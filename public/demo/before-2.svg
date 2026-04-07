@@ -1,0 +1,11 @@
+<svg width="600" height="420" viewBox="0 0 600 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="600" height="420" rx="36" fill="#EEF2F7"/>
+  <rect x="42" y="58" width="516" height="304" rx="28" fill="#D6DBE2"/>
+  <rect x="78" y="94" width="150" height="24" rx="12" fill="#9AA4B2"/>
+  <rect x="78" y="136" width="308" height="18" rx="9" fill="#B2BAC6"/>
+  <rect x="78" y="170" width="240" height="18" rx="9" fill="#B2BAC6"/>
+  <rect x="370" y="126" width="122" height="132" rx="20" fill="#C3CAD5"/>
+  <rect x="390" y="146" width="82" height="92" rx="14" fill="#A7AFBB"/>
+  <text x="78" y="326" fill="#334155" font-family="Arial, sans-serif" font-size="28" font-weight="700">Before</text>
+</svg>
+
