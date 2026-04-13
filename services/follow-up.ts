@@ -11,10 +11,10 @@ export async function sendLeadConfirmationEmail(input: {
     return { skipped: true };
   }
 
-  const resend = new Resend(env.resendApiKey);
+  const resend = new Resend(env.resendApiKey!);
 
   await resend.emails.send({
-    from: env.resendFromEmail,
+    from: env.resendFromEmail!,
     to: input.to,
     subject: input.subject || `Thanks for reaching out to ${input.businessName}`,
     html: `<div style="font-family:Arial,sans-serif;line-height:1.5">
@@ -26,4 +26,3 @@ export async function sendLeadConfirmationEmail(input: {
 
   return { skipped: false };
 }
-

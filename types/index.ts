@@ -4,6 +4,8 @@ export type TemplateCategory =
   | "Recurring Revenue"
   | "Seasonal Offer";
 
+export type UserRole = "admin" | "user";
+export type TemplateStatus = "draft" | "published" | "archived";
 export type LeadStatus = "new" | "contacted" | "booked" | "closed";
 
 export type TemplateSeed = {
@@ -32,6 +34,32 @@ export type TemplateSeed = {
     whyChooseUs: string[];
     finalCta: string;
   };
+};
+
+export type TemplateConfigJson = Partial<{
+  positioning: string;
+  ctaDefault: string;
+  benefits: string[];
+  faq: Array<{ question: string; answer: string }>;
+  adCopy: TemplateSeed["adCopy"];
+  funnel: TemplateSeed["funnel"];
+}>;
+
+export type TemplateRecord = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  category: TemplateCategory;
+  preview_image_url: string | null;
+  config_json: TemplateConfigJson | null;
+  status: TemplateStatus;
+  is_featured: boolean;
+  version?: number | null;
+  created_by?: string | null;
+  published_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export type TemplateSetupValues = {
@@ -68,6 +96,14 @@ export type BusinessProfile = {
   default_cta: string | null;
 };
 
+export type ProfileRecord = {
+  id: string;
+  user_id: string;
+  role: UserRole;
+  created_at: string;
+  updated_at: string;
+};
+
 export type CampaignRecord = {
   id: string;
   user_id: string;
@@ -83,6 +119,7 @@ export type CampaignRecord = {
   testimonial_text: string | null;
   before_images_json: string[];
   after_images_json: string[];
+  source_template_version?: number | null;
   ad_copy_json: {
     primary: string;
     headlines: string[];
@@ -129,4 +166,3 @@ export type CampaignBundle = {
   template: TemplateSeed;
   businessProfile: BusinessProfile | null;
 };
-

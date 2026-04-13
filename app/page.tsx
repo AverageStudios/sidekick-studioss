@@ -1,236 +1,272 @@
 import Link from "next/link";
-import { ArrowRight, ChevronRight, Sparkles } from "lucide-react";
+import { ArrowRight, CheckCircle2, ChevronRight, Sparkles } from "lucide-react";
 import { MarketingNav } from "@/components/marketing-nav";
-import { SectionHeading } from "@/components/section-heading";
-import { TemplateCard } from "@/components/template-card";
+import { PublicSiteFooter } from "@/components/public-site-footer";
+import { HomeProductShowcase } from "@/components/home-product-showcase";
+import { HomeTrialCta } from "@/components/home-trial-cta";
+import { WhySidekickSection } from "@/components/why-sidekick-section";
+import { InteractiveGlowCard } from "@/components/ui/interactive-glow-card";
+import { HeroGeometric } from "@/components/ui/shape-landing-hero";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { detailingTemplates } from "@/data/templates";
+import { publicFaqs } from "@/data/public-faqs";
+import { getTemplates } from "@/lib/data";
 
-export default function Home() {
+const featureCards = [
+  {
+    title: "Choose your industry",
+    description:
+      "Start with the type of business you run, then jump into a template that already fits that offer.",
+    points: ["Industry-first setup", "Ready from day one", "No blank page"],
+  },
+  {
+    title: "Launch from one system",
+    description:
+      "Templates, campaign pages, lead management, and follow-up stay connected so launch feels cleaner.",
+    points: ["Campaign page included", "Lead management built in", "Simple outreach flow"],
+  },
+  {
+    title: "Manage leads in one place",
+    description:
+      "Track inquiries, update status, and keep the next step moving without adding another tool.",
+    points: ["Lead list", "Status updates", "Next-step outreach"],
+  },
+];
+
+const steps = [
+  {
+    number: "01",
+    title: "Choose your industry",
+    description: "Start with the kind of business and offer you want to launch.",
+  },
+  {
+    number: "02",
+    title: "Pick a template",
+    description: "Choose a ready-to-go template instead of building the whole setup from scratch.",
+  },
+  {
+    number: "03",
+    title: "Launch and manage leads",
+    description: "Go live, manage leads, and keep outreach moving from the same platform.",
+  },
+];
+
+export default async function HomePage() {
+  const templates = await getTemplates();
+  const featuredTemplates = templates.slice(0, 3);
+  const featuredFaqs = publicFaqs.slice(0, 4);
+
   return (
-    <div className="min-h-screen">
+    <main className="public-site min-h-screen">
       <MarketingNav />
-      <main>
-        <section className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:py-20">
-          <div className="space-y-7">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-white/80 px-4 py-2 text-sm text-[var(--muted-strong)] shadow-sm">
-              <Sparkles className="h-4 w-4 text-[var(--brand)]" />
-              Built for solo detailers and small shops
-            </div>
-            <div className="space-y-5">
-              <h1 className="max-w-3xl text-5xl font-semibold tracking-[-0.07em] text-[var(--ink)] sm:text-6xl">
-                Plug-and-play ads and funnels for car detailers
-              </h1>
-              <p className="max-w-xl text-lg leading-8 text-[var(--muted-strong)]">
-                Pick a template, swap a few details, publish a clean funnel, and start capturing leads without building from scratch.
+
+      <HeroGeometric />
+
+      <section id="features" className="page-section marketing-section pt-8 sm:pt-12">
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="public-accent-kicker text-[11px] font-semibold uppercase tracking-[0.24em]">
+            Product
+          </p>
+          <h2 className="mt-4 text-3xl font-semibold tracking-[-0.05em] text-[var(--public-text)] sm:text-4xl md:text-5xl">
+            One clearer system for small-business launch
+          </h2>
+          <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 public-text-muted sm:text-base">
+            Choose your industry, pick a ready-to-go template, launch faster, and manage leads and outreach without stitching together a stack of extra tools.
+          </p>
+        </div>
+
+        <div className="mt-10 grid gap-5 sm:mt-11 lg:grid-cols-3">
+          {featureCards.map((card) => (
+            <InteractiveGlowCard
+              key={card.title}
+                className="h-full rounded-[32px] border border-[var(--public-line)] bg-[var(--public-surface)] p-6 sm:p-7"
+            >
+              <div className="flex h-full flex-col">
+                <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-[var(--public-line)] bg-[var(--public-accent-soft)] text-[var(--public-accent)]">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <h3 className="mt-6 text-2xl font-semibold tracking-[-0.04em] text-[var(--public-text)]">
+                  {card.title}
+                </h3>
+                <p className="mt-4 text-sm leading-7 public-text-muted">{card.description}</p>
+                <div className="mt-6 space-y-3.5">
+                  {card.points.map((point) => (
+                    <div key={point} className="flex items-center gap-3 text-sm text-[rgba(17,18,22,0.88)]">
+                      <CheckCircle2 className="h-4 w-4 text-[var(--public-accent)]" />
+                      <span>{point}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </InteractiveGlowCard>
+          ))}
+        </div>
+      </section>
+
+      <WhySidekickSection />
+
+      <section className="page-section marketing-section">
+        <div className="public-section-shell overflow-hidden px-6 py-8 sm:px-8 sm:py-10">
+          <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between lg:gap-10">
+            <div className="max-w-xl">
+              <p className="public-accent-kicker text-[11px] font-semibold uppercase tracking-[0.24em]">
+                How it works
+              </p>
+              <h2 className="mt-4 text-3xl font-semibold tracking-[-0.05em] text-[var(--public-text)] sm:text-4xl">
+                Three steps from first click to live system
+              </h2>
+              <p className="mt-5 text-sm leading-7 public-text-muted sm:text-base">
+                The point is clarity: choose the business type, pick the template, then launch and manage leads from one platform.
               </p>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg">
-                <Link href="/signup">Start Free Trial</Link>
-              </Button>
-              <Button asChild size="lg" variant="outline">
-                <Link href="/templates">See Templates</Link>
-              </Button>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {[
-                "Launch in minutes",
-                "Built for detailers",
-                "Simple follow-up included",
-              ].map((item) => (
-                <div key={item} className="rounded-[24px] border border-[var(--line)] bg-white/70 px-4 py-4 text-sm text-[var(--muted-strong)] shadow-sm">
-                  {item}
+
+            <div className="grid flex-1 gap-4">
+              {steps.map((step) => (
+                <div
+                  key={step.number}
+                  className="public-surface-card-strong rounded-[28px] px-5 py-5 sm:px-6 sm:py-[1.375rem]"
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
+                    <div className="inline-flex w-fit rounded-full border border-[var(--public-line)] bg-white/72 px-3 py-1 text-[11px] font-semibold tracking-[0.2em] text-[var(--public-accent)]">
+                      {step.number}
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-[var(--public-text)]">{step.title}</h3>
+                      <p className="mt-2 text-sm leading-7 public-text-muted">{step.description}</p>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
-          <Card className="ambient-grid overflow-hidden p-5 sm:p-6">
-            <div className="rounded-[28px] bg-[linear-gradient(135deg,#171127_0%,#6d5ef8_100%)] p-5 text-white shadow-[0_24px_50px_rgba(26,16,64,0.22)]">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-white/70">Launch flow</p>
-                  <h2 className="mt-2 text-2xl font-semibold tracking-[-0.05em]">From template to live funnel</h2>
-                </div>
-                <span className="rounded-full bg-white/12 px-3 py-1 text-xs font-semibold">Mobile first</span>
-              </div>
-              <div className="mt-6 grid gap-3">
-                {[
-                  "Choose a campaign template",
-                  "Customize your offer and brand",
-                  "Publish a lightweight funnel",
-                  "Capture and follow up with leads",
-                ].map((step, index) => (
-                  <div key={step} className="flex items-center gap-3 rounded-[20px] bg-white/10 px-4 py-4">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/14 text-sm font-semibold">
-                      0{index + 1}
-                    </span>
-                    <span className="text-sm text-white/88">{step}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-6 rounded-[24px] bg-white/96 p-4 text-[var(--ink)]">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--brand)]">
-                  Funnel snapshot
-                </p>
-                <div className="mt-4 space-y-3">
-                  <div className="rounded-[20px] bg-[var(--soft-panel)] px-4 py-4">
-                    <p className="text-sm font-medium">Full Detail Promo</p>
-                    <p className="mt-1 text-sm text-[var(--muted)]">Limited offer for Charlotte drivers</p>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-[20px] bg-[var(--soft-panel)] px-4 py-4 text-sm text-[var(--muted)]">
-                      Offer price
-                      <div className="mt-1 text-lg font-semibold text-[var(--ink)]">$179</div>
-                    </div>
-                    <div className="rounded-[20px] bg-[var(--soft-panel)] px-4 py-4 text-sm text-[var(--muted)]">
-                      CTA
-                      <div className="mt-1 text-lg font-semibold text-[var(--ink)]">Get My Quote</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Card>
-        </section>
+        </div>
+      </section>
 
-        <section className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
-          <div className="grid gap-4 md:grid-cols-3">
-            {[
-              {
-                title: "Launch faster",
-                body: "Skip the blank page and start with offers made for detailing services.",
-              },
-              {
-                title: "Capture leads",
-                body: "Use clean mobile-first funnels designed for paid traffic and simple forms.",
-              },
-              {
-                title: "Follow up simply",
-                body: "Keep confirmation emails lightweight and leave room for SMS later.",
-              },
-            ].map((item) => (
-              <Card key={item.title} className="p-6">
-                <h3 className="text-xl font-semibold tracking-[-0.04em] text-[var(--ink)]">{item.title}</h3>
-                <p className="mt-3 text-sm leading-6 text-[var(--muted-strong)]">{item.body}</p>
-              </Card>
-            ))}
+      <section className="page-section marketing-section">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-2xl">
+            <p className="public-accent-kicker text-[11px] font-semibold uppercase tracking-[0.24em]">
+              Templates
+            </p>
+            <h2 className="mt-4 text-3xl font-semibold tracking-[-0.05em] text-[var(--public-text)] sm:text-4xl">
+              Start from templates that already fit the business
+            </h2>
+            <p className="mt-5 text-sm leading-7 public-text-muted sm:text-base">
+              Choose your industry, then start from a ready-to-go template instead of a blank setup.
+            </p>
           </div>
-        </section>
+          <Button
+            asChild
+            variant="outline"
+            className="border-[var(--public-line)] bg-white/74 text-[var(--public-text)] hover:border-[var(--public-line-strong)] hover:bg-[rgba(109,94,248,0.05)] hover:text-[var(--public-text)]"
+          >
+            <Link href="/product/templates">
+              See all templates
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
 
-        <section id="how-it-works" className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
-          <SectionHeading
-            eyebrow="How it works"
-            title="Click a few buttons and launch"
-            description="Everything is built around a calm, narrow flow so detailers can move quickly without learning a big system."
-          />
-          <div className="mt-10 grid gap-5 lg:grid-cols-4">
-            {[
-              ["Sign up", "Create an account and land in a lightweight dashboard."],
-              ["Pick a template", "Choose the offer that fits the campaign you want to run."],
-              ["Customize a few fields", "Update business info, pricing, CTA, proof, and brand color."],
-              ["Publish and collect leads", "Share the funnel link and keep follow-up simple."],
-            ].map(([title, body], index) => (
-              <Card key={title} className="p-6">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--soft-brand)] font-semibold text-[var(--brand)]">
-                  0{index + 1}
+        <div className="mt-10 grid gap-5 sm:mt-11 lg:grid-cols-3">
+          {featuredTemplates.map((template) => (
+            <InteractiveGlowCard
+              key={template.slug}
+                className="h-full rounded-[32px] border border-[var(--public-line)] bg-[var(--public-surface)] p-6"
+            >
+              <div className="flex h-full flex-col">
+                <div className="rounded-[24px] border border-[var(--public-line)] bg-[radial-gradient(circle_at_top_left,rgba(109,94,248,0.12),transparent_35%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,244,255,0.78))] p-5">
+                  <div className="rounded-[20px] border border-[var(--public-line)] bg-[rgba(255,255,255,0.82)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.96)]">
+                    <div className="flex items-center justify-between">
+                      <span className="rounded-full border border-[var(--public-line)] bg-white/72 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--public-muted)]">
+                        {template.category}
+                      </span>
+                      <span className="text-[11px] font-medium uppercase tracking-[0.14em] public-text-faint">
+                        Industry-ready
+                      </span>
+                    </div>
+                    <div className="mt-8 space-y-3">
+                      <div className="h-3 w-2/3 rounded-full bg-[rgba(17,18,22,0.14)]" />
+                      <div className="h-2.5 w-full rounded-full bg-[rgba(17,18,22,0.08)]" />
+                      <div className="h-2.5 w-5/6 rounded-full bg-[rgba(17,18,22,0.08)]" />
+                      <div className="h-2.5 w-3/4 rounded-full bg-[rgba(17,18,22,0.06)]" />
+                    </div>
+                  </div>
                 </div>
-                <h3 className="mt-4 text-lg font-semibold text-[var(--ink)]">{title}</h3>
-                <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">{body}</p>
-              </Card>
-            ))}
-          </div>
-        </section>
 
-        <section id="templates" className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-            <SectionHeading
-              eyebrow="Templates"
-              title="Made for the campaigns detailers actually run"
-              description="Five focused campaigns. No niche switching. No noisy template marketplace."
-            />
-            <Button asChild variant="outline">
-              <Link href="/templates">
-                See all templates
-                <ChevronRight className="ml-2 h-4 w-4" />
+                <div className="mt-6 flex flex-1 flex-col">
+                  <h3 className="text-xl font-semibold tracking-[-0.03em] text-[var(--public-text)]">
+                    {template.name}
+                  </h3>
+                  <p className="mt-3 text-sm leading-7 public-text-muted">
+                    {template.description}
+                  </p>
+                  <p className="mt-4 text-sm leading-7 public-text-soft">
+                    {template.positioning}
+                  </p>
+                  <div className="mt-6 flex flex-wrap gap-2.5">
+                    {template.benefits.slice(0, 2).map((benefit) => (
+                      <span
+                        key={benefit}
+                        className="rounded-full border border-[var(--public-line)] bg-white/72 px-3 py-1 text-xs text-[rgba(17,18,22,0.74)]"
+                      >
+                        {benefit}
+                      </span>
+                    ))}
+                  </div>
+                  <Button
+                    asChild
+                    className="mt-6 w-full rounded-[18px] border border-[rgba(143,124,255,0.55)] bg-[linear-gradient(180deg,var(--public-accent)_0%,var(--public-accent-strong)_100%)] !font-bold !text-white shadow-[0_18px_44px_rgba(109,94,248,0.24)] hover:border-[rgba(173,160,255,0.68)] hover:bg-[linear-gradient(180deg,#9b8cff_0%,#7567ff_100%)] [&_svg]:!text-white"
+                  >
+                    <Link href="/product/templates">
+                      Explore this template
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </InteractiveGlowCard>
+          ))}
+        </div>
+      </section>
+
+      <HomeProductShowcase />
+
+      <section id="faq" className="page-section marketing-section pt-0">
+        <div className="grid gap-4 sm:gap-5 lg:grid-cols-3">
+          <div className="lg:col-span-1">
+            <p className="public-accent-kicker text-[11px] font-semibold uppercase tracking-[0.24em]">
+              FAQ
+            </p>
+            <h2 className="mt-4 text-3xl font-semibold tracking-[-0.05em] text-[var(--public-text)] sm:text-4xl">
+              The quick answers people actually need
+            </h2>
+            <Button
+              asChild
+              variant="outline"
+              className="mt-6 border-[var(--public-line)] bg-white/74 text-[var(--public-text)] hover:border-[var(--public-line-strong)] hover:bg-[rgba(109,94,248,0.05)] hover:text-[var(--public-text)]"
+            >
+              <Link href="/faq">
+                See all questions
+                <ChevronRight className="h-4 w-4" />
               </Link>
             </Button>
           </div>
-          <div className="mt-10 grid gap-5 lg:grid-cols-3">
-            {detailingTemplates.slice(0, 3).map((template) => (
-              <TemplateCard key={template.id} template={template} />
-            ))}
-          </div>
-        </section>
-
-        <section id="faq" className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
-          <SectionHeading
-            eyebrow="FAQ"
-            title="Simple answers for a simple product"
-            description="V1 stays intentionally narrow so the setup stays fast."
-          />
-          <div className="mt-10 grid gap-5 md:grid-cols-2">
-            {[
-              [
-                "Is this a full CRM?",
-                "No. It is a focused campaign launcher with lead capture and lightweight follow-up.",
-              ],
-              [
-                "Can I edit the funnel layout?",
-                "You can customize fields and content, but V1 uses fixed high-converting sections instead of a full page builder.",
-              ],
-              [
-                "Can I publish Facebook ads directly?",
-                "Not in V1. The product generates ad-ready copy, headlines, and funnel assets so you can launch faster.",
-              ],
-              [
-                "Does it work without Supabase configured?",
-                "Yes in demo mode. Connect Supabase to enable real auth, persistence, uploads, and production lead capture.",
-              ],
-            ].map(([question, answer]) => (
-              <Card key={question} className="p-6">
-                <h3 className="text-lg font-semibold text-[var(--ink)]">{question}</h3>
-                <p className="mt-3 text-sm leading-6 text-[var(--muted-strong)]">{answer}</p>
-              </Card>
-            ))}
-          </div>
-        </section>
-
-        <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
-          <Card className="overflow-hidden bg-[linear-gradient(135deg,#151126_0%,#2a1d55_58%,#40308c_100%)] p-8 text-white sm:p-10">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-              <div className="max-w-2xl space-y-4">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/70">Ready to launch</p>
-                <h2 className="text-4xl font-semibold tracking-[-0.06em]">The simplest way for a car detailer to launch a campaign</h2>
-                <p className="text-base leading-7 text-white/80">
-                  Start with a clean template, publish a polished funnel, and keep the process light from day one.
-                </p>
+          <div className="grid gap-4 lg:col-span-2">
+            {featuredFaqs.map((item) => (
+              <div
+                key={item.question}
+                className="public-surface-card rounded-[28px] border border-[var(--public-line)] px-5 py-5 sm:px-6 sm:py-[1.375rem]"
+              >
+                <h3 className="text-lg font-semibold text-[var(--public-text)]">{item.question}</h3>
+                <p className="mt-3 text-sm leading-7 public-text-muted">{item.answer}</p>
               </div>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Button asChild size="lg" className="bg-white text-[var(--ink)] hover:bg-white/90">
-                  <Link href="/signup">Get Started</Link>
-                </Button>
-                <Button asChild size="lg" variant="ghost" className="text-white hover:bg-white/12 hover:text-white">
-                  <Link href="/templates">
-                    See Templates
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </section>
-      </main>
-      <footer className="border-t border-[var(--line)] py-8">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 text-sm text-[var(--muted)] sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p>SideKick Studioss. Plug-and-play ads and funnels for car detailers.</p>
-          <div className="flex items-center gap-5">
-            <Link href="/login">Login</Link>
-            <Link href="/signup">Start Free Trial</Link>
+            ))}
           </div>
         </div>
-      </footer>
-    </div>
+      </section>
+
+      <HomeTrialCta />
+
+      <PublicSiteFooter />
+    </main>
   );
 }

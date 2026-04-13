@@ -14,7 +14,7 @@ const sora = Sora({
 
 export const metadata: Metadata = {
   title: "SideKick Studioss",
-  description: "Plug-and-play ads and funnels for car detailers.",
+  description: "Software for small businesses to choose templates, launch faster, and manage leads and follow-up in one place.",
 };
 
 export default function RootLayout({

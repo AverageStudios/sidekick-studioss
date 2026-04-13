@@ -1,9 +1,9 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { env, isSupabaseConfigured } from "@/lib/env";
+import { env, isSupabasePublicConfigured } from "@/lib/env";
 
 export async function createSupabaseServerClient() {
-  if (!isSupabaseConfigured()) {
+  if (!isSupabasePublicConfigured()) {
     return null;
   }
 
@@ -22,4 +22,3 @@ export async function createSupabaseServerClient() {
     },
   });
 }
-

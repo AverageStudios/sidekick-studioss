@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { SectionHeading } from "@/components/section-heading";
+import { PageHeader } from "@/components/page-header";
 import { TemplateSetupForm } from "@/components/template-setup-form";
 import { requireUser } from "@/lib/auth";
 import { getBusinessProfile, getTemplate } from "@/lib/data";
@@ -24,13 +24,13 @@ export default async function TemplateDetailPage({
 
   return (
     <AppShell currentPath="/templates">
+      <PageHeader
+        badge="Setup flow"
+        title={template.name}
+        description={template.positioning}
+      />
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-5">
-          <SectionHeading
-            eyebrow="Setup flow"
-            title={template.name}
-            description={template.positioning}
-          />
           <Card className="space-y-4 p-6">
             <Badge>{template.category}</Badge>
             <p className="text-sm leading-6 text-[var(--muted-strong)]">{template.description}</p>
@@ -56,4 +56,3 @@ export default async function TemplateDetailPage({
     </AppShell>
   );
 }
-

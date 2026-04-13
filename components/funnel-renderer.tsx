@@ -52,7 +52,7 @@ export function FunnelRenderer({
 
   return (
     <div className="space-y-5" style={brandStyle}>
-      <Card className="overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(109,94,248,0.15),transparent_32%),linear-gradient(180deg,#fdfdff_0%,#f6f7fb_100%)] p-6 sm:p-8">
+      <Card className="overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(109,94,248,0.13),transparent_32%),linear-gradient(180deg,#fdfdff_0%,#f6f7fb_100%)] p-6 sm:p-8">
         <div className="flex flex-wrap items-center gap-3">
           <Badge>{config.offerLabel}</Badge>
           <span className="text-sm text-[var(--muted)]">{config.city}</span>
@@ -63,11 +63,11 @@ export function FunnelRenderer({
               {config.headline}
             </h1>
             <p className="max-w-xl text-base leading-7 text-[var(--muted-strong)]">{config.subheadline}</p>
-            <div className="flex flex-wrap items-center gap-4 text-sm text-[var(--muted-strong)]">
-              <span className="rounded-full bg-white px-4 py-2 shadow-sm">
+            <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--muted-strong)]">
+              <span className="rounded-full bg-white px-4 py-2 shadow-[var(--shadow-soft)]">
                 Offer {formatCurrency(Number(config.offerPrice))}
               </span>
-              <span className="rounded-full bg-white px-4 py-2 shadow-sm">
+              <span className="rounded-full bg-white px-4 py-2 shadow-[var(--shadow-soft)]">
                 Regular {formatCurrency(Number(config.regularPrice))}
               </span>
             </div>
@@ -96,7 +96,7 @@ export function FunnelRenderer({
       </Card>
 
       <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-        <Card className="p-6">
+        <Card className="p-6 sm:p-7">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand)]">The offer</p>
           <p className="mt-3 text-lg leading-8 text-[var(--muted-strong)]">
             {config.businessDescription || "A straightforward offer built to help local drivers take the next step quickly."}
@@ -109,10 +109,10 @@ export function FunnelRenderer({
             ))}
           </ul>
         </Card>
-        <Card className="p-6">{showLeadForm}</Card>
+        <Card className="p-6 sm:p-7">{showLeadForm}</Card>
       </div>
 
-      <Card className="p-6">
+      <Card className="p-6 sm:p-7">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand)]">Before and after</p>
@@ -135,7 +135,7 @@ export function FunnelRenderer({
         </div>
       </Card>
 
-      <Card className="grid gap-6 p-6 lg:grid-cols-[0.8fr_1.2fr]">
+      <Card className="grid gap-6 p-6 sm:p-7 lg:grid-cols-[0.8fr_1.2fr]">
         <div className="space-y-3">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand)]">Social proof</p>
           <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Simple trust for paid traffic</h2>
@@ -145,7 +145,7 @@ export function FunnelRenderer({
         </div>
       </Card>
 
-      <Card className="p-6">
+      <Card className="p-6 sm:p-7">
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand)]">FAQ</p>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           {config.faq.map((item) => (
@@ -157,7 +157,7 @@ export function FunnelRenderer({
         </div>
       </Card>
 
-      <Card className="flex flex-col items-start justify-between gap-4 p-6 sm:flex-row sm:items-center">
+      <Card className="flex flex-col items-start justify-between gap-4 p-6 sm:flex-row sm:items-center sm:p-7">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand)]">Final CTA</p>
           <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">

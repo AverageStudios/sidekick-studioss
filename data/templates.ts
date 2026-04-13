@@ -1,6 +1,8 @@
-import { TemplateSeed } from "@/types";
+import { TemplateRecord, TemplateSeed } from "@/types";
 
-export const detailingTemplates: TemplateSeed[] = [
+// Dev fallback only. The real source of truth for customer-facing template browsing
+// should be the Supabase `templates` table.
+export const templateFallbackCatalog: TemplateSeed[] = [
   {
     id: "tpl-full-detail",
     slug: "full-detail-promo",
@@ -294,6 +296,45 @@ export const detailingTemplates: TemplateSeed[] = [
 ];
 
 export function getTemplateBySlug(slug: string) {
-  return detailingTemplates.find((template) => template.slug === slug);
+  return templateFallbackCatalog.find((template) => template.slug === slug);
 }
 
+export function getTemplateById(id: string) {
+  return templateFallbackCatalog.find((template) => template.id === id);
+}
+
+export function hydrateTemplateRecord(record: TemplateRecord): TemplateSeed {
+  const fallback = getTemplateById(record.id) || getTemplateBySlug(record.slug);
+  const config = record.config_json || {};
+
+  return {
+    id: record.id,
+    slug: record.slug,
+    name: record.name,
+    description: record.description,
+    category: record.category,
+    positioning: config.positioning || fallback?.positioning || record.description,
+    previewImage: record.preview_image_url || fallback?.previewImage || "/placeholders/template.jpg",
+    ctaDefault: config.ctaDefault || fallback?.ctaDefault || "Get Started",
+    benefits: config.benefits || fallback?.benefits || [],
+    faq: config.faq || fallback?.faq || [],
+    adCopy: config.adCopy || fallback?.adCopy || {
+      primary: "",
+      headlines: [],
+      descriptions: [],
+      targeting: "",
+      budget: "",
+      creativeGuidance: [],
+    },
+    funnel: config.funnel || fallback?.funnel || {
+      heroHeadline: record.name,
+      heroSubheadline: record.description,
+      offerLabel: record.name,
+      whyChooseUs: [],
+      finalCta: "Get Started",
+    },
+  };
+}
+
+// Backwards-compatible alias while the rest of the app finishes moving to the repository layer.
+export const detailingTemplates = templateFallbackCatalog;

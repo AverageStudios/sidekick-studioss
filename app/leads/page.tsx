@@ -1,7 +1,6 @@
 import { AppShell } from "@/components/app-shell";
 import { LeadsTable } from "@/components/leads-table";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth";
 import { getLeads } from "@/lib/data";
 
@@ -18,34 +17,29 @@ export default async function LeadsPage({
 
   return (
     <AppShell currentPath="/leads">
-      <Card className="p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-2">
-            <Badge>Leads</Badge>
-            <h1 className="text-4xl font-semibold tracking-[-0.06em] text-[var(--ink)]">Simple lead tracking</h1>
-            <p className="max-w-2xl text-base leading-7 text-[var(--muted-strong)]">
-              No inbox. No complicated pipeline. Just the leads, their status, and the next action.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
+      <PageHeader
+        badge="Leads"
+        title="Simple lead tracking"
+        description="No inbox. No complicated pipeline. Just the leads, their status, and the next action."
+        actions={
+          <div className="flex flex-wrap gap-2.5">
             {filters.map((filter) => (
               <a
                 key={filter}
                 href={`/leads?status=${filter}`}
-                className={`rounded-full px-4 py-2 text-sm font-medium ${
+                className={`rounded-full px-4 py-2.5 text-sm font-medium capitalize transition ${
                   filter === status
-                    ? "bg-[var(--ink)] text-white"
-                    : "border border-[var(--line)] bg-white text-[var(--muted-strong)]"
+                    ? "bg-[var(--ink)] text-white shadow-[0_10px_20px_rgba(17,24,39,0.12)]"
+                    : "border border-[var(--line)] bg-white/85 text-[var(--muted-strong)] shadow-[var(--shadow-soft)]"
                 }`}
               >
                 {filter}
               </a>
             ))}
           </div>
-        </div>
-      </Card>
+        }
+      />
       <LeadsTable leads={leads} />
     </AppShell>
   );
 }
-

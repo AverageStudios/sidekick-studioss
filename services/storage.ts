@@ -1,10 +1,10 @@
 import { randomUUID } from "crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { isSupabaseConfigured } from "@/lib/env";
+import { isSupabaseServerConfigured } from "@/lib/env";
 
 export async function uploadAsset(file: File, folder: string) {
   if (!file || file.size === 0) return null;
-  if (!isSupabaseConfigured()) return null;
+  if (!isSupabaseServerConfigured()) return null;
 
   const supabase = createSupabaseAdminClient();
   if (!supabase) return null;
@@ -27,4 +27,3 @@ export async function uploadAsset(file: File, folder: string) {
   const { data } = supabase.storage.from("assets").getPublicUrl(path);
   return data.publicUrl;
 }
-

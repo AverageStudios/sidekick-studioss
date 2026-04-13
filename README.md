@@ -56,13 +56,16 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+If `.env.local` is missing the Supabase values, the app now falls back to a clear demo-mode experience instead of crashing.
+
 ## Supabase setup
 
 1. Create a Supabase project.
 2. Add the values from `.env.example` to `.env.local`.
 3. Create a public storage bucket named `assets`.
 4. Run the SQL in `supabase/migrations/001_initial.sql`.
-5. Run the SQL in `supabase/seed.sql`.
+5. Run the SQL in `supabase/migrations/002_roles_and_template_admin.sql`.
+6. Run the SQL in `supabase/seed.sql`.
 
 Required env vars:
 
@@ -72,7 +75,24 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-If Supabase is not configured yet, the app still runs in demo mode so you can review the UX and structure.
+What each env var is used for:
+
+- `NEXT_PUBLIC_APP_URL`: canonical app URL for local/dev links
+- `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL for public and server clients
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: public anon key used by auth/public clients
+- `SUPABASE_SERVICE_ROLE_KEY`: server-only key used for writes, storage uploads, and server data access
+- `RESEND_API_KEY`: optional email API key
+- `RESEND_FROM_EMAIL`: optional sender address for confirmation emails
+
+If Supabase public env vars are missing, auth runs in demo mode.
+
+If the service-role key is missing, the app still renders safely, but writes, uploads, and persisted lead actions are skipped.
+
+## Schema notes for Phase 2
+
+- `profiles` stores app-level user roles tied to Supabase auth users.
+- `templates` now supports admin workflow fields such as `status`, `is_featured`, `created_by`, `published_at`, and `updated_at`.
+- `campaigns` now stores `source_template_version` so user campaign instances stay tied to the master template version they were created from.
 
 ## Resend setup
 

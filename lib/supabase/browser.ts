@@ -1,13 +1,12 @@
 "use client";
 
 import { createBrowserClient } from "@supabase/ssr";
-import { env, isSupabaseConfigured } from "@/lib/env";
+import { env, isSupabasePublicConfigured } from "@/lib/env";
 
 export function createSupabaseBrowserClient() {
-  if (!isSupabaseConfigured()) {
+  if (!isSupabasePublicConfigured()) {
     return null;
   }
 
   return createBrowserClient(env.supabaseUrl!, env.supabaseAnonKey!);
 }
-

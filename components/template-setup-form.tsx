@@ -17,7 +17,7 @@ function SetupSection({
 }) {
   return (
     <Card className="p-5 sm:p-6">
-      <div className="mb-5 space-y-1">
+      <div className="mb-5 space-y-2">
         <h3 className="text-xl font-semibold tracking-[-0.04em] text-[var(--ink)]">{title}</h3>
         <p className="text-sm leading-6 text-[var(--muted-strong)]">{description}</p>
       </div>
@@ -68,7 +68,10 @@ export function TemplateSetupForm({
         description="Add just enough brand detail to make the funnel feel like your shop, not a generic template."
       >
         <div className="grid gap-4 sm:grid-cols-2">
-          <Input name="brandColor" type="color" defaultValue={profile?.brand_color || "#6D5EF8"} className="h-14 p-2" />
+          <div className="rounded-[22px] bg-[var(--soft-panel)] p-3">
+            <label className="mb-2 block text-sm font-medium text-[var(--ink)]">Brand color</label>
+            <Input name="brandColor" type="color" defaultValue={profile?.brand_color || "#6D5EF8"} className="h-12 p-2" />
+          </div>
           <Input name="logo" type="file" accept="image/*" />
           <Input name="before1" type="file" accept="image/*" />
           <Input name="after1" type="file" accept="image/*" />
@@ -95,7 +98,7 @@ export function TemplateSetupForm({
         title="Publish settings"
         description="V1 follow-up stays intentionally lightweight so detailers can move fast."
       >
-        <div className="flex items-center justify-between rounded-[24px] bg-[var(--soft-panel)] px-4 py-4">
+        <div className="flex flex-col gap-4 rounded-[24px] bg-[var(--soft-panel)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="font-medium text-[var(--ink)]">Send confirmation email</p>
             <p className="text-sm text-[var(--muted)]">Optional confirmation email after a lead submits.</p>
@@ -107,8 +110,8 @@ export function TemplateSetupForm({
         </div>
       </SetupSection>
 
-      <div className="flex items-center justify-between rounded-[28px] border border-[var(--line)] bg-white/75 p-5">
-        <div>
+      <div className="flex flex-col gap-4 rounded-[28px] border border-[var(--line)] bg-white/80 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-2">
           <Badge>{template.category}</Badge>
           <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{template.name}</p>
           <p className="mt-1 text-sm text-[var(--muted)]">Generate campaign assets and a published funnel in one step.</p>
@@ -120,4 +123,3 @@ export function TemplateSetupForm({
     </form>
   );
 }
-

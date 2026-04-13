@@ -6,9 +6,10 @@ import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/auth";
-import { getTemplateBySlug } from "@/data/templates";
+import { authSuccessMessages, formatAuthErrorMessage } from "@/lib/auth-messages";
 import { createCampaignBlueprint } from "@/lib/template-engine";
-import { isSupabaseConfigured } from "@/lib/env";
+import { env, isSupabasePublicConfigured, isSupabaseServerConfigured } from "@/lib/env";
+import { getPublishedTemplateBySlug } from "@/lib/template-repository";
 import { slugify } from "@/lib/utils";
 import { sendLeadConfirmationEmail } from "@/services/follow-up";
 import { uploadAsset } from "@/services/storage";
@@ -19,58 +20,85 @@ const authSchema = z.object({
 });
 
 export async function signUpAction(formData: FormData) {
-  const values = authSchema.parse({
+  const values = authSchema.safeParse({
     email: String(formData.get("email") || ""),
     password: String(formData.get("password") || ""),
   });
 
-  if (!isSupabaseConfigured()) {
+  if (!values.success) {
+    const message = values.error.issues[0]?.message || "Enter a valid email and password.";
+    redirect(`/signup?error=${encodeURIComponent(formatAuthErrorMessage(message))}`);
+  }
+
+  if (!isSupabasePublicConfigured()) {
     redirect("/dashboard");
   }
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase!.auth.signUp(values);
+  if (!supabase) {
+    redirect("/signup?error=Supabase auth is not configured yet.");
+  }
+  const { data, error } = await supabase!.auth.signUp({
+    ...values.data,
+    options: {
+      emailRedirectTo: `${env.appUrl}/auth/callback?next=/login`,
+    },
+  });
 
   if (error) {
-    redirect(`/signup?error=${encodeURIComponent(error.message)}`);
+    redirect(`/signup?error=${encodeURIComponent(formatAuthErrorMessage(error.message))}`);
   }
 
-  redirect("/dashboard");
+  if (data.session) {
+    redirect("/dashboard");
+  }
+
+  redirect(`/signup/confirm?email=${encodeURIComponent(values.data.email)}`);
 }
 
 export async function signInAction(formData: FormData) {
-  const values = authSchema.parse({
+  const values = authSchema.safeParse({
     email: String(formData.get("email") || ""),
     password: String(formData.get("password") || ""),
   });
 
-  if (!isSupabaseConfigured()) {
+  if (!values.success) {
+    const message = values.error.issues[0]?.message || "Enter a valid email and password.";
+    redirect(`/login?error=${encodeURIComponent(formatAuthErrorMessage(message))}`);
+  }
+
+  if (!isSupabasePublicConfigured()) {
     redirect("/dashboard");
   }
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase!.auth.signInWithPassword(values);
+  if (!supabase) {
+    redirect("/login?error=Supabase auth is not configured yet.");
+  }
+  const { error } = await supabase!.auth.signInWithPassword(values.data);
 
   if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+    redirect(`/login?error=${encodeURIComponent(formatAuthErrorMessage(error.message))}`);
   }
 
   redirect("/dashboard");
 }
 
 export async function signOutAction() {
-  if (isSupabaseConfigured()) {
+  if (isSupabasePublicConfigured()) {
     const supabase = await createSupabaseServerClient();
-    await supabase!.auth.signOut();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
   }
 
-  redirect("/login");
+  redirect(`/login?success=${encodeURIComponent(authSuccessMessages.signedOut)}`);
 }
 
 export async function createCampaignAction(formData: FormData) {
   const user = await getCurrentUser();
   const templateSlug = String(formData.get("templateSlug") || "");
-  const template = getTemplateBySlug(templateSlug);
+  const template = await getPublishedTemplateBySlug(templateSlug);
 
   if (!template) {
     redirect("/templates");
@@ -111,13 +139,16 @@ export async function createCampaignAction(formData: FormData) {
     afterImageUrls,
   });
 
-  if (!isSupabaseConfigured() || !user) {
+  if (!isSupabaseServerConfigured() || !user) {
     redirect("/campaigns/campaign-demo");
   }
 
   const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect("/campaigns/campaign-demo");
+  }
 
-  await admin!
+  await admin
     .from("business_profiles")
     .upsert(
       {
@@ -136,7 +167,7 @@ export async function createCampaignAction(formData: FormData) {
     .select()
     .single();
 
-  const { data: campaign, error: campaignError } = await admin!
+  const { data: campaign, error: campaignError } = await admin
     .from("campaigns")
     .insert({
       user_id: user.id,
@@ -163,7 +194,7 @@ export async function createCampaignAction(formData: FormData) {
   }
 
   await Promise.all([
-    admin!.from("funnels").insert({
+    admin.from("funnels").insert({
       user_id: user.id,
       campaign_id: campaign.id,
       slug: blueprint.slug,
@@ -171,7 +202,7 @@ export async function createCampaignAction(formData: FormData) {
       published_at: new Date().toISOString(),
       config_json: blueprint.funnelConfig,
     }),
-    admin!.from("follow_up_settings").upsert(
+    admin.from("follow_up_settings").upsert(
       {
         user_id: user.id,
         campaign_id: campaign.id,
@@ -204,10 +235,13 @@ export async function submitLeadAction(formData: FormData) {
     message: String(formData.get("message") || ""),
   };
 
-  if (isSupabaseConfigured()) {
+  if (isSupabaseServerConfigured()) {
     const admin = createSupabaseAdminClient();
+    if (!admin) {
+      redirect(`/f/${payload.funnelSlug}?submitted=1`);
+    }
 
-    await admin!.from("leads").insert({
+    await admin.from("leads").insert({
       user_id: payload.userId,
       campaign_id: payload.campaignId,
       funnel_id: payload.funnelId,
@@ -219,7 +253,7 @@ export async function submitLeadAction(formData: FormData) {
       status: "new",
     });
 
-    const { data: followUp } = await admin!
+    const { data: followUp } = await admin
       .from("follow_up_settings")
       .select("*")
       .eq("campaign_id", payload.campaignId)
@@ -239,7 +273,7 @@ export async function submitLeadAction(formData: FormData) {
 }
 
 export async function updateLeadStatusAction(formData: FormData) {
-  if (!isSupabaseConfigured()) {
+  if (!isSupabaseServerConfigured()) {
     redirect("/leads");
   }
 
@@ -247,7 +281,10 @@ export async function updateLeadStatusAction(formData: FormData) {
   const status = String(formData.get("status") || "new");
 
   const admin = createSupabaseAdminClient();
-  await admin!.from("leads").update({ status }).eq("id", leadId);
+  if (!admin) {
+    redirect("/leads");
+  }
+  await admin.from("leads").update({ status }).eq("id", leadId);
 
   revalidatePath("/leads");
   revalidatePath("/dashboard");
@@ -260,15 +297,18 @@ export async function updateSettingsAction(formData: FormData) {
     redirect("/login");
   }
 
-  if (!isSupabaseConfigured()) {
+  if (!isSupabaseServerConfigured()) {
     redirect("/settings?saved=1");
   }
 
   const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect("/settings?saved=1");
+  }
   const logoFile = formData.get("logo") as File;
   const logoUrl = await uploadAsset(logoFile, "logos");
 
-  await admin!.from("business_profiles").upsert(
+  await admin.from("business_profiles").upsert(
     {
       user_id: user.id,
       business_name: String(formData.get("businessName") || ""),
@@ -290,12 +330,14 @@ export async function updateSettingsAction(formData: FormData) {
 export async function publishFunnelAction(formData: FormData) {
   const funnelId = String(formData.get("funnelId") || "");
 
-  if (isSupabaseConfigured()) {
+  if (isSupabaseServerConfigured()) {
     const admin = createSupabaseAdminClient();
-    await admin!
+    if (admin) {
+      await admin
       .from("funnels")
       .update({ is_published: true, published_at: new Date().toISOString() })
       .eq("id", funnelId);
+    }
   }
 
   revalidatePath("/dashboard");

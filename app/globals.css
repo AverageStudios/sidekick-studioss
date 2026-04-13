@@ -1,17 +1,25 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8f6f0;
+  --background: #f6f4ee;
   --foreground: #111827;
-  --surface: #f8f6f0;
-  --panel: rgba(255, 255, 255, 0.82);
-  --soft-panel: #f1efe8;
-  --line: rgba(17, 24, 39, 0.08);
+  --surface: #f6f4ee;
+  --panel: rgba(255, 255, 255, 0.86);
+  --soft-panel: #efede7;
+  --panel-strong: #ffffff;
+  --line: rgba(17, 24, 39, 0.075);
   --brand: #6d5ef8;
-  --soft-brand: #eeebff;
+  --soft-brand: #efecff;
+  --brand-ink: #483aa8;
   --ink: #0f172a;
-  --muted: #7c8495;
-  --muted-strong: #4b5563;
+  --muted: #7d8798;
+  --muted-strong: #4d5868;
+  --success-soft: #ebf8ef;
+  --success-ink: #2f6a4b;
+  --radius-card: 28px;
+  --radius-inner: 22px;
+  --shadow-card: 0 18px 40px rgba(16, 24, 40, 0.05);
+  --shadow-soft: 0 10px 24px rgba(16, 24, 40, 0.04);
 }
 
 @theme inline {
@@ -29,9 +37,10 @@ body {
   background: var(--background);
   color: var(--foreground);
   background-image:
-    radial-gradient(circle at top left, rgba(109, 94, 248, 0.1), transparent 26%),
-    radial-gradient(circle at top right, rgba(35, 184, 166, 0.08), transparent 20%);
+    radial-gradient(circle at top left, rgba(109, 94, 248, 0.08), transparent 24%),
+    radial-gradient(circle at top right, rgba(35, 184, 166, 0.05), transparent 18%);
   font-family: var(--font-plus-jakarta-sans), sans-serif;
+  line-height: 1.5;
 }
 
 h1,
@@ -64,4 +73,113 @@ img {
     linear-gradient(to right, rgba(17, 24, 39, 0.025) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(17, 24, 39, 0.025) 1px, transparent 1px);
   background-size: 34px 34px;
+}
+
+.page-section {
+  margin-inline: auto;
+  width: min(100%, 74rem);
+  padding-inline: 1.1rem;
+}
+
+.marketing-section {
+  padding-block: 4rem;
+}
+
+.section-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(16px);
+}
+
+.surface-muted {
+  background: var(--soft-panel);
+}
+
+.public-site {
+  --public-bg: #f8f7f3;
+  --public-bg-soft: #f1eee8;
+  --public-bg-elevated: #ffffff;
+  --public-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(251, 249, 255, 0.88));
+  --public-surface-strong: linear-gradient(180deg, rgba(255, 255, 255, 0.985), rgba(249, 246, 255, 0.92));
+  --public-surface-soft: rgba(255, 255, 255, 0.8);
+  --public-line: rgba(18, 22, 31, 0.08);
+  --public-line-strong: rgba(101, 88, 246, 0.17);
+  --public-text: #0f1116;
+  --public-muted: rgba(15, 17, 22, 0.68);
+  --public-muted-soft: rgba(15, 17, 22, 0.52);
+  --public-muted-faint: rgba(15, 17, 22, 0.36);
+  --public-accent: #6558f6;
+  --public-accent-strong: #5646ec;
+  --public-accent-soft: rgba(101, 88, 246, 0.08);
+  --public-shadow: 0 30px 90px rgba(15, 17, 22, 0.06);
+  --public-shadow-soft: 0 14px 36px rgba(15, 17, 22, 0.045);
+  background:
+    radial-gradient(circle at top right, rgba(101, 88, 246, 0.06), transparent 20%),
+    radial-gradient(circle at top left, rgba(101, 88, 246, 0.035), transparent 16%),
+    radial-gradient(circle at bottom left, rgba(101, 88, 246, 0.03), transparent 22%),
+    var(--public-bg);
+  color: var(--public-text);
+}
+
+.public-section-shell {
+  border: 1px solid var(--public-line);
+  border-radius: 38px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.965), rgba(248, 245, 255, 0.9));
+  box-shadow: var(--public-shadow);
+}
+
+.public-surface-card {
+  border: 1px solid var(--public-line);
+  background: var(--public-surface);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    var(--public-shadow-soft);
+  backdrop-filter: blur(20px);
+}
+
+.public-surface-card-strong {
+  border: 1px solid var(--public-line-strong);
+  background: var(--public-surface-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    0 20px 52px rgba(15, 17, 22, 0.065);
+  backdrop-filter: blur(20px);
+}
+
+.public-accent-kicker {
+  color: #6d5ef8;
+}
+
+.public-text-muted {
+  color: var(--public-muted);
+}
+
+.public-text-soft {
+  color: var(--public-muted-soft);
+}
+
+.public-text-faint {
+  color: var(--public-muted-faint);
+}
+
+@media (min-width: 640px) {
+  .page-section {
+    padding-inline: 1.5rem;
+  }
+
+  .marketing-section {
+    padding-block: 5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page-section {
+    padding-inline: 1.75rem;
+  }
+
+  .marketing-section {
+    padding-block: 5.5rem;
+  }
 }

@@ -43,6 +43,9 @@ export function PublicLeadForm({
           Keep it simple. A short form usually converts best for detailing traffic.
         </p>
       </div>
+      <div className="rounded-[22px] bg-[var(--soft-panel)] px-4 py-3 text-sm text-[var(--muted-strong)]">
+        Usually best for: name, phone, email, service, and one optional note.
+      </div>
       <Input name="name" placeholder="Your name" required />
       <Input name="phone" placeholder="Phone number" required />
       <Input name="email" type="email" placeholder="Email address" required />
@@ -54,4 +57,3 @@ export function PublicLeadForm({
     </form>
   );
 }
-
