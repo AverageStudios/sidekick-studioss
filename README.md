@@ -25,6 +25,7 @@ The product is intentionally narrow:
 - Marketing site with hero, benefits, how it works, template preview, FAQ, CTA, and footer
 - Auth flow for sign up, sign in, and sign out
 - Protected dashboard, templates, leads, campaign, funnel, and settings pages
+- Admin-only template management routes for creating, editing, featuring, and publishing master templates
 - Seeded campaign templates for detailing offers
 - Template setup flow with business info, offer details, branding, proof, and publish settings
 - Generated campaign output with ad copy, headlines, descriptions, targeting notes, and budget guidance
@@ -62,10 +63,11 @@ If `.env.local` is missing the Supabase values, the app now falls back to a clea
 
 1. Create a Supabase project.
 2. Add the values from `.env.example` to `.env.local`.
-3. Create a public storage bucket named `assets`.
+3. Create a public storage bucket named `assets`, or set `SUPABASE_STORAGE_BUCKET` if you want to use a different bucket name.
 4. Run the SQL in `supabase/migrations/001_initial.sql`.
 5. Run the SQL in `supabase/migrations/002_roles_and_template_admin.sql`.
-6. Run the SQL in `supabase/seed.sql`.
+6. Run the SQL in `supabase/migrations/003_user_onboarding.sql`.
+7. Run the SQL in `supabase/seed.sql`.
 
 Required env vars:
 
@@ -73,6 +75,7 @@ Required env vars:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_STORAGE_BUCKET=assets
 ```
 
 What each env var is used for:
@@ -81,6 +84,7 @@ What each env var is used for:
 - `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL for public and server clients
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: public anon key used by auth/public clients
 - `SUPABASE_SERVICE_ROLE_KEY`: server-only key used for writes, storage uploads, and server data access
+- `SUPABASE_STORAGE_BUCKET`: optional bucket name for uploaded assets; defaults to `assets`
 - `RESEND_API_KEY`: optional email API key
 - `RESEND_FROM_EMAIL`: optional sender address for confirmation emails
 
@@ -91,6 +95,7 @@ If the service-role key is missing, the app still renders safely, but writes, up
 ## Schema notes for Phase 2
 
 - `profiles` stores app-level user roles tied to Supabase auth users.
+- `profiles` also stores first-run onboarding state, selected industry, and the user's starting template.
 - `templates` now supports admin workflow fields such as `status`, `is_featured`, `created_by`, `published_at`, and `updated_at`.
 - `campaigns` now stores `source_template_version` so user campaign instances stay tied to the master template version they were created from.
 
@@ -115,7 +120,7 @@ npm run dev
 
 1. Import the `sidekick-studioss` folder into Vercel.
 2. Add the environment variables from `.env.example`.
-3. Make sure the Supabase `assets` bucket exists.
+3. Make sure the Supabase storage bucket exists, or leave `SUPABASE_STORAGE_BUCKET=assets` and let the app auto-create it with the service role.
 4. Deploy.
 
 ## Project structure

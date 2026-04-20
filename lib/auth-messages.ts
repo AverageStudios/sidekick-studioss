@@ -39,4 +39,5 @@ export function formatAuthErrorMessage(message: string) {
 export const authSuccessMessages = {
   signedOut: "You’ve been signed out.",
   confirmed: "Email confirmed. You can sign in now.",
+  confirmationResent: "Confirmation email sent. Check your inbox and spam folder.",
 } as const;

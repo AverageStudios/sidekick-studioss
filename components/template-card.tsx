@@ -1,48 +1,46 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { TemplateSeed } from "@/types";
 
 export function TemplateCard({ template }: { template: TemplateSeed }) {
   return (
-    <Card className="group flex h-full flex-col overflow-hidden transition duration-200 hover:-translate-y-1 hover:shadow-[0_22px_44px_rgba(16,24,40,0.08)]">
-      <div className="aspect-[4/3] bg-[radial-gradient(circle_at_top_left,rgba(109,94,248,0.2),transparent_35%),linear-gradient(135deg,#fafbff_0%,#f0efff_45%,#f5f3ee_100%)] p-5">
-        <div className="flex h-full flex-col rounded-[24px] border border-white/70 bg-white/78 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.74)]">
-          <div className="flex items-start justify-between">
-            <Badge>{template.category}</Badge>
-            <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted-strong)]">
-              Plug-and-play
-            </span>
-          </div>
-          <div className="mt-8 rounded-[20px] bg-white/88 p-4 shadow-[0_10px_18px_rgba(17,24,39,0.05)]">
-            <div className="h-3 w-2/3 rounded-full bg-[#cfd4ff]" />
-            <div className="mt-3 grid gap-2">
-              <div className="h-2.5 w-full rounded-full bg-[#e9ebfa]" />
-              <div className="h-2.5 w-5/6 rounded-full bg-[#ececf5]" />
-              <div className="h-2.5 w-3/4 rounded-full bg-[#ececf5]" />
-            </div>
-          </div>
-          <div className="mt-auto flex items-center gap-2 pt-4 text-xs text-[var(--muted-strong)]">
-            <span className="rounded-full bg-[var(--soft-brand)] px-3 py-1">Fast setup</span>
-            <span className="rounded-full bg-white px-3 py-1">Paid traffic ready</span>
-          </div>
-        </div>
+    <div className="group flex max-w-[20rem] flex-col overflow-hidden rounded-[24px] border border-[var(--line)] bg-white transition duration-200 hover:shadow-[0_8px_28px_rgba(16,24,40,0.06)]">
+      <div className="aspect-[16/9] overflow-hidden border-b border-[var(--line)] bg-[var(--soft-panel)]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={template.previewImage}
+          alt={`${template.name} preview`}
+          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+        />
       </div>
-      <div className="flex flex-1 flex-col space-y-4 p-6">
-        <div className="space-y-3">
-          <h3 className="text-xl font-semibold tracking-[-0.03em] text-[var(--ink)]">{template.name}</h3>
-          <p className="text-sm leading-6 text-[var(--muted-strong)]">{template.description}</p>
+
+      <div className="flex flex-1 flex-col gap-4 p-4">
+        <div className="space-y-1">
+          <h3 className="text-[1.05rem] font-semibold tracking-[-0.02em] text-[var(--ink)]">{template.name}</h3>
+          <p className="text-xs text-[var(--muted)]">
+            {template.industry || template.category}
+          </p>
         </div>
-        <p className="min-h-[72px] text-sm leading-6 text-[var(--muted)]">{template.positioning}</p>
-        <Button asChild className="mt-auto w-full justify-between">
-          <Link href={`/templates/${template.slug}`}>
-            Use this template
-            <ArrowRight className="h-4 w-4" />
+
+        <p className="line-clamp-2 flex-1 text-sm leading-6 text-[var(--muted)]">{template.description}</p>
+
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-[#ecfdf3] px-2.5 py-1 text-[11px] font-medium text-[#15803d]">Published</span>
+          {template.category ? (
+            <span className="rounded-full bg-[var(--soft-panel)] px-2.5 py-1 text-[11px] font-medium text-[var(--muted-strong)]">
+              {template.category}
+            </span>
+          ) : null}
+        </div>
+
+        <Button asChild variant="outline" className="mt-1 w-full justify-between rounded-[18px]">
+          <Link href={`/templates/new?template=${template.slug}`}>
+            Use template
+            <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </Button>
       </div>
-    </Card>
+    </div>
   );
 }

@@ -1,4 +1,5 @@
 import { TemplateRecord, TemplateSeed } from "@/types";
+import { getTemplatePlaceholderFields } from "@/lib/campaign-launch";
 
 // Dev fallback only. The real source of truth for customer-facing template browsing
 // should be the Supabase `templates` table.
@@ -9,9 +10,15 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     name: "Full Detail Promo",
     description: "A fast-launch offer for drivers who want the full interior and exterior reset.",
     category: "Lead Generation",
+    industry: "Auto detailing",
     positioning: "Best for shops pushing a flagship full detail with a clean entry offer.",
     previewImage: "/placeholders/full-detail.jpg",
     ctaDefault: "Claim My Detail",
+    offerStructure: [
+      "Lead with the main service angle",
+      "Anchor the offer with price or value",
+      "Move into a simple mobile lead form",
+    ],
     benefits: [
       "Simple offer positioning that works for paid traffic",
       "High-trust before and after story",
@@ -67,9 +74,15 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     name: "Interior Detail Promo",
     description: "A focused funnel for detailers selling interior recovery, stain removal, and refresh jobs.",
     category: "Lead Generation",
+    industry: "Auto detailing",
     positioning: "Best for shops booking family vehicles, work trucks, or rideshare interiors.",
     previewImage: "/placeholders/interior-detail.jpg",
     ctaDefault: "Get Interior Pricing",
+    offerStructure: [
+      "Start from the pain point",
+      "Show the interior reset angle",
+      "Collect the inquiry with a quick form",
+    ],
     benefits: [
       "Clear pain-point messaging for messy interiors",
       "Works well with dirty-to-clean creative",
@@ -125,9 +138,15 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     name: "Ceramic Coating Promo",
     description: "A premium-feeling campaign for high-ticket coating jobs and paint protection offers.",
     category: "Premium Service",
+    industry: "Auto detailing",
     positioning: "Best for detailers selling higher-ticket paint protection with a premium brand feel.",
     previewImage: "/placeholders/ceramic.jpg",
     ctaDefault: "Request Coating Quote",
+    offerStructure: [
+      "Premium service positioning",
+      "Protection/value framing",
+      "Quote request for higher-intent buyers",
+    ],
     benefits: [
       "Premium landing flow for higher-ticket services",
       "Supports price anchoring against regular pricing",
@@ -183,9 +202,15 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     name: "Paint Correction Promo",
     description: "A polished campaign for swirl removal, gloss restoration, and paint correction leads.",
     category: "Premium Service",
+    industry: "Auto detailing",
     positioning: "Best for detailers selling transformation-focused correction work.",
     previewImage: "/placeholders/paint-correction.jpg",
     ctaDefault: "See Correction Options",
+    offerStructure: [
+      "Transformation-first hero",
+      "Paint correction value story",
+      "Simple quote step",
+    ],
     benefits: [
       "Strong fit for visual transformation ads",
       "Helps explain value with simple copy",
@@ -241,9 +266,15 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     name: "Monthly Maintenance Promo",
     description: "A recurring-revenue funnel for maintenance washes and simple monthly membership style offers.",
     category: "Recurring Revenue",
+    industry: "Auto detailing",
     positioning: "Best for detailers wanting steadier repeat business with a lightweight offer.",
     previewImage: "/placeholders/maintenance.jpg",
     ctaDefault: "Join The Wash Plan",
+    offerStructure: [
+      "Convenience-focused recurring angle",
+      "Membership or monthly plan framing",
+      "Lead capture for repeat business",
+    ],
     benefits: [
       "Supports repeatable local revenue",
       "Simple offer format for existing customers and new traffic",
@@ -306,6 +337,10 @@ export function getTemplateById(id: string) {
 export function hydrateTemplateRecord(record: TemplateRecord): TemplateSeed {
   const fallback = getTemplateById(record.id) || getTemplateBySlug(record.slug);
   const config = record.config_json || {};
+  const placeholderFields =
+    config.placeholderFields ||
+    fallback?.placeholderFields ||
+    (fallback ? getTemplatePlaceholderFields(fallback) : []);
 
   return {
     id: record.id,
@@ -313,9 +348,12 @@ export function hydrateTemplateRecord(record: TemplateRecord): TemplateSeed {
     name: record.name,
     description: record.description,
     category: record.category,
+    industry: config.industry || fallback?.industry || "",
     positioning: config.positioning || fallback?.positioning || record.description,
     previewImage: record.preview_image_url || fallback?.previewImage || "/placeholders/template.jpg",
     ctaDefault: config.ctaDefault || fallback?.ctaDefault || "Get Started",
+    offerStructure: config.offerStructure || fallback?.offerStructure || [],
+    placeholderFields,
     benefits: config.benefits || fallback?.benefits || [],
     faq: config.faq || fallback?.faq || [],
     adCopy: config.adCopy || fallback?.adCopy || {

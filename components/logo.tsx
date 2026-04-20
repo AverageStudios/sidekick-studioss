@@ -8,23 +8,31 @@ export function Logo({
   markOnly = false,
   showTagline = false,
   tone = "dark",
+  size = "default",
 }: {
   href?: string;
   className?: string;
   markOnly?: boolean;
   showTagline?: boolean;
   tone?: "dark" | "light";
+  size?: "default" | "compact";
 }) {
   const content = (
     <>
-      <span className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-[18px] bg-[#1f1337] shadow-[0_14px_30px_rgba(91,94,214,0.14)]">
+      <span
+        className={cn(
+          "relative flex items-center justify-center overflow-hidden bg-[#1f1337] shadow-[0_14px_30px_rgba(91,94,214,0.14)]",
+          size === "compact" ? "h-10 w-10 rounded-[16px]" : "h-11 w-11 rounded-[18px]",
+        )}
+      >
         <Image src="/sidekick-logo.png" alt="SideKick Studioss logo" fill className="object-cover" />
       </span>
       {!markOnly ? (
         <span className="flex flex-col">
           <span
             className={cn(
-              "text-[15px] font-semibold leading-none tracking-[-0.03em]",
+              size === "compact" ? "text-[14px]" : "text-[15px]",
+              "font-semibold leading-none tracking-[-0.03em]",
               tone === "light" ? "text-white" : "text-[var(--ink)]",
             )}
           >
@@ -41,7 +49,7 @@ export function Logo({
   );
 
   return (
-    <Link href={href} className={cn("inline-flex items-center gap-3", className)}>
+    <Link href={href} className={cn("inline-flex items-center gap-3", size === "compact" && "gap-2.5", className)}>
       {content}
     </Link>
   );

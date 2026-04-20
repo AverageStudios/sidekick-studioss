@@ -1,111 +1,117 @@
 import { AppShell } from "@/components/app-shell";
-import { updateSettingsAction } from "@/app/actions";
-import { Badge } from "@/components/ui/badge";
+import { InitialsAvatar } from "@/components/initials-avatar";
+import Link from "next/link";
+import { signOutAction, updateProfileSettingsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { PageHeader } from "@/components/page-header";
-import { Textarea } from "@/components/ui/textarea";
-import { requireUser } from "@/lib/auth";
-import { getBusinessProfile } from "@/lib/data";
+import { getCurrentProfile, requireUser } from "@/lib/auth";
+import { getCurrentWorkspaceContext, getUserDisplayNameFromProfile, getUserInitialsFromProfile } from "@/lib/workspaces";
 
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string }>;
 }) {
   const user = await requireUser();
-  const profile = await getBusinessProfile(user.id);
-  const { saved } = await searchParams;
+  const [{ saved, error }, workspaceContext, accountProfile] = await Promise.all([
+    searchParams,
+    getCurrentWorkspaceContext(),
+    getCurrentProfile(),
+  ]);
+  const resolvedProfile = accountProfile || workspaceContext?.profile || null;
+  const resolvedName =
+    getUserDisplayNameFromProfile(resolvedProfile, user) ||
+    workspaceContext?.userDisplayName ||
+    "User";
+  const resolvedInitials =
+    getUserInitialsFromProfile(resolvedProfile, user) ||
+    workspaceContext?.userInitials ||
+    "U";
+  const resolvedEmail = user.email || workspaceContext?.userEmail || "";
 
   return (
     <AppShell currentPath="/settings">
-      <PageHeader
-        badge="Settings"
-        title="Business defaults"
-        description="Keep your brand and contact info ready so campaign setup stays quick."
-      />
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Account</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[var(--ink)]">Profile settings</h1>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Personal profile details for your account inside this workspace.
+          </p>
+        </div>
+        <Button asChild variant="outline">
+          <Link href="/workspace/settings">Open workspace settings</Link>
+        </Button>
+      </div>
+
       {saved ? (
-        <div className="rounded-[24px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           Settings saved.
         </div>
       ) : null}
+      {error ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
+        </div>
+      ) : null}
 
-      <form action={updateSettingsAction}>
-        <div className="grid gap-5 lg:gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-          <div className="grid gap-5 lg:gap-6">
-            <Card className="p-6 sm:p-7">
-              <div className="mb-5">
-                <Badge>Business info</Badge>
-                <h2 className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Shop basics</h2>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Input name="businessName" defaultValue={profile?.business_name || ""} placeholder="Business name" required />
-                <Input name="location" defaultValue={profile?.location || ""} placeholder="Location" required />
-              </div>
-              <div className="mt-[1.125rem]">
-                <Textarea
-                  name="description"
-                  defaultValue={profile?.description || ""}
-                  placeholder="Short business description"
-                />
-              </div>
-            </Card>
+      <section id="account">
+        <div className="mb-5">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--muted)]">Account</p>
+          <h2 className="mt-1 text-base font-semibold text-[var(--ink)]">Your profile</h2>
+          <p className="mt-0.5 text-sm text-[var(--muted)]">
+            Your personal account inside this workspace.
+          </p>
+        </div>
 
-            <Card className="p-6 sm:p-7">
-              <div className="mb-5">
-                <Badge>Contact defaults</Badge>
-                <h2 className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Lead response details</h2>
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
+            <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] px-3.5 py-3">
+              <InitialsAvatar initials={resolvedInitials} label={resolvedName} size="lg" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-[var(--ink)]">{resolvedName}</p>
+                <p className="truncate text-xs text-[var(--muted)]">{resolvedEmail || "Signed-in user"}</p>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Input name="phone" defaultValue={profile?.phone || ""} placeholder="Phone" required />
-                <Input name="email" defaultValue={profile?.email || ""} placeholder="Email" required />
+            </div>
+            <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Profile info</p>
+            <form action={updateProfileSettingsAction}>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input name="firstName" defaultValue={resolvedProfile?.first_name || ""} placeholder="First name" />
+                <Input name="lastName" defaultValue={resolvedProfile?.last_name || ""} placeholder="Last name" />
                 <div className="sm:col-span-2">
-                  <Input name="defaultCta" defaultValue={profile?.default_cta || "Get My Quote"} placeholder="Default CTA" />
+                  <Input value={resolvedEmail} placeholder="Email" readOnly disabled />
                 </div>
               </div>
-            </Card>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Button type="submit">Save profile</Button>
+              </div>
+            </form>
+            <div className="mt-3">
+              <form action={signOutAction}>
+                <Button type="submit" variant="outline">
+                  Sign out
+                </Button>
+              </form>
+            </div>
           </div>
 
-          <div className="grid gap-5 lg:gap-6">
-            <Card className="p-6 sm:p-7">
-              <div className="mb-5">
-                <Badge>Branding</Badge>
-                <h2 className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Logo and color</h2>
-              </div>
-              <div className="grid gap-5">
-                <div className="rounded-[24px] bg-[var(--soft-panel)] p-4">
-                  <label className="mb-2 block text-sm font-medium text-[var(--ink)]">Brand color</label>
-                  <Input
-                    name="brandColor"
-                    type="color"
-                    defaultValue={profile?.brand_color || "#6D5EF8"}
-                    className="h-14 p-2"
-                  />
-                </div>
-                <div className="rounded-[24px] bg-[var(--soft-panel)] p-4">
-                  <label className="mb-2 block text-sm font-medium text-[var(--ink)]">Logo upload</label>
-                  <Input name="logo" type="file" accept="image/*" />
-                </div>
-              </div>
-            </Card>
-
-            <Card className="p-6 sm:p-7">
-              <div className="space-y-2">
-                <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Save and keep moving</h2>
-                <p className="text-sm leading-6 text-[var(--muted-strong)]">
-                  These defaults prefill your next campaign so setup stays fast.
+          <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Account notes</p>
+            <div className="mt-4 space-y-2.5">
+              {[
+                "Your profile name appears in the account dropdown.",
+                "Workspace/company settings now live in the dedicated workspace settings page.",
+                "Email is controlled by your authentication account.",
+              ].map((tip) => (
+                <p key={tip} className="text-xs leading-5 text-[var(--muted)]">
+                  — {tip}
                 </p>
-              </div>
-              <div className="mt-6 flex justify-end">
-                <Button type="submit" size="lg">
-                  Save settings
-                </Button>
-              </div>
-            </Card>
+              ))}
+            </div>
           </div>
         </div>
-      </form>
+      </section>
     </AppShell>
   );
 }

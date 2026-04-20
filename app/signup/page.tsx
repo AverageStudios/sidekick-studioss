@@ -4,6 +4,7 @@ import { AuthCard } from "@/components/auth-card";
 import { getCurrentUser } from "@/lib/auth";
 import { ConfigNotice } from "@/components/config-notice";
 import { getSupabaseFallbackMessage, isSupabasePublicConfigured } from "@/lib/env";
+import { Input } from "@/components/ui/input";
 
 export default async function SignupPage({
   searchParams,
@@ -44,6 +45,22 @@ export default async function SignupPage({
           footerHref="/login"
           footerLinkLabel="Sign in"
           error={error}
+          fields={
+            <div className="grid gap-[1.125rem] pt-2 sm:grid-cols-2 sm:pt-3">
+              <div className="space-y-[0.625rem]">
+                <label className="text-sm font-medium text-[var(--ink)]" htmlFor="firstName">
+                  First name
+                </label>
+                <Input id="firstName" name="firstName" placeholder="Enter first name" required />
+              </div>
+              <div className="space-y-[0.625rem]">
+                <label className="text-sm font-medium text-[var(--ink)]" htmlFor="lastName">
+                  Last name
+                </label>
+                <Input id="lastName" name="lastName" placeholder="Enter last name" required />
+              </div>
+            </div>
+          }
         />
       </div>
     </div>

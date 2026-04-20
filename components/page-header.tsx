@@ -8,26 +8,48 @@ export function PageHeader({
   description,
   actions,
   className,
+  variant = "card",
 }: {
   badge?: string;
   title: string;
   description: string;
   actions?: React.ReactNode;
   className?: string;
+  variant?: "card" | "plain";
 }) {
-  return (
-    <Card className={cn("overflow-hidden bg-[linear-gradient(135deg,#fffefc_0%,#f4f1ff_58%,#edf6f4_100%)] p-6 sm:p-7 lg:p-8", className)}>
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-        <div className="space-y-[0.875rem]">
+  if (variant === "plain") {
+    return (
+      <div className={cn("flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between", className)}>
+        <div className="space-y-3">
           {badge ? <Badge>{badge}</Badge> : null}
-          <h1 className="max-w-3xl text-3xl font-semibold tracking-[-0.06em] text-[var(--ink)] sm:text-4xl">
+          <h1 className="max-w-3xl text-3xl font-semibold tracking-[-0.055em] text-[var(--ink)] sm:text-[2.3rem]">
             {title}
           </h1>
-          <p className="max-w-2xl text-sm leading-7 text-[var(--muted-strong)] sm:text-base">
+          <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-[15px]">{description}</p>
+        </div>
+        {actions ? <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">{actions}</div> : null}
+      </div>
+    );
+  }
+
+  return (
+    <Card
+      className={cn(
+        "overflow-hidden border-[var(--line)] bg-[rgba(255,255,255,0.72)] p-6 shadow-[0_10px_24px_rgba(16,24,40,0.03)] sm:p-7",
+        className,
+      )}
+    >
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="space-y-3">
+          {badge ? <Badge>{badge}</Badge> : null}
+          <h1 className="max-w-3xl text-3xl font-semibold tracking-[-0.055em] text-[var(--ink)] sm:text-[2.35rem]">
+            {title}
+          </h1>
+          <p className="max-w-2xl text-sm leading-6 text-[var(--muted-strong)] sm:text-[15px]">
             {description}
           </p>
         </div>
-        {actions ? <div className="flex flex-col gap-[0.625rem] sm:flex-row sm:items-center">{actions}</div> : null}
+        {actions ? <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">{actions}</div> : null}
       </div>
     </Card>
   );

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { signInAction } from "@/app/actions";
+import { resendConfirmationAction, signInAction } from "@/app/actions";
 import { AuthCard } from "@/components/auth-card";
+import { Button } from "@/components/ui/button";
 import { ConfigNotice } from "@/components/config-notice";
 import { getCurrentUser } from "@/lib/auth";
 import { authSuccessMessages } from "@/lib/auth-messages";
@@ -10,15 +11,16 @@ import { getSupabaseFallbackMessage, isSupabasePublicConfigured } from "@/lib/en
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; success?: string }>;
+  searchParams: Promise<{ error?: string; success?: string; email?: string; needsConfirm?: string }>;
 }) {
   const user = await getCurrentUser();
   if (user) {
     redirect("/dashboard");
   }
 
-  const { error, success } = await searchParams;
+  const { error, success, email, needsConfirm } = await searchParams;
   const supabaseFallbackMessage = getSupabaseFallbackMessage();
+  const showResendConfirmation = needsConfirm === "1" && Boolean(email);
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-10 sm:px-6 sm:py-12">
@@ -50,6 +52,24 @@ export default async function LoginPage({
           footerLinkLabel="Start free trial"
           error={error}
           success={success === authSuccessMessages.confirmed ? "Email confirmed. You can sign in now." : success}
+          emailDefaultValue={email}
+          extraContent={
+            showResendConfirmation ? (
+              <div className="rounded-2xl border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-4">
+                <p className="text-sm font-medium text-[var(--ink)]">Need a new confirmation email?</p>
+                <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+                  We can send a fresh link to {email}.
+                </p>
+                <form action={resendConfirmationAction} className="mt-4">
+                  <input type="hidden" name="email" value={email} />
+                  <input type="hidden" name="source" value="login" />
+                  <Button type="submit" variant="outline">
+                    Resend confirmation email
+                  </Button>
+                </form>
+              </div>
+            ) : null
+          }
         />
       </div>
     </div>

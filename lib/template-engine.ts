@@ -1,10 +1,39 @@
 import { TemplateSeed, TemplateSetupAssetState, TemplateSetupValues } from "@/types";
 import { slugify } from "@/lib/utils";
 
+function buildPlaceholderTokens(values: TemplateSetupValues) {
+  const placeholderValues = values.placeholderValues || {};
+  const offerPrice = placeholderValues.offerPrice || placeholderValues.monthlyRate || values.offerPrice || "";
+  const regularPrice = placeholderValues.regularPrice || values.regularPrice || "";
+  const savings =
+    placeholderValues.savings ||
+    (offerPrice && regularPrice && !Number.isNaN(Number(regularPrice)) && !Number.isNaN(Number(offerPrice))
+      ? String(Number(regularPrice) - Number(offerPrice))
+      : "");
+
+  return {
+    businessName: values.businessName || "Your detailing shop",
+    city: values.city || "your city",
+    offerPrice,
+    price: offerPrice,
+    regularPrice,
+    normalPrice: placeholderValues.normalPrice || regularPrice,
+    savings,
+    monthlyRate: placeholderValues.monthlyRate || offerPrice,
+    joinFee: placeholderValues.joinFee || regularPrice,
+    yearlySavings: placeholderValues.yearlySavings || "",
+    ctaText: values.ctaText || "",
+    ...placeholderValues,
+  };
+}
+
 function fillPlaceholders(input: string, values: TemplateSetupValues) {
-  return input
-    .replaceAll("{{businessName}}", values.businessName || "Your detailing shop")
-    .replaceAll("{{city}}", values.city || "your city");
+  const tokens = buildPlaceholderTokens(values);
+
+  return input.replace(/\{\{(\w+)\}\}/g, (_, key: string) => {
+    const value = tokens[key as keyof typeof tokens];
+    return typeof value === "string" ? value : "";
+  });
 }
 
 export function createCampaignBlueprint(
@@ -47,7 +76,18 @@ export function createCampaignBlueprint(
       offerPrice: values.offerPrice,
       regularPrice: values.regularPrice,
       followUpEnabled: values.followUpEnabled,
+      thankYouPage: {
+        headline: values.thankYouHeadline || "Thanks, we got your request.",
+        description: values.thankYouDescription || "We'll follow up shortly with the next step.",
+        buttonLabel: values.thankYouButtonText || "Back to site",
+        destinationUrl: values.destinationUrl || "",
+      },
+      launchSettings: {
+        campaignGoal: values.campaignGoal || "OUTCOME_LEADS",
+        dailyBudget: values.dailyBudget || "",
+        targetLocation: values.targetLocation || values.city,
+        placeholderValues: values.placeholderValues || {},
+      },
     },
   };
 }
-

@@ -15,6 +15,9 @@ export function AuthCard({
   footerLinkLabel,
   error,
   success,
+  extraContent,
+  fields,
+  emailDefaultValue,
 }: {
   title: string;
   description: string;
@@ -26,6 +29,9 @@ export function AuthCard({
   footerLinkLabel: string;
   error?: string;
   success?: string;
+  extraContent?: React.ReactNode;
+  fields?: React.ReactNode;
+  emailDefaultValue?: string;
 }) {
   return (
     <Card className="w-full max-w-md p-6 sm:p-7">
@@ -45,11 +51,19 @@ export function AuthCard({
         </div>
       ) : null}
       <form action={action} className="mt-6 space-y-[1.125rem]">
+        {fields}
         <div className="space-y-[0.625rem]">
           <label className="text-sm font-medium text-[var(--ink)]" htmlFor="email">
             Email
           </label>
-          <Input id="email" type="email" name="email" placeholder="name@shop.com" required />
+          <Input
+            id="email"
+            type="email"
+            name="email"
+            placeholder="name@shop.com"
+            defaultValue={emailDefaultValue}
+            required
+          />
         </div>
         <div className="space-y-[0.625rem]">
           <label className="text-sm font-medium text-[var(--ink)]" htmlFor="password">
@@ -59,6 +73,7 @@ export function AuthCard({
         </div>
         <AuthSubmitButton label={submitLabel} pendingLabel={pendingLabel} />
       </form>
+      {extraContent ? <div className="mt-5">{extraContent}</div> : null}
       <p className="mt-6 text-sm leading-6 text-[var(--muted)]">
         {footerLabel}{" "}
         <Link href={footerHref} className="font-medium text-[var(--brand)]">

@@ -1,0 +1,1275 @@
+/* Mobile Clients Page Styles */
+
+/* Mobile Stats Grid */
+.mobile-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.mobile-stats-card {
+  background: #f9fafb;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dark .mobile-stats-card {
+  background: #374151;
+}
+
+.mobile-stats-card:active {
+  transform: scale(0.98);
+}
+
+/* Stats Bar Scroll Indicator Animation (keeping for potential future use) */
+.mobile-stats-scroll-indicator {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* FAB Animations */
+.animate-fade-in-up {
+  animation: fadeInUp 0.3s ease-out forwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Mobile Card Minimal Design */
+.client-mobile-card {
+  position: relative;
+  touch-action: pan-y;
+  transition: background-color 0.15s ease;
+}
+
+.client-mobile-card.expanded {
+  background-color: #f9fafb;
+}
+
+.dark .client-mobile-card.expanded {
+  background-color: #1f2937;
+}
+
+/* Smooth expand icon rotation */
+.client-mobile-card svg[data-mobile-client-card-target="expandIcon"] {
+  transition: transform 0.2s ease;
+}
+
+/* Mini progress bar styling */
+.client-mobile-card .mini-progress-bar {
+  transition: width 0.3s ease;
+}
+
+/* Remove tap highlight on mobile */
+.client-mobile-card {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Bottom Sheet Animations */
+.bottom-sheet-enter {
+  animation: slideUp 0.3s ease-out forwards;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Mobile Stats Carousel */
+.mobile-stats-carousel {
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-stats-carousel .carousel-container {
+  scroll-snap-type: x mandatory;
+}
+
+.mobile-stats-carousel .carousel-item {
+  scroll-snap-align: start;
+}
+
+/* Carousel Indicators */
+.mobile-stats-carousel span[data-mobile-stats-carousel-target="indicator"] {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.mobile-stats-carousel span[data-mobile-stats-carousel-target="indicator"]:hover {
+  transform: scale(1.5);
+}
+
+.mobile-stats-carousel span[data-mobile-stats-carousel-target="indicator"]:active {
+  transform: scale(1.3);
+}
+
+/* Tab Dropdown */
+.tab-dropdown-button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab-dropdown-menu {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* Touch-optimized tap targets */
+@media (max-width: 640px) {
+  /* Prevent horizontal scrolling on mobile */
+  html, body {
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
+  }
+  
+  .clients-index-page {
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
+  }
+  
+  /* Fix viewport height on mobile */
+  .flex.h-screen {
+    height: 100vh; /* Fallback for browsers that don't support -webkit-fill-available */
+    height: -webkit-fill-available; /* Preferred height accounting for mobile browser UI */
+  }
+  
+  /* Ensure minimum 44px touch targets */
+  button, a, .clickable {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Improve form inputs on mobile */
+  input[type="text"],
+  input[type="search"],
+  select {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+  
+  /* Carousel indicator states using Tailwind's @apply directive */
+  .mobile-stats-carousel .indicator.active {
+    @apply bg-blue-600;
+  }
+  
+  .mobile-stats-carousel .indicator.inactive {
+    @apply bg-gray-300 dark:bg-gray-600;
+  }
+  
+  /* Sticky elements positioning */
+  /* Note: Duplicate position properties are intentional for cross-browser compatibility */
+  .sticky {
+    position: -webkit-sticky; /* For Safari and older browsers */
+    position: sticky; /* Standard property */
+  }
+  
+  /* Fix tab overflow - allow horizontal scroll only for tabs */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Remove container margins on mobile */
+  .container {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  /* Ensure FAB doesn't push content */
+  .fixed.bottom-6.right-6 {
+    bottom: 1rem;
+    right: 1rem;
+  }
+}
+
+/* Pull-to-refresh indicator */
+.pull-to-refresh {
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 40px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.pull-to-refresh.active {
+  top: 20px;
+}
+
+/* Loading skeleton for cards */
+.skeleton-card {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+/*
+ * This is a manifest file that'll be compiled into dashboard.css, which will include all the files
+ * listed below.
+ *
+ * Any CSS and SCSS file within this directory, lib/assets/stylesheets, or any plugin's
+ * vendor/assets/stylesheets directory can be referenced here using a relative path.
+ *
+ * You're free to add application-wide styles to this file and they'll appear at the bottom of the
+ * compiled file so the styles you add here take precedence over styles defined in any other CSS/SCSS
+ * files in this directory. Styles in this file should be added after the last require_* statement.
+ * It is generally better to create a new file per style scope.
+ *
+
+
+ */
+
+.is-disabled {
+  pointer-events: none !important;
+  opacity: 0.4 !important;
+}
+
+body {
+  --input-range-height: 0.5em;
+  --input-range-background: #ccc;
+  --input-range-border-radius: 1em;
+  --primary-color-rgb: 59, 130, 246;
+  --input-range-thumb-backgroud-color: rgba(var(--primary-color-rgb), var(--tw-bg-opacity, 1));
+  --input-range-thumb-dimensions: 1.1em;
+  --input-range-thumb-margin-top: -0.28em;
+  --input-range-thumb-border-radius: 50%;
+}
+
+input[type=range] {
+  width: 100%;
+  cursor: pointer;
+  outline: none;
+  border-radius: var(--input-range-border-radius);
+  height: var(--input-range-height);
+  background: var(--input-range-background);
+}
+
+input[type=range]::-webkit-slider-thumb {
+  pointer-events: all;
+  -webkit-appearance: none;
+  border: none;
+  width: var(--input-range-thumb-dimensions);
+  height: var(--input-range-thumb-dimensions);
+  background-color: var(--input-range-thumb-backgroud-color);
+  border-radius: var(--input-range-thumb-border-radius);
+  margin-top: var(--input-range-thumb-margin-top);
+}
+
+/* Uppie Ad Generator Workflow Styles */
+#workflow-progress-indicator {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  transition: box-shadow 0.2s ease-in-out;
+}
+
+/* Add shadow when scrolled */
+#workflow-progress-indicator.scrolled {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Grid layout for workflow steps */
+#workflow-progress-indicator .grid-cols-8 {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
+/* Adjust chat body padding to account for sticky header */
+#uppie-chat-body {
+  padding-top: 1rem;
+  scroll-behavior: smooth;
+}
+
+/* Tooltip styles */
+.workflow-step-tooltip {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Progress dot hover effects */
+#workflow-progress-indicator [data-step] {
+  transition: all 0.2s ease-out;
+}
+
+#workflow-progress-indicator [data-step]:hover {
+  transform: scale(1.25);
+  filter: brightness(1.1);
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 640px) {
+  #workflow-progress-indicator {
+    margin-left: -1rem;
+    margin-right: -1rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+input[type=range]::-moz-range-thumb {
+  pointer-events: all;
+  appearance: none;
+  border: none;
+  width: var(--input-range-thumb-dimensions);
+  height: var(--input-range-thumb-dimensions);
+  background-color: var(--input-range-thumb-backgroud-color);
+  border-radius: var(--input-range-thumb-border-radius);
+  margin-top: var(--input-range-thumb-margin-top);
+}
+
+input[type=range]::-webkit-slider-runnable-track {
+  height: var(--input-range-height);
+  background: var(--input-range-background);
+  border-radius: var(--input-range-border-radius);
+}
+
+input[type=range]::-moz-range-track {
+  height: var(--input-range-height);
+  background: var(--input-range-background);
+  border-radius: var(--input-range-border-radius);
+}
+
+input[type=range]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 10px rgba(var(--primary-color-rgb), .1)
+}
+
+input[type=range]:active::-webkit-slider-thumb {
+  box-shadow: 0 0 0 13px rgba(var(--primary-color-rgb), .2)
+}
+
+input[type=range]:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 13px rgba(var(--primary-color-rgb), .2)
+}
+
+input[type=range]::-moz-range-thumb:hover {
+  box-shadow: 0 0 0 10px rgba(var(--primary-color-rgb), .1)
+}
+
+input[type=range]:active::-moz-range-thumb {
+  box-shadow: 0 0 0 13px rgba(var(--primary-color-rgb), .2)
+}
+
+input[type=range]:focus::-moz-range-thumb {
+  box-shadow: 0 0 0 13px rgba(var(--primary-color-rgb), .2)
+}
+
+#markers-threshold,
+#markers-upcharge {
+  writing-mode: horizontal-tb;
+}
+
+.rebilling-label-dollar::after {
+  content: " $";
+  font-weight: 700;
+}
+
+.rebilling-label-percentage::after {
+  content: " %";
+  font-weight: 800;
+}
+
+.bubble-rebilling {
+  background: rgba(var(--primary-color-rgb), 1);
+  color: white;
+  padding: 4px 12px;
+  position: absolute;
+  border-radius: 4px;
+  transform: translateY(-170%) translateX(-50%);
+  margin-top: 0.7em;
+  font-weight: 700;
+}
+
+.bubble-rebilling::before {
+  content: "";
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: rgba(var(--primary-color-rgb), 1);
+  bottom: -2px;
+  left: 50%;
+  transform: rotate(45deg);
+}
+
+.plan-tooltip-bubble::before {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background-color: inherit;
+  top: -2px;
+  left: calc(50% - 11px);
+  transform: rotate(45deg);
+}
+
+dialog {
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+dialog:focus {
+  outline: none;
+}
+
+dialog:focus-visible {
+  outline: none;
+}
+
+dialog::backdrop {
+  background-color: rgb(107, 114, 128);
+  opacity: 0.75;
+}
+
+.dialog-width {
+  min-width: 30em;
+  max-width: 30em;
+}
+
+/*
+start - ignore perfers-color-scheme - darkMode
+*/
+
+.text-gray-700 {
+  --tw-text-opacity: 1;
+  color: rgba(55, 65, 81, var(--tw-text-opacity));
+}
+
+.bg-white {
+  --tw-bg-opacity: 1;
+  background-color: rgba(255, 255, 255, var(--tw-bg-opacity));
+}
+
+.text-red-500 {
+  --tw-text-opacity: 1;
+  color: rgba(239, 68, 68, var(--tw-text-opacity));
+}
+
+.bg-gray-100 {
+  --tw-bg-opacity: 1;
+  background-color: rgba(243, 244, 246, var(--tw-bg-opacity));
+}
+
+.bg-gray-200 {
+  --tw-bg-opacity: 1;
+  background-color: rgba(229, 231, 235, var(--tw-bg-opacity));
+}
+
+.text-gray-900 {
+  --tw-text-opacity: 1;
+  color: rgba(17, 24, 39, var(--tw-text-opacity));
+}
+
+.text-gray-500 {
+  --tw-text-opacity: 1;
+  color: rgba(107, 114, 128, var(--tw-text-opacity));
+}
+
+.text-gray-800 {
+  --tw-text-opacity: 1;
+  color: rgba(31, 41, 55, var(--tw-text-opacity));
+}
+
+.bg-gray-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgba(249, 250, 251, var(--tw-bg-opacity));
+}
+
+.text-green-700 {
+  --tw-text-opacity: 1;
+  color: rgba(4, 120, 87, var(--tw-text-opacity));
+}
+
+.text-gray-600 {
+  --tw-text-opacity: 1;
+  color: rgba(75, 85, 99, var(--tw-text-opacity));
+}
+
+.border-gray-200 {
+  --tw-border-opacity: 1;
+  border-color: rgba(229, 231, 235, var(--tw-border-opacity));
+}
+
+.text-gray-400 {
+  --tw-text-opacity: 1;
+  color: rgba(156, 163, 175, var(--tw-text-opacity));
+}
+
+.text-blue-500 {
+  --tw-text-opacity: 1;
+  color: rgba(59, 130, 246, var(--tw-text-opacity));
+}
+
+.text-blue-500 {
+  --tw-text-opacity: 1;
+  color: rgba(59, 130, 246, var(--tw-text-opacity));
+}
+
+.hover\:bg-gray-300:hover {
+  --bg-opacity: 1;
+  background-color: rgba(229, 231, 235, var(--bg-opacity));
+}
+
+.max-width-3xl {
+  max-width: 1650px !important;
+}
+
+.video-container-slo {
+  padding-top: 37.25%;
+}
+
+.error-slo {
+  border: 1px solid red;
+}
+
+@media only screen and (max-width: 1024px) {
+  .main-container-slo {
+    flex-direction: column;
+  }
+}
+
+#launch-campaign-modal {
+  width: 30vw;
+  max-width: 96rem;
+  height: 60vh;
+  max-height: 80rem;
+}
+
+#clientsTable {
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(229, 231, 235, 1);
+  border-radius: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 1);
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-spinner {
+  animation: spin 2s linear infinite;
+  transform-origin: center;
+  border: 3px solid #f3f3f3;
+  border-radius: 50%;
+  border-top: 3px solid #3498db;
+  width: 20px;
+  height: 20px;
+}
+
+/*
+end - ignore perfers-color-scheme - darkMode
+*/
+
+/* International Telephone Input Styles */
+.iti {
+  width: 100%;
+}
+
+.iti__flag-container {
+  display: flex;
+  align-items: center;
+}
+
+.dark .iti__country-list {
+  background-color: #374151;
+  color: #e5e7eb;
+  border-color: #4b5563;
+}
+
+.dark .iti__country-name,
+.dark .iti__dial-code {
+  color: #e5e7eb;
+}
+
+.dark .iti__country.iti__highlight {
+  background-color: #4b5563;
+}
+
+/* Animation Styles */
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+.animate-fade-in-down {
+  animation: fadeInDown 0.5s ease-out;
+}
+
+.animate-fade-out {
+  animation: fadeOut 0.5s ease-out;
+}
+
+/* Tooltip styling */
+.tooltip-content {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  max-width: 300px;
+  z-index: 11;
+}
+
+/* Styles for Ad Library Prebuilt View */
+body.prebuilt-library-active .template_samples_categories,
+body.prebuilt-library-active .template_samples_subcategories,
+/* Target the specific grid structure where subcategory cards might appear */
+body.prebuilt-library-active .flex.flex-row.flex-wrap.mt-4.gap-y-8.sm\:gap-6.lg\:gap-10.grid.grid-cols-12 .col-span-12 {
+  display: none !important;
+}
+
+/* AlpineJS x-cloak helper */
+[x-cloak] {
+  display: none !important;
+}
+
+/* Animations for menu transitions */
+.submenu {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-in-out;
+}
+
+/* Disable transitions during initial page load */
+.submenu.no-transition {
+  transition: none !important;
+}
+
+/* Rotate the chevron when menu is expanded */
+.rotate-180 {
+  transform: rotate(180deg);
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 1023px) {
+  .menu-section {
+    position: relative;
+  }
+}
+
+.sortable-item.dragging {
+  opacity: 0.5;
+  background-color: #f3f4f6;
+}
+
+.sortable-item {
+  user-select: none;
+}
+
+/* ---- Modern Date Picker / Range Highlight Styles ---- */
+/* Scoped under .modern-datepicker for specificity without !important.
+   These live in the asset pipeline so they are always available,
+   including when the partial is loaded dynamically (e.g. bottom sheet
+   via DOMParser which strips inline <style> tags). */
+
+@media (min-width: 768px) {
+  .modern-datepicker .datepicker-right-panel {
+    width: 450px;
+    flex: none;
+  }
+}
+
+.modern-datepicker .datepicker-picker {
+  box-shadow: none;
+}
+
+.modern-datepicker .datepicker.datepicker-dropdown {
+  box-shadow: none;
+}
+
+.modern-datepicker .datepicker-inline .datepicker-picker {
+  box-shadow: none;
+}
+
+.modern-datepicker .datepicker-grid {
+  width: 240px;
+  margin: 0 auto;
+}
+
+.modern-datepicker .datepicker-cell {
+  height: 35px;
+  width: 35px;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+  cursor: pointer;
+}
+
+.modern-datepicker .datepicker-view {
+  padding: 4px;
+}
+
+.modern-datepicker .datepicker-header {
+  padding: 6px;
+  margin-bottom: 6px;
+}
+
+.modern-datepicker .days-of-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 6px;
+}
+
+.modern-datepicker .dow {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Range highlight styling (pill style) */
+.modern-datepicker .datepicker-cell.dp-in-range::before,
+.modern-datepicker .datepicker-cell.dp-range-start::before,
+.modern-datepicker .datepicker-cell.dp-range-end::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 70%;
+  background-color: rgba(59, 130, 246, 0.15);
+  z-index: 0;
+}
+
+.modern-datepicker .datepicker-cell.dp-in-range::before {
+  left: 0;
+  right: 0;
+  border-radius: 0;
+}
+
+.modern-datepicker .datepicker-cell.dp-range-start::before {
+  left: 50%;
+  right: 0;
+  border-top-right-radius: 9999px;
+  border-bottom-right-radius: 9999px;
+}
+
+.modern-datepicker .datepicker-cell.dp-range-end::before {
+  left: 0;
+  right: 50%;
+  border-top-left-radius: 9999px;
+  border-bottom-left-radius: 9999px;
+}
+
+.modern-datepicker .datepicker-cell.dp-range-start,
+.modern-datepicker .datepicker-cell.dp-range-end {
+  background-color: rgba(59, 130, 246, 1);
+  color: #ffffff;
+  border-radius: 9999px;
+}
+
+/* Hover preview styling (lighter variant of range) */
+.modern-datepicker .datepicker-cell.dp-preview-in-range::before,
+.modern-datepicker .datepicker-cell.dp-preview-range-start::before,
+.modern-datepicker .datepicker-cell.dp-preview-range-end::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 70%;
+  background-color: rgba(59, 130, 246, 0.12);
+  z-index: 0;
+}
+
+.modern-datepicker .datepicker-cell.dp-preview-in-range::before {
+  left: 0;
+  right: 0;
+  border-radius: 0;
+}
+
+.modern-datepicker .datepicker-cell.dp-preview-range-start::before {
+  left: 50%;
+  right: 0;
+  border-top-right-radius: 9999px;
+  border-bottom-right-radius: 9999px;
+}
+
+.modern-datepicker .datepicker-cell.dp-preview-range-end::before {
+  left: 0;
+  right: 50%;
+  border-top-left-radius: 9999px;
+  border-bottom-left-radius: 9999px;
+}
+
+.modern-datepicker .datepicker-cell.dp-preview-range-start,
+.modern-datepicker .datepicker-cell.dp-preview-range-end {
+  background-color: rgba(59, 130, 246, 0.9);
+  color: #ffffff;
+  border-radius: 9999px;
+}
+
+.modern-datepicker .datepicker-cell > * {
+  position: relative;
+  z-index: 1;
+}
+
+.modern-datepicker .datepicker-cell.disabled {
+  opacity: 0.5;
+  background-color: #f3f4f6;
+  cursor: not-allowed;
+}
+
+/* Neutralize Flowbite's transient selected styles — scoped specificity wins */
+.modern-datepicker .datepicker-cell.selected {
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  outline: none;
+}
+
+/* Keyboard focus: visible ring for accessibility */
+.modern-datepicker .datepicker-cell:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.8);
+  outline-offset: -2px;
+  border-radius: 9999px;
+}
+
+/* Flowbite adds .focused on click — suppress its visual but keep keyboard focus above */
+.modern-datepicker .datepicker-cell.focused:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Selected endpoint cells keep their blue pill look */
+.modern-datepicker .datepicker-cell.selected.dp-range-start,
+.modern-datepicker .datepicker-cell.selected.dp-range-end {
+  background-color: rgba(59, 130, 246, 1);
+  color: #ffffff;
+  border-radius: 9999px;
+}
+
+/* Writing Assistant collapsible sections */
+.wa-collapsible {
+  overflow: hidden;
+  max-height: 2000px;
+  /* Open by default - high enough for any content */
+  transition: max-height 0.25s ease;
+}
+
+.wa-collapsed {
+  max-height: 64px;
+  /* keep header visible */
+}
+
+/* Slideover Form Context Styles */
+.slideover-form-context .nav-steps {
+  display: none;
+}
+
+/* Define semantic class */
+.campaign-details-header {
+  margin-top: 1.5rem;
+  /* mt-6 */
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  /* gap-2 */
+}
+
+/* Hides the campaign details header within the form partial */
+.slideover-form-context .campaign-details-header {
+  display: none;
+}
+
+/* Rebilling Badge - Expandable on hover */
+.rebilling-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: default;
+  transition: all 0.3s ease-out;
+  margin-left: 0.25rem;
+}
+
+.rebilling-badge-agency {
+  background-color: #dbeafe;
+  /* bg-blue-100 */
+  color: #1e40af;
+  /* text-blue-800 */
+}
+
+.rebilling-badge-client {
+  background-color: #f3e8ff;
+  /* bg-purple-100 */
+  color: #6b21a8;
+  /* text-purple-800 */
+}
+
+.dark .rebilling-badge-agency {
+  background-color: #1e3a8a;
+  /* dark:bg-blue-900 */
+  color: #bfdbfe;
+  /* dark:text-blue-200 */
+}
+
+.dark .rebilling-badge-client {
+  background-color: #581c87;
+  /* dark:bg-purple-900 */
+  color: #e9d5ff;
+  /* dark:text-purple-200 */
+}
+
+.rebilling-badge-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+}
+
+.rebilling-badge-text {
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 0.3s ease-out, margin-left 0.3s ease-out;
+  margin-left: 0;
+}
+
+.rebilling-badge:hover .rebilling-badge-text {
+  max-width: 100px;
+  margin-left: 0.25rem;
+}
+
+/* Reviews walk-in animations */
+@keyframes walkIn1 {
+  0% { transform: translateX(-6px); opacity: 0; }
+  20% { opacity: 0.6; }
+  80% { opacity: 0.6; }
+  100% { transform: translateX(7px); opacity: 0; }
+}
+
+@keyframes walkIn2 {
+  0% { transform: translateX(-6px); opacity: 0; }
+  20% { opacity: 0.4; }
+  80% { opacity: 0.4; }
+  100% { transform: translateX(12px); opacity: 0; }
+}
+
+.animate-walk-in-1 {
+  animation: walkIn1 3s ease-in-out infinite;
+}
+
+.animate-walk-in-2 {
+  animation: walkIn2 3s ease-in-out infinite 1.5s;
+}
+
+/* Storefront walk animations for new client wizard */
+@keyframes storefrontWalkRight1 {
+  0% { transform: translateX(-15px); opacity: 0; }
+  15% { opacity: 0.5; }
+  85% { opacity: 0.5; }
+  100% { transform: translateX(20px); opacity: 0; }
+}
+
+@keyframes storefrontWalkRight2 {
+  0% { transform: translateX(-10px); opacity: 0; }
+  15% { opacity: 0.35; }
+  85% { opacity: 0.35; }
+  100% { transform: translateX(35px); opacity: 0; }
+}
+
+@keyframes storefrontWalkLeft {
+  0% { transform: translateX(10px); opacity: 0; }
+  15% { opacity: 0.4; }
+  85% { opacity: 0.4; }
+  100% { transform: translateX(-25px); opacity: 0; }
+}
+
+.storefront-person-1 {
+  animation: storefrontWalkRight1 3.5s ease-in-out infinite;
+}
+
+.storefront-person-2 {
+  animation: storefrontWalkRight2 4s ease-in-out infinite 1.2s;
+}
+
+.storefront-person-3 {
+  animation: storefrontWalkLeft 3.8s ease-in-out infinite 0.6s;
+}
+
+/* Modern Date Picker - Range highlight styling */
+@media (min-width: 768px) {
+  .datepicker-right-panel {
+    width: 450px;
+    flex: none;
+  }
+}
+
+.datepicker-picker {
+  box-shadow: none !important;
+}
+
+.datepicker.datepicker-dropdown {
+  box-shadow: none !important;
+}
+
+.datepicker-inline .datepicker-picker {
+  box-shadow: none !important;
+}
+
+.datepicker-grid {
+  width: 240px !important;
+  margin: 0 auto;
+}
+
+.datepicker-cell {
+  height: 35px !important;
+  width: 35px !important;
+  padding: 4px !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+  cursor: pointer;
+}
+
+.datepicker-view {
+  padding: 4px;
+}
+
+.datepicker-header {
+  padding: 6px;
+  margin-bottom: 6px;
+}
+
+.days-of-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 6px;
+}
+
+.dow {
+  height: 22px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Range bar across selected days */
+.datepicker-cell.dp-in-range::before,
+.datepicker-cell.dp-range-start::before,
+.datepicker-cell.dp-range-end::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 70%;
+  background-color: rgba(59, 130, 246, 0.15);
+  z-index: 0;
+}
+
+.datepicker-cell.dp-in-range::before {
+  left: 0;
+  right: 0;
+  border-radius: 0;
+}
+
+.datepicker-cell.dp-range-start::before {
+  left: 50%;
+  right: 0;
+  border-top-right-radius: 9999px;
+  border-bottom-right-radius: 9999px;
+}
+
+.datepicker-cell.dp-range-end::before {
+  left: 0;
+  right: 50%;
+  border-top-left-radius: 9999px;
+  border-bottom-left-radius: 9999px;
+}
+
+.datepicker-cell.dp-range-start,
+.datepicker-cell.dp-range-end {
+  background-color: rgba(59, 130, 246, 1);
+  color: #ffffff;
+  border-radius: 9999px;
+}
+
+/* Hover preview styling */
+.datepicker-cell.dp-preview-in-range::before,
+.datepicker-cell.dp-preview-range-start::before,
+.datepicker-cell.dp-preview-range-end::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 70%;
+  background-color: rgba(59, 130, 246, 0.12);
+  z-index: 0;
+}
+
+.datepicker-cell.dp-preview-in-range::before {
+  left: 0;
+  right: 0;
+  border-radius: 0;
+}
+
+.datepicker-cell.dp-preview-range-start::before {
+  left: 50%;
+  right: 0;
+  border-top-right-radius: 9999px;
+  border-bottom-right-radius: 9999px;
+}
+
+.datepicker-cell.dp-preview-range-end::before {
+  left: 0;
+  right: 50%;
+  border-top-left-radius: 9999px;
+  border-bottom-left-radius: 9999px;
+}
+
+.datepicker-cell.dp-preview-range-start,
+.datepicker-cell.dp-preview-range-end {
+  background-color: rgba(59, 130, 246, 0.9);
+  color: #ffffff;
+  border-radius: 9999px;
+}
+
+.datepicker-cell > * {
+  position: relative;
+  z-index: 1;
+}
+
+.datepicker-cell.disabled {
+  opacity: 0.5;
+  background-color: #f3f4f6;
+  cursor: not-allowed;
+}
+
+/* Neutralize Flowbite's transient selected/focused styles */
+.datepicker-cell.selected {
+  background: transparent !important;
+  color: inherit !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.datepicker-cell.focused {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.datepicker-cell.selected.dp-range-start,
+.datepicker-cell.selected.dp-range-end {
+  background-color: rgba(59, 130, 246, 1) !important;
+  color: #ffffff !important;
+  border-radius: 9999px !important;
+}
+
+/* Support Chat — Widget Popup Animations */
+
+.support-message-enter {
+  animation: supportMessageEnter 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.support-dot-pulse {
+  animation: supportDotPulse 2s ease-in-out infinite;
+}
+
+.support-composer {
+  transition: height 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              background-color 200ms ease,
+              border-color 200ms ease,
+              box-shadow 200ms ease;
+}
+
+@keyframes supportMessageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes supportDotPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.85);
+  }
+}

@@ -15,8 +15,15 @@ export const env = {
   supabaseUrl: readEnv("NEXT_PUBLIC_SUPABASE_URL"),
   supabaseAnonKey: readEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
   supabaseServiceKey: readEnv("SUPABASE_SERVICE_ROLE_KEY"),
+  supabaseStorageBucket: readEnv("SUPABASE_STORAGE_BUCKET") || "assets",
   resendApiKey: readEnv("RESEND_API_KEY"),
   resendFromEmail: readEnv("RESEND_FROM_EMAIL"),
+  metaAppId: readEnv("META_APP_ID"),
+  metaAppSecret: readEnv("META_APP_SECRET"),
+  metaRedirectUri: readEnv("META_REDIRECT_URI"),
+  metaScopes: readEnv("META_SCOPES"),
+  metaGraphApiVersion: readEnv("META_GRAPH_API_VERSION") || "v25.0",
+  metaTokenEncryptionKey: readEnv("META_TOKEN_ENCRYPTION_KEY"),
 } as const;
 
 export function getSupabasePublicEnvStatus() {
@@ -53,6 +60,14 @@ export function getResendEnvStatus() {
   };
 }
 
+export function getMetaEnvStatus() {
+  const missingKeys = missing(["META_APP_ID", "META_APP_SECRET", "META_REDIRECT_URI"]);
+  return {
+    configured: missingKeys.length === 0,
+    missingKeys,
+  };
+}
+
 export function isSupabasePublicConfigured() {
   return getSupabasePublicEnvStatus().configured;
 }
@@ -67,6 +82,10 @@ export function isSupabaseConfigured() {
 
 export function isResendConfigured() {
   return getResendEnvStatus().configured;
+}
+
+export function isMetaConfigured() {
+  return getMetaEnvStatus().configured;
 }
 
 export function getSupabaseFallbackMessage() {

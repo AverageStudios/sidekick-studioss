@@ -4,6 +4,8 @@ import { createCampaignBlueprint } from "@/lib/template-engine";
 
 const demoProfile: BusinessProfile = {
   id: "profile-demo",
+  user_id: "demo-user",
+  workspace_id: "workspace-demo",
   business_name: "SideKick Detail Co.",
   location: "Charlotte, NC",
   phone: "(704) 555-0183",
@@ -45,6 +47,7 @@ const blueprint = createCampaignBlueprint(
 export const demoCampaign: CampaignRecord = {
   id: "campaign-demo",
   user_id: "demo-user",
+  workspace_id: "workspace-demo",
   template_id: template.id,
   name: blueprint.campaignName,
   slug: blueprint.slug,
@@ -66,6 +69,7 @@ export const demoCampaign: CampaignRecord = {
 export const demoFunnel: FunnelRecord = {
   id: "funnel-demo",
   user_id: "demo-user",
+  workspace_id: "workspace-demo",
   campaign_id: demoCampaign.id,
   slug: "sidekick-full-detail-demo",
   is_published: true,
@@ -79,6 +83,7 @@ export const demoLeads: LeadRecord[] = [
   {
     id: "lead-1",
     user_id: "demo-user",
+    workspace_id: "workspace-demo",
     campaign_id: demoCampaign.id,
     funnel_id: demoFunnel.id,
     name: "Jordan Hayes",
@@ -93,6 +98,7 @@ export const demoLeads: LeadRecord[] = [
   {
     id: "lead-2",
     user_id: "demo-user",
+    workspace_id: "workspace-demo",
     campaign_id: demoCampaign.id,
     funnel_id: demoFunnel.id,
     name: "Avery Brooks",
@@ -117,4 +123,3 @@ export const demoUser = {
   id: "demo-user",
   email: "demo@sidekickstudioss.com",
 };
-

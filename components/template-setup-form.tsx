@@ -38,7 +38,7 @@ export function TemplateSetupForm({
       <input type="hidden" name="templateSlug" value={template.slug} />
       <SetupSection
         title="Business info"
-        description="Keep this tight. These fields drive the page copy, lead flow, and confirmation messages."
+        description="These details personalize your campaign instance without changing the master template."
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <Input name="businessName" defaultValue={profile?.business_name || ""} placeholder="Business name" required />
@@ -50,7 +50,7 @@ export function TemplateSetupForm({
 
       <SetupSection
         title="Offer"
-        description="Simple fields only. Enough to launch a convincing detail offer without building anything custom."
+        description="Customize the offer essentials people see first so the template fits your business."
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <Input name="offerPrice" placeholder="Offer price" defaultValue="179" />
@@ -65,18 +65,33 @@ export function TemplateSetupForm({
 
       <SetupSection
         title="Branding"
-        description="Add just enough brand detail to make the funnel feel like your shop, not a generic template."
+        description="Add the brand details and proof assets that make the campaign instance feel like your business."
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-[22px] bg-[var(--soft-panel)] p-3">
             <label className="mb-2 block text-sm font-medium text-[var(--ink)]">Brand color</label>
             <Input name="brandColor" type="color" defaultValue={profile?.brand_color || "#6D5EF8"} className="h-12 p-2" />
           </div>
-          <Input name="logo" type="file" accept="image/*" />
-          <Input name="before1" type="file" accept="image/*" />
-          <Input name="after1" type="file" accept="image/*" />
-          <Input name="before2" type="file" accept="image/*" />
-          <Input name="after2" type="file" accept="image/*" />
+          <div className="rounded-[22px] border border-[var(--line)] bg-white/82 p-4">
+            <label className="mb-2 block text-sm font-medium text-[var(--ink)]">Logo upload</label>
+            <Input name="logo" type="file" accept="image/*" />
+          </div>
+          <div className="rounded-[22px] border border-[var(--line)] bg-white/82 p-4">
+            <label className="mb-2 block text-sm font-medium text-[var(--ink)]">Before image</label>
+            <Input name="before1" type="file" accept="image/*" />
+          </div>
+          <div className="rounded-[22px] border border-[var(--line)] bg-white/82 p-4">
+            <label className="mb-2 block text-sm font-medium text-[var(--ink)]">After image</label>
+            <Input name="after1" type="file" accept="image/*" />
+          </div>
+          <div className="rounded-[22px] border border-[var(--line)] bg-white/82 p-4">
+            <label className="mb-2 block text-sm font-medium text-[var(--ink)]">Optional extra before image</label>
+            <Input name="before2" type="file" accept="image/*" />
+          </div>
+          <div className="rounded-[22px] border border-[var(--line)] bg-white/82 p-4 sm:col-span-2">
+            <label className="mb-2 block text-sm font-medium text-[var(--ink)]">Optional extra after image</label>
+            <Input name="after2" type="file" accept="image/*" />
+          </div>
         </div>
         <div className="mt-4">
           <Textarea
@@ -89,14 +104,14 @@ export function TemplateSetupForm({
 
       <SetupSection
         title="Social proof"
-        description="Keep it short. One believable testimonial is enough to add trust to a paid traffic page."
+        description="One believable testimonial is enough to help the template feel real and trustworthy."
       >
         <Textarea name="testimonialText" placeholder="Optional testimonial text" />
       </SetupSection>
 
       <SetupSection
-        title="Publish settings"
-        description="V1 follow-up stays intentionally lightweight so detailers can move fast."
+        title="Launch settings"
+        description="Choose whether you want to launch now or save the campaign instance as a draft and come back."
       >
         <div className="flex flex-col gap-4 rounded-[24px] bg-[var(--soft-panel)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -104,7 +119,12 @@ export function TemplateSetupForm({
             <p className="text-sm text-[var(--muted)]">Optional confirmation email after a lead submits.</p>
           </div>
           <label className="inline-flex items-center gap-2 text-sm text-[var(--muted-strong)]">
-            <input type="checkbox" name="followUpEnabled" defaultChecked className="h-4 w-4" />
+            <input
+              type="checkbox"
+              name="followUpEnabled"
+              defaultChecked
+              className="h-4 w-4 rounded border-[var(--line)] text-[var(--brand)] focus:ring-2 focus:ring-[var(--soft-brand)] focus:ring-offset-2 focus:ring-offset-[var(--surface)]"
+            />
             Enabled
           </label>
         </div>
@@ -114,11 +134,16 @@ export function TemplateSetupForm({
         <div className="space-y-2">
           <Badge>{template.category}</Badge>
           <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{template.name}</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">Generate campaign assets and a published funnel in one step.</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">This creates your own campaign instance from the published master template.</p>
         </div>
-        <Button type="submit" size="lg">
-          Create campaign
-        </Button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Button type="submit" name="intent" value="draft" size="lg" variant="outline">
+            Save draft
+          </Button>
+          <Button type="submit" name="intent" value="launch" size="lg">
+            Create and launch
+          </Button>
+        </div>
       </div>
     </form>
   );

@@ -26,18 +26,34 @@ export default async function CampaignPage({
       <PageHeader
         badge={bundle.template.name}
         title={bundle.campaign.name}
-        description="Your campaign output is ready. Use the copy below, share the funnel link, and keep the launch process simple."
+        description={
+          bundle.campaign.status === "draft"
+            ? "Your campaign instance is saved as a draft. Review the copy, finish the funnel details, and publish when you are ready."
+            : "Your campaign output is ready. Use the copy below, share the funnel link, and keep the launch process simple."
+        }
         actions={
           <>
-            <Button asChild variant="outline">
-              <Link href={`/funnels/${bundle.funnel.id}`}>Open funnel manager</Link>
-            </Button>
-            <Button asChild>
-              <Link href={`/f/${bundle.funnel.slug}`} target="_blank">
-                View public funnel
-                <ExternalLink className="h-4 w-4" />
-              </Link>
-            </Button>
+            {bundle.campaign.status === "draft" ? (
+              <Button asChild variant="outline">
+                <Link href={`/templates/new?draft=${bundle.campaign.id}`}>Continue launch wizard</Link>
+              </Button>
+            ) : (
+              <Button asChild variant="outline">
+                <Link href={`/funnels/${bundle.funnel.id}`}>Open funnel manager</Link>
+              </Button>
+            )}
+            {bundle.funnel.is_published ? (
+              <Button asChild>
+                <Link href={`/f/${bundle.funnel.slug}`} target="_blank">
+                  View public funnel
+                  <ExternalLink className="h-4 w-4" />
+                </Link>
+              </Button>
+            ) : (
+              <Button asChild>
+                <Link href="/templates">Choose another template</Link>
+              </Button>
+            )}
           </>
         }
       />
@@ -74,7 +90,7 @@ export default async function CampaignPage({
           <Card className="p-6 sm:p-7">
             <h2 className="text-lg font-semibold text-[var(--ink)]">Funnel link</h2>
             <p className="mt-3 rounded-[20px] bg-[var(--soft-panel)] px-4 py-4 text-sm text-[var(--muted-strong)]">
-              /f/{bundle.funnel.slug}
+              {bundle.funnel.is_published ? `/f/${bundle.funnel.slug}` : "This funnel is still in draft mode."}
             </p>
           </Card>
           <Card className="p-6 sm:p-7">
