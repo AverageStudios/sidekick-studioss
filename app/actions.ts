@@ -9,7 +9,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentRole, getCurrentUser } from "@/lib/auth";
 import { authSuccessMessages, formatAuthErrorMessage } from "@/lib/auth-messages";
 import { createCampaignBlueprint } from "@/lib/template-engine";
-import { env, isSupabasePublicConfigured, isSupabaseServerConfigured } from "@/lib/env";
+import { env, isDemoModeEnabled, isSupabasePublicConfigured, isSupabaseServerConfigured } from "@/lib/env";
 import { getPublishedTemplateBySlug } from "@/lib/template-repository";
 import { slugify } from "@/lib/utils";
 import { sendLeadConfirmationEmail, sendWorkspaceInvitationEmail } from "@/services/follow-up";
@@ -411,7 +411,11 @@ export async function signUpAction(formData: FormData) {
   }
 
   if (!isSupabasePublicConfigured()) {
-    redirect("/dashboard");
+    if (isDemoModeEnabled()) {
+      redirect("/dashboard");
+    }
+
+    redirect(`/signup?error=${encodeURIComponent("Supabase auth is not configured yet.")}`);
   }
 
   const supabase = await createSupabaseServerClient();
@@ -513,7 +517,11 @@ export async function signInAction(formData: FormData) {
   }
 
   if (!isSupabasePublicConfigured()) {
-    redirect("/dashboard");
+    if (isDemoModeEnabled()) {
+      redirect("/dashboard");
+    }
+
+    redirect(`/login?error=${encodeURIComponent("Supabase auth is not configured yet.")}`);
   }
 
   const supabase = await createSupabaseServerClient();

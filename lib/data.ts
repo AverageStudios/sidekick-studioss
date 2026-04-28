@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { getTemplateById, hydrateTemplateRecord } from "@/data/templates";
 import { demoBundle, demoCampaign, demoFunnel, demoLeads } from "@/lib/demo-data";
-import { isSupabaseServerConfigured } from "@/lib/env";
+import { isDemoModeEnabled, isSupabaseServerConfigured } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { listPublishedTemplates, getPublishedTemplateBySlug } from "@/lib/template-repository";
 import { ensureWorkspaceContextByUserId, getActiveWorkspaceIdForUser, userHasWorkspaceAccess } from "@/lib/workspaces";
@@ -27,13 +27,25 @@ async function getTemplateRecordById(id: string) {
   return (data as TemplateRecord | null) || null;
 }
 
+function getEmptyDashboardSnapshot() {
+  return {
+    liveFunnels: 0,
+    newLeads: 0,
+    contactedLeads: 0,
+    bookedLeads: 0,
+    recentLeads: [],
+    campaigns: [],
+    funnels: [],
+  };
+}
+
 export const getTemplates = cache(async () => listPublishedTemplates());
 
 export const getTemplate = cache(async (slug: string) => getPublishedTemplateBySlug(slug));
 
 export const getBusinessProfile = cache(async (userId: string) => {
   if (!isSupabaseServerConfigured()) {
-    return demoBundle.businessProfile;
+    return isDemoModeEnabled() ? demoBundle.businessProfile : null;
   }
 
   const context = await ensureWorkspaceContextByUserId(userId);
@@ -42,6 +54,10 @@ export const getBusinessProfile = cache(async (userId: string) => {
 
 export const getDashboardSnapshot = cache(async (userId: string) => {
   if (!isSupabaseServerConfigured()) {
+    if (!isDemoModeEnabled()) {
+      return getEmptyDashboardSnapshot();
+    }
+
     return {
       liveFunnels: 1,
       newLeads: demoLeads.filter((lead) => lead.status === "new").length,
@@ -55,15 +71,17 @@ export const getDashboardSnapshot = cache(async (userId: string) => {
 
   const supabase = createSupabaseAdminClient();
   if (!supabase) {
-    return {
-      liveFunnels: 1,
-      newLeads: demoLeads.filter((lead) => lead.status === "new").length,
-      contactedLeads: demoLeads.filter((lead) => lead.status === "contacted").length,
-      bookedLeads: demoLeads.filter((lead) => lead.status === "booked").length,
-      recentLeads: demoLeads,
-      campaigns: [demoCampaign],
-      funnels: [demoFunnel],
-    };
+    return isDemoModeEnabled()
+      ? {
+          liveFunnels: 1,
+          newLeads: demoLeads.filter((lead) => lead.status === "new").length,
+          contactedLeads: demoLeads.filter((lead) => lead.status === "contacted").length,
+          bookedLeads: demoLeads.filter((lead) => lead.status === "booked").length,
+          recentLeads: demoLeads,
+          campaigns: [demoCampaign],
+          funnels: [demoFunnel],
+        }
+      : getEmptyDashboardSnapshot();
   }
   const activeWorkspaceId = await getActiveWorkspaceIdForUser(userId);
   const [funnelsResult, leadsResult, campaignsResult] = await Promise.all([
@@ -93,7 +111,7 @@ export const getDashboardSnapshot = cache(async (userId: string) => {
 
 export const getCampaignBundle = cache(async (userId: string, id: string) => {
   if (!isSupabaseServerConfigured()) {
-    if (id === demoCampaign.id) {
+    if (isDemoModeEnabled() && id === demoCampaign.id) {
       return demoBundle;
     }
     return null;
@@ -153,7 +171,7 @@ export const getCampaignBundle = cache(async (userId: string, id: string) => {
 
 export const getFunnelBundleById = cache(async (userId: string, id: string) => {
   if (!isSupabaseServerConfigured()) {
-    if (id === demoFunnel.id) {
+    if (isDemoModeEnabled() && id === demoFunnel.id) {
       return demoBundle;
     }
     return null;
@@ -203,11 +221,11 @@ export const getFunnelBundleById = cache(async (userId: string, id: string) => {
 
 export const getFunnelBySlug = cache(async (slug: string) => {
   if (!isSupabaseServerConfigured()) {
-    return demoBundle;
+    return isDemoModeEnabled() ? demoBundle : null;
   }
 
   const supabase = createSupabaseAdminClient();
-  if (!supabase) return demoBundle;
+  if (!supabase) return isDemoModeEnabled() ? demoBundle : null;
   const { data: funnel } = await supabase
     .from("funnels")
     .select("*")
@@ -249,11 +267,19 @@ export const getFunnelBySlug = cache(async (slug: string) => {
 
 export const getLeads = cache(async (userId: string, status?: string) => {
   if (!isSupabaseServerConfigured()) {
+    if (!isDemoModeEnabled()) {
+      return [];
+    }
+
     return status ? demoLeads.filter((lead) => lead.status === status) : demoLeads;
   }
 
   const supabase = createSupabaseAdminClient();
   if (!supabase) {
+    if (!isDemoModeEnabled()) {
+      return [];
+    }
+
     return status ? demoLeads.filter((lead) => lead.status === status) : demoLeads;
   }
   const activeWorkspaceId = await getActiveWorkspaceIdForUser(userId);

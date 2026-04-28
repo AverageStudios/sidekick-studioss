@@ -32,7 +32,7 @@ The product is intentionally narrow:
 - Public funnel publishing at `/f/[slug]`
 - Lead capture and status updates
 - Optional confirmation email plumbing via Resend
-- Demo fallback mode when Supabase env vars are not configured
+- Optional explicit demo mode when `NEXT_PUBLIC_DEMO_MODE=1`
 
 ## Intentionally left out of V1
 
@@ -57,7 +57,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-If `.env.local` is missing the Supabase values, the app now falls back to a clear demo-mode experience instead of crashing.
+If you want the demo experience, set `NEXT_PUBLIC_DEMO_MODE=1`. Otherwise the app expects real Supabase auth and will not silently impersonate a demo user.
 
 ## Supabase setup
 
@@ -88,7 +88,7 @@ What each env var is used for:
 - `RESEND_API_KEY`: optional email API key
 - `RESEND_FROM_EMAIL`: optional sender address for confirmation emails
 
-If Supabase public env vars are missing, auth runs in demo mode.
+If Supabase public env vars are missing, auth will stay disabled unless you explicitly enable demo mode.
 
 If the service-role key is missing, the app still renders safely, but writes, uploads, and persisted lead actions are skipped.
 

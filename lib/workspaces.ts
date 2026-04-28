@@ -2,7 +2,7 @@ import { cache } from "react";
 import type { User } from "@supabase/supabase-js";
 import { demoUser } from "@/lib/demo-data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { isSupabaseServerConfigured } from "@/lib/env";
+import { isDemoModeEnabled, isSupabaseServerConfigured } from "@/lib/env";
 import { getCurrentUser } from "@/lib/auth";
 import { BusinessProfile, ProfileRecord, WorkspaceContext, WorkspaceMember, WorkspaceRecord, WorkspaceSummary } from "@/types";
 
@@ -101,58 +101,64 @@ function isGenericWorkspaceName(value?: string | null) {
   return normalized === "" || normalized === "my workspace";
 }
 
-async function ensureWorkspaceContextResolved(user: UserIdentityLike): Promise<WorkspaceContext | null> {
-  if (!isSupabaseServerConfigured()) {
-    return {
-      profile: {
-        id: "profile-demo",
-        user_id: demoUser.id,
-        role: "user",
-        first_name: "Demo",
-        last_name: "User",
-        selected_industry: "auto-detailing",
-        starting_template_id: "tpl-full-detail",
-        active_workspace_id: "workspace-demo",
-        onboarding_completed_at: new Date().toISOString(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      workspaces: [
-        {
-          id: "workspace-demo",
-          name: "Demo Workspace",
-          owner_user_id: demoUser.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          role: "owner",
-        },
-      ],
-      activeWorkspace: {
+function buildDemoWorkspaceContext(): WorkspaceContext {
+  const now = new Date().toISOString();
+
+  return {
+    profile: {
+      id: "profile-demo",
+      user_id: demoUser.id,
+      role: "user",
+      first_name: "Demo",
+      last_name: "User",
+      selected_industry: "auto-detailing",
+      starting_template_id: "tpl-full-detail",
+      active_workspace_id: "workspace-demo",
+      onboarding_completed_at: now,
+      created_at: now,
+      updated_at: now,
+    },
+    workspaces: [
+      {
         id: "workspace-demo",
         name: "Demo Workspace",
         owner_user_id: demoUser.id,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        created_at: now,
+        updated_at: now,
         role: "owner",
       },
-      businessProfile: {
-        id: "profile-demo",
-        user_id: demoUser.id,
-        workspace_id: "workspace-demo",
-        business_name: "Demo Workspace",
-        location: "",
-        phone: "",
-        email: demoUser.email,
-        description: "",
-        logo_url: null,
-        brand_color: "#6D5EF8",
-        default_cta: "Get My Quote",
-      },
-      userDisplayName: "Demo User",
-      userEmail: demoUser.email,
-      userInitials: "DU",
-      workspaceInitial: "D",
-    };
+    ],
+    activeWorkspace: {
+      id: "workspace-demo",
+      name: "Demo Workspace",
+      owner_user_id: demoUser.id,
+      created_at: now,
+      updated_at: now,
+      role: "owner",
+    },
+    businessProfile: {
+      id: "profile-demo",
+      user_id: demoUser.id,
+      workspace_id: "workspace-demo",
+      business_name: "Demo Workspace",
+      location: "",
+      phone: "",
+      email: demoUser.email,
+      description: "",
+      logo_url: null,
+      brand_color: "#6D5EF8",
+      default_cta: "Get My Quote",
+    },
+    userDisplayName: "Demo User",
+    userEmail: demoUser.email,
+    userInitials: "DU",
+    workspaceInitial: "D",
+  };
+}
+
+async function ensureWorkspaceContextResolved(user: UserIdentityLike): Promise<WorkspaceContext | null> {
+  if (!isSupabaseServerConfigured()) {
+    return isDemoModeEnabled() ? buildDemoWorkspaceContext() : null;
   }
 
   const admin = createSupabaseAdminClient();
@@ -420,6 +426,10 @@ export async function ensureWorkspaceContextForUser(user: UserIdentityLike) {
 
 export async function ensureWorkspaceContextByUserId(userId: string) {
   if (!isSupabaseServerConfigured()) {
+    if (!isDemoModeEnabled()) {
+      return null;
+    }
+
     return ensureWorkspaceContextResolved({
       id: demoUser.id,
       email: demoUser.email,
@@ -527,17 +537,19 @@ export async function getCurrentWorkspaceMembers(): Promise<WorkspaceMember[]> {
   if (!context) return [];
 
   if (!isSupabaseServerConfigured()) {
-    return [
-      {
-        membershipId: "membership-demo",
-        userId: demoUser.id,
-        role: "owner",
-        displayName: context.userDisplayName,
-        email: context.userEmail,
-        initials: context.userInitials,
-        isCurrentUser: true,
-      },
-    ];
+    return isDemoModeEnabled()
+      ? [
+          {
+            membershipId: "membership-demo",
+            userId: demoUser.id,
+            role: "owner",
+            displayName: context.userDisplayName,
+            email: context.userEmail,
+            initials: context.userInitials,
+            isCurrentUser: true,
+          },
+        ]
+      : [];
   }
 
   const admin = createSupabaseAdminClient();

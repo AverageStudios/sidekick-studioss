@@ -12,6 +12,7 @@ function missing(keys: string[]) {
 
 export const env = {
   appUrl: readEnv("NEXT_PUBLIC_APP_URL") || "http://localhost:3000",
+  demoMode: readEnv("NEXT_PUBLIC_DEMO_MODE") || readEnv("DEMO_MODE"),
   supabaseUrl: readEnv("NEXT_PUBLIC_SUPABASE_URL"),
   supabaseAnonKey: readEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
   supabaseServiceKey: readEnv("SUPABASE_SERVICE_ROLE_KEY"),
@@ -80,6 +81,11 @@ export function isSupabaseConfigured() {
   return isSupabaseServerConfigured();
 }
 
+export function isDemoModeEnabled() {
+  const value = env.demoMode?.toLowerCase();
+  return value === "1" || value === "true";
+}
+
 export function isResendConfigured() {
   return getResendEnvStatus().configured;
 }
@@ -97,10 +103,14 @@ export function getSupabaseFallbackMessage() {
   }
 
   if (!publicStatus.configured) {
-    return "Supabase public env vars are missing. The app is running in demo mode until auth and public clients are configured.";
+    return isDemoModeEnabled()
+      ? "Supabase public env vars are missing, so the app is running in explicit demo mode."
+      : "Supabase public env vars are missing, so real sign-in is unavailable until auth is configured.";
   }
 
-  return "Supabase service-role env vars are missing. Demo mode still works, but database writes and storage uploads are disabled.";
+  return isDemoModeEnabled()
+    ? "Supabase service-role env vars are missing, so explicit demo mode can still render but database writes and storage uploads are disabled."
+    : "Supabase service-role env vars are missing, so database writes and storage uploads are disabled until the server key is configured.";
 }
 
 export function getResendFallbackMessage() {

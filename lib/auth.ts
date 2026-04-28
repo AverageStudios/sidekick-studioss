@@ -4,7 +4,7 @@ import type { User } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { demoUser } from "@/lib/demo-data";
-import { isSupabasePublicConfigured, isSupabaseServerConfigured } from "@/lib/env";
+import { isDemoModeEnabled, isSupabasePublicConfigured, isSupabaseServerConfigured } from "@/lib/env";
 import { ProfileRecord, UserRole } from "@/types";
 
 type UserWithOptionalMetadata = {
@@ -25,9 +25,27 @@ function deriveProfileNameFields(user: UserWithOptionalMetadata, profile?: Parti
   };
 }
 
+function buildDemoProfile(userId?: string | null): ProfileRecord {
+  const now = new Date().toISOString();
+
+  return {
+    id: "profile-demo",
+    user_id: userId || demoUser.id,
+    role: "user",
+    first_name: "Demo",
+    last_name: "User",
+    selected_industry: "auto-detailing",
+    starting_template_id: "tpl-full-detail",
+    active_workspace_id: "workspace-demo",
+    onboarding_completed_at: now,
+    created_at: now,
+    updated_at: now,
+  };
+}
+
 export async function getCurrentUser() {
   if (!isSupabasePublicConfigured()) {
-    return demoUser;
+    return isDemoModeEnabled() ? demoUser : null;
   }
 
   const supabase = await createSupabaseServerClient();
@@ -42,20 +60,12 @@ export async function getCurrentUser() {
 
 export const getCurrentProfile = cache(async () => {
   const user = await getCurrentUser();
-  if (!user || !isSupabasePublicConfigured()) {
-    return {
-      id: "profile-demo",
-      user_id: user?.id || "demo-user",
-      role: "user" as UserRole,
-      first_name: "Demo",
-      last_name: "User",
-      selected_industry: "auto-detailing",
-      starting_template_id: "tpl-full-detail",
-      active_workspace_id: "workspace-demo",
-      onboarding_completed_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    } satisfies ProfileRecord;
+  if (!user) {
+    return isDemoModeEnabled() ? buildDemoProfile() : null;
+  }
+
+  if (!isSupabasePublicConfigured()) {
+    return isDemoModeEnabled() ? buildDemoProfile(user.id) : null;
   }
 
   if (isSupabaseServerConfigured()) {
