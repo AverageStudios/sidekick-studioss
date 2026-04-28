@@ -17,6 +17,8 @@ import { uploadAsset } from "@/services/storage";
 import { storageBucketName } from "@/services/storage";
 import { createWorkspaceForUser, ensureWorkspaceContextForUser } from "@/lib/workspaces";
 import { isMetaConfigured } from "@/lib/meta";
+import { normalizeIndustryLabel } from "@/data/template-taxonomy";
+import { CampaignAdType } from "@/types";
 import {
   disconnectWorkspaceMetaConnection,
   saveWorkspaceMetaSelections,
@@ -26,6 +28,7 @@ import {
   AdminTemplateActionState,
   AdminTemplateFieldName,
   emptyAdminTemplateActionState,
+  getEmptyLeadFormSettings,
 } from "@/lib/admin-template-form";
 
 const authSchema = z.object({
@@ -43,19 +46,40 @@ const optionalUrl = z.union([z.literal(""), z.string().url("Enter a valid previe
 
 const templateAdminSchema = z.object({
   name: z.string().min(2, "Template name is required."),
-  slug: z.string().min(2, "Slug is required."),
-  category: z.string().min(2, "Category is required."),
-  industry: z.string().min(2, "Industry is required."),
+  slug: optionalText,
+  category: optionalText,
+  industry: optionalText,
   description: z.string().min(8, "Short description is required."),
   previewImageUrl: optionalUrl,
+  mediaImageUrls: z.array(z.string().url()).default([]),
+  mediaVideoUrls: z.array(z.string().url()).default([]),
   status: z.enum(["draft", "published", "archived"]),
   isFeatured: z.boolean(),
   positioning: optionalText,
+  campaignType: optionalText,
+  audienceType: optionalText,
+  offerFramework: optionalText,
+  displayLink: optionalText,
+  adFormat: optionalText,
+  mediaType: optionalText,
+  adSetStructure: optionalText,
+  advantagePlusSettings: optionalText,
+  placements: optionalText,
+  dynamicCreative: optionalText,
+  conversionEvent: optionalText,
+  specialAdCategory: optionalText,
+  kpiCtrAll: optionalText,
+  kpiCtrLink: optionalText,
+  kpiCr: optionalText,
+  kpiCpa: optionalText,
+  utmParameters: optionalText,
   offerType: optionalText,
+  supportedAdTypes: z.array(z.enum(["lead_form", "landing_page", "call_now", "messenger_leads", "messenger_engagement"])).default(["lead_form"]),
+  defaultAdType: z.enum(["lead_form", "landing_page", "call_now", "messenger_leads", "messenger_engagement"]).default("lead_form"),
   promoDetails: optionalText,
-  headline: z.string().min(4, "Headline default is required."),
+  headline: optionalText,
   subheadline: optionalText,
-  ctaDefault: z.string().min(2, "CTA default is required."),
+  ctaDefault: optionalText,
   offerLabel: optionalText,
   benefits: z.array(z.string()).default([]),
   offerStructure: z.array(z.string()).default([]),
@@ -71,6 +95,16 @@ const templateAdminSchema = z.object({
   formCta: optionalText,
   formFields: z.array(z.string()).default([]),
   nextStepFlow: z.array(z.string()).default([]),
+  landingPageUrl: optionalText,
+  phoneNumber: optionalText,
+  messengerWelcomeMessage: optionalText,
+  messengerReplyPrompt: optionalText,
+  thankYouEnabled: z.boolean().default(true),
+  thankYouHeadline: optionalText,
+  thankYouDescription: optionalText,
+  thankYouButtonText: optionalText,
+  thankYouWebsiteUrl: optionalText,
+  leadFormSettingsJson: optionalText,
   followUpSubject: optionalText,
   followUpBody: optionalText,
   followUpSms: optionalText,
@@ -100,21 +134,51 @@ function splitFaq(value: FormDataEntryValue | null) {
 }
 
 function buildTemplateAdminValues(formData: FormData) {
+  const supportedAdTypes = formData.getAll("supportedAdTypes").map(String);
+  const mediaImageUrls = formData.getAll("mediaImageUrls").map(String).filter(Boolean);
+  const mediaVideoUrls = formData.getAll("mediaVideoUrls").map(String).filter(Boolean);
+  const name = String(formData.get("name") || "");
+  const category = String(formData.get("category") || formData.get("industry") || "");
+  const industry = String(formData.get("industry") || formData.get("category") || "");
   return templateAdminSchema.safeParse({
-    name: String(formData.get("name") || ""),
-    slug: slugify(String(formData.get("slug") || formData.get("name") || "")),
-    category: String(formData.get("category") || ""),
-    industry: String(formData.get("industry") || ""),
+    name,
+    slug: slugify(String(formData.get("slug") || name || "")),
+    category,
+    industry,
     description: String(formData.get("description") || ""),
     previewImageUrl: String(formData.get("previewImageUrl") || "").trim(),
+    mediaImageUrls,
+    mediaVideoUrls,
     status: String(formData.get("status") || "draft"),
     isFeatured: formData.get("isFeatured") === "on",
     positioning: String(formData.get("positioning") || ""),
+    campaignType: String(formData.get("campaignType") || ""),
+    audienceType: String(formData.get("audienceType") || ""),
+    offerFramework: String(formData.get("offerFramework") || ""),
+    displayLink: String(formData.get("displayLink") || ""),
+    adFormat: String(formData.get("adFormat") || ""),
+    mediaType: String(formData.get("mediaType") || ""),
+    adSetStructure: String(formData.get("adSetStructure") || ""),
+    advantagePlusSettings: String(formData.get("advantagePlusSettings") || ""),
+    placements: String(formData.get("placements") || ""),
+    dynamicCreative: String(formData.get("dynamicCreative") || ""),
+    conversionEvent: String(formData.get("conversionEvent") || ""),
+    specialAdCategory: String(formData.get("specialAdCategory") || ""),
+    kpiCtrAll: String(formData.get("kpiCtrAll") || ""),
+    kpiCtrLink: String(formData.get("kpiCtrLink") || ""),
+    kpiCr: String(formData.get("kpiCr") || ""),
+    kpiCpa: String(formData.get("kpiCpa") || ""),
+    utmParameters: String(formData.get("utmParameters") || ""),
     offerType: String(formData.get("offerType") || ""),
+    supportedAdTypes:
+      supportedAdTypes.length > 0
+        ? supportedAdTypes
+        : ["lead_form"],
+    defaultAdType: String(formData.get("defaultAdType") || "lead_form"),
     promoDetails: String(formData.get("promoDetails") || ""),
-    headline: String(formData.get("headline") || ""),
+    headline: String(formData.get("headline") || name),
     subheadline: String(formData.get("subheadline") || ""),
-    ctaDefault: String(formData.get("ctaDefault") || ""),
+    ctaDefault: String(formData.get("ctaDefault") || "Get Started"),
     offerLabel: String(formData.get("offerLabel") || ""),
     benefits: splitLines(formData.get("benefits")),
     offerStructure: splitLines(formData.get("offerStructure")),
@@ -130,6 +194,16 @@ function buildTemplateAdminValues(formData: FormData) {
     formCta: String(formData.get("formCta") || ""),
     formFields: splitLines(formData.get("formFields")),
     nextStepFlow: splitLines(formData.get("nextStepFlow")),
+    landingPageUrl: String(formData.get("landingPageUrl") || ""),
+    phoneNumber: String(formData.get("phoneNumber") || ""),
+    messengerWelcomeMessage: String(formData.get("messengerWelcomeMessage") || ""),
+    messengerReplyPrompt: String(formData.get("messengerReplyPrompt") || ""),
+    thankYouEnabled: formData.get("thankYouEnabled") === "on",
+    thankYouHeadline: String(formData.get("thankYouHeadline") || ""),
+    thankYouDescription: String(formData.get("thankYouDescription") || ""),
+    thankYouButtonText: String(formData.get("thankYouButtonText") || ""),
+    thankYouWebsiteUrl: String(formData.get("thankYouWebsiteUrl") || ""),
+    leadFormSettingsJson: String(formData.get("leadFormSettingsJson") || JSON.stringify(getEmptyLeadFormSettings())),
     followUpSubject: String(formData.get("followUpSubject") || ""),
     followUpBody: String(formData.get("followUpBody") || ""),
     followUpSms: String(formData.get("followUpSms") || ""),
@@ -192,11 +266,58 @@ async function resolveAdminTemplatePreviewImage(formData: FormData, fallbackUrl?
 
 function buildAdminTemplateConfig(values: z.infer<typeof templateAdminSchema>) {
   const resolvedOfferLabel = values.offerLabel || values.offerType || "Limited-time offer";
+  const normalizedIndustry = normalizeIndustryLabel(values.industry);
+  const supportedAdTypes = values.supportedAdTypes.length ? values.supportedAdTypes : ["lead_form"];
+  let leadFormSettings = getEmptyLeadFormSettings();
+
+  try {
+    const parsed = JSON.parse(values.leadFormSettingsJson || "{}");
+    leadFormSettings = {
+      ...leadFormSettings,
+      ...parsed,
+      multipleChoiceQuestions: Array.isArray(parsed?.multipleChoiceQuestions)
+        ? parsed.multipleChoiceQuestions
+        : leadFormSettings.multipleChoiceQuestions,
+      shortQuestions: Array.isArray(parsed?.shortQuestions)
+        ? parsed.shortQuestions
+        : leadFormSettings.shortQuestions,
+      standardQuestions: Array.isArray(parsed?.standardQuestions)
+        ? parsed.standardQuestions
+        : leadFormSettings.standardQuestions,
+    };
+  } catch {
+    leadFormSettings = getEmptyLeadFormSettings();
+  }
 
   return {
-    industry: values.industry,
+    industry: normalizedIndustry || values.industry,
     positioning: values.positioning,
+    campaignType: values.campaignType,
+    audienceType: values.audienceType,
+    offerFramework: values.offerFramework,
+    displayLink: values.displayLink,
+    adFormat: values.adFormat,
+    mediaType: values.mediaType,
+    campaignSettings: {
+      adSetStructure: values.adSetStructure,
+      advantagePlusSettings: values.advantagePlusSettings,
+      placements: values.placements,
+      dynamicCreative: values.dynamicCreative,
+      conversionEvent: values.conversionEvent,
+    },
+    additionalSettings: {
+      specialAdCategory: values.specialAdCategory,
+      kpiThresholds: {
+        ctrAll: values.kpiCtrAll,
+        ctrLink: values.kpiCtrLink,
+        cr: values.kpiCr,
+        cpa: values.kpiCpa,
+      },
+      utmParameters: values.utmParameters,
+    },
     offerType: values.offerType,
+    supportedAdTypes,
+    defaultAdType: supportedAdTypes.includes(values.defaultAdType) ? values.defaultAdType : supportedAdTypes[0] || "lead_form",
     promoDetails: values.promoDetails,
     ctaDefault: values.ctaDefault,
     offerStructure: values.offerStructure,
@@ -204,7 +325,7 @@ function buildAdminTemplateConfig(values: z.infer<typeof templateAdminSchema>) {
     faq: values.faq,
     adCopy: {
       objective: values.campaignObjective,
-      primary: values.adPrimary,
+      primary: values.adPrimary || values.description || values.headline,
       headlines: values.adHeadlines,
       descriptions: values.adDescriptions,
       targeting: values.targeting,
@@ -212,21 +333,49 @@ function buildAdminTemplateConfig(values: z.infer<typeof templateAdminSchema>) {
       creativeGuidance: values.creativeGuidance,
     },
     funnel: {
-      heroHeadline: values.headline,
+      heroHeadline: values.headline || values.name,
       heroSubheadline: values.subheadline,
       offerLabel: resolvedOfferLabel,
       whyChooseUs: values.benefits,
-      finalCta: values.ctaDefault,
+      finalCta: values.ctaDefault || "Get Started",
       pageIntro: values.landingIntro,
-      formCta: values.formCta || values.ctaDefault,
+      formCta: values.formCta || values.ctaDefault || "Request details",
       formFields: values.formFields,
       nextStepFlow: values.nextStepFlow,
     },
+    creativeAssets: {
+      imageUrls: values.mediaImageUrls,
+      videoUrls: values.mediaVideoUrls,
+    },
     leadFlowDefaults: {
       pageIntro: values.landingIntro,
-      formCta: values.formCta || values.ctaDefault,
+      formCta: values.formCta || values.ctaDefault || "Request details",
       formFields: values.formFields,
       nextStepFlow: values.nextStepFlow,
+    },
+    leadFormSettings,
+    adTypeConfig: {
+      lead_form: {
+        thankYouEnabled: values.thankYouEnabled,
+        thankYouHeadline: values.thankYouHeadline,
+        thankYouDescription: values.thankYouDescription,
+        thankYouButtonLabel: values.thankYouButtonText,
+        thankYouWebsiteUrl: values.thankYouWebsiteUrl,
+      },
+      landing_page: {
+        landingPageUrl: values.landingPageUrl,
+      },
+      call_now: {
+        phoneNumber: values.phoneNumber,
+      },
+      messenger_leads: {
+        messengerWelcomeMessage: values.messengerWelcomeMessage,
+        messengerReplyPrompt: values.messengerReplyPrompt,
+      },
+      messenger_engagement: {
+        messengerWelcomeMessage: values.messengerWelcomeMessage,
+        messengerReplyPrompt: values.messengerReplyPrompt,
+      },
     },
     followUpDefaults: {
       subject: values.followUpSubject || "Thanks for reaching out",
@@ -935,6 +1084,9 @@ export async function createCampaignAction(formData: FormData) {
       user_id: user.id,
       workspace_id: activeWorkspaceId,
       template_id: template.id,
+      launch_category: template.industry,
+      launch_industry: template.industry,
+      launch_offer_type: template.offerType,
       name: blueprint.campaignName,
       slug: blueprint.slug,
       offer_price: Number(values.offerPrice) || null,
@@ -1522,7 +1674,7 @@ export async function createAdminTemplateAction(
 
   if (!values.success) {
     return {
-      formError: "Please clean up the highlighted fields and try again.",
+      formError: "Some required template fields are still missing.",
       fieldErrors: getTemplateFieldErrors(values.error),
     };
   }
@@ -1561,7 +1713,7 @@ export async function createAdminTemplateAction(
       slug: values.data.slug,
       name: values.data.name,
       description: values.data.description,
-      category: values.data.category,
+      category: values.data.category || values.data.industry || "",
       preview_image_url: previewImageUrl || null,
       status: resolvedStatus,
       is_featured: values.data.isFeatured,
@@ -1604,7 +1756,7 @@ export async function updateAdminTemplateAction(
 
   if (!values.success) {
     return {
-      formError: "Please clean up the highlighted fields and try again.",
+      formError: "Some required template fields are still missing.",
       fieldErrors: getTemplateFieldErrors(values.error),
     };
   }
@@ -1640,7 +1792,7 @@ export async function updateAdminTemplateAction(
       slug: values.data.slug,
       name: values.data.name,
       description: values.data.description,
-      category: values.data.category,
+      category: values.data.category || values.data.industry || "",
       preview_image_url: previewImageUrl || null,
       status: resolvedStatus,
       is_featured: values.data.isFeatured,

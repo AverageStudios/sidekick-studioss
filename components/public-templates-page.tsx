@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useMemo, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -12,6 +15,7 @@ import {
 import { MarketingNav } from "@/components/marketing-nav";
 import { PublicSiteFooter } from "@/components/public-site-footer";
 import { InteractiveGlowCard } from "@/components/ui/interactive-glow-card";
+import { FacebookAdPreview } from "@/components/facebook-ad-preview";
 import { Button } from "@/components/ui/button";
 import { TemplateSeed } from "@/types";
 
@@ -86,7 +90,18 @@ const templateIncludes = [
 ];
 
 export function PublicTemplatesPage({ templates }: { templates: TemplateSeed[] }) {
-  const featuredTemplates = templates.slice(0, 6);
+  const [templateQuery, setTemplateQuery] = useState("");
+  const featuredTemplates = useMemo(() => {
+    const query = templateQuery.trim().toLowerCase();
+    const source = templates.slice(0, 6);
+    if (!query) return source;
+    return source.filter((template) =>
+      [template.name, template.description, template.offerType, template.industry]
+        .join(" ")
+        .toLowerCase()
+        .includes(query),
+    );
+  }, [templateQuery, templates]);
 
   return (
     <main className="public-site min-h-screen">
@@ -351,37 +366,33 @@ export function PublicTemplatesPage({ templates }: { templates: TemplateSeed[] }
         </div>
 
         <div className="mt-10 grid gap-5 sm:mt-11 lg:grid-cols-3">
+          <div className="lg:col-span-3">
+            <div className="max-w-xl">
+              <input
+                value={templateQuery}
+                onChange={(event) => setTemplateQuery(event.target.value)}
+                placeholder="Search templates"
+                className="h-11 w-full rounded-full border border-[var(--public-line)] bg-white/82 px-4 text-sm text-[var(--public-text)] outline-none ring-0 transition placeholder:text-[rgba(17,18,22,0.42)] focus:border-[var(--public-line-strong)]"
+              />
+            </div>
+          </div>
           {featuredTemplates.map((template) => (
             <InteractiveGlowCard
               key={template.slug}
               className="h-full rounded-[32px] border border-[var(--public-line)] bg-[var(--public-surface)] p-6"
             >
               <div className="flex h-full flex-col">
-                <div className="rounded-[24px] border border-[var(--public-line)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,244,255,0.82))] p-4">
-                  <div className="rounded-[20px] border border-[rgba(143,124,255,0.13)] bg-[linear-gradient(145deg,rgba(143,124,255,0.12),rgba(255,255,255,0.84))] p-4">
-                    <div className="flex items-center justify-between">
-                      <span className="rounded-full border border-[var(--public-line)] bg-white/82 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--public-accent)]">
-                        {template.category}
-                      </span>
-                      <span className="text-[11px] public-text-faint">Campaign preview</span>
-                    </div>
-                    <div className="mt-5 space-y-2.5">
-                      <div className="h-3 w-2/3 rounded-full bg-[rgba(17,18,22,0.14)]" />
-                      <div className="h-2.5 w-full rounded-full bg-[rgba(17,18,22,0.08)]" />
-                      <div className="h-2.5 w-5/6 rounded-full bg-[rgba(17,18,22,0.08)]" />
-                    </div>
-                    <div className="mt-5 grid gap-2">
-                      {template.benefits.slice(0, 2).map((benefit) => (
-                        <div
-                          key={benefit}
-                          className="rounded-[14px] border border-[var(--public-line)] bg-white/78 px-3 py-2 text-xs text-[rgba(17,18,22,0.74)]"
-                        >
-                          {benefit}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <FacebookAdPreview
+                  template={template}
+                  primaryText={template.adCopy.primary}
+                  headline={template.adCopy.headlines[0] || template.name}
+                  description={template.promoDetails}
+                  ctaLabel={template.ctaDefault}
+                  imageUrl={template.previewImage}
+                  compact
+                  showMetaBar={false}
+                  className="rounded-[24px]"
+                />
 
                 <div className="mt-6 flex flex-1 flex-col">
                   <h3 className="text-xl font-semibold tracking-[-0.03em] text-[var(--public-text)]">

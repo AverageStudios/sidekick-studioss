@@ -88,6 +88,17 @@ function formatInstagramAssetName(instagram: { id: string; username?: string } |
   return instagram.username ? `@${instagram.username}` : instagram.id;
 }
 
+function getMetaPageAvatarUrl(page: MetaPage) {
+  const picture = page.picture;
+  if (!picture || typeof picture !== "object") return null;
+  const dataUrl =
+    picture.data && typeof picture.data === "object" && typeof picture.data.url === "string"
+      ? picture.data.url
+      : null;
+  const directUrl = typeof picture.url === "string" ? picture.url : null;
+  return dataUrl || directUrl;
+}
+
 async function getActiveMetaConnection(admin: SupabaseAdmin, workspaceId: string) {
   const { data, error } = await admin
     .from("workspace_provider_connections")
@@ -403,7 +414,7 @@ export async function syncWorkspaceMetaAssets({
       : ([] as MetaPixel[]);
   const leadForms =
     selectedPageId
-      ? await fetchMetaLeadForms(accessToken, selectedPageId).catch(() => [] as MetaLeadForm[])
+      ? await fetchMetaLeadForms(selectedPage?.access_token || accessToken, selectedPageId).catch(() => [] as MetaLeadForm[])
       : ([] as MetaLeadForm[]);
 
   const selectedPixelId =
@@ -445,7 +456,12 @@ export async function syncWorkspaceMetaAssets({
       rows: pages.map((page) => ({
         asset_id: page.id,
         name: page.name || page.id,
-        metadata_json: page as unknown as Record<string, unknown>,
+        metadata_json: {
+          ...(page as unknown as Record<string, unknown>),
+          avatar_url: getMetaPageAvatarUrl(page),
+          profile_picture_url: getMetaPageAvatarUrl(page),
+          picture_url: getMetaPageAvatarUrl(page),
+        },
         is_selected: page.id === selectedPageId,
       })),
     }),

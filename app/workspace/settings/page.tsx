@@ -75,38 +75,11 @@ export default async function WorkspaceSettingsPage({
   const connection = integrationState?.connection || null;
   const adAccounts = integrationState?.assets.adAccounts || [];
   const pages = integrationState?.assets.pages || [];
-  const pixels = integrationState?.assets.pixels || [];
-  const leadForms = integrationState?.assets.leadForms || [];
   const instagramActors = integrationState?.assets.instagramActors || [];
-  const selectedAdAccountName =
-    adAccounts.find((asset) => asset.asset_id === integrationState?.selected.adAccountId)?.name ||
-    "None selected";
-  const selectedPageName =
-    pages.find((asset) => asset.asset_id === integrationState?.selected.pageId)?.name ||
-    "None selected";
-  const selectedPixelName =
-    pixels.find((asset) => asset.asset_id === integrationState?.selected.pixelId)?.name ||
-    "None selected";
-  const selectedLeadFormName =
-    leadForms.find((asset) => asset.asset_id === integrationState?.selected.leadFormId)?.name ||
-    "None selected";
-  const selectedInstagramName =
-    instagramActors.find((asset) => asset.asset_id === integrationState?.selected.instagramActorId)?.name ||
-    "None selected";
   const metaConnected =
     Boolean(connection && integrationState?.tokenAvailable && connection.status === "connected");
   const hasSelectedAdAccount = Boolean(integrationState?.selected.adAccountId);
   const hasSelectedPage = Boolean(integrationState?.selected.pageId);
-  const hasSelectedPixel = Boolean(integrationState?.selected.pixelId);
-  const hasSelectedLeadForm = Boolean(integrationState?.selected.leadFormId);
-  const draftReadinessItems = [
-    { label: "Connected token", ready: metaConnected, required: true },
-    { label: "Ad account selected", ready: hasSelectedAdAccount, required: true },
-    { label: "Facebook Page selected", ready: hasSelectedPage, required: true },
-    { label: "Pixel selected", ready: hasSelectedPixel, required: false },
-    { label: "Lead form selected", ready: hasSelectedLeadForm, required: false },
-  ];
-  const liveReadinessBlocked = !metaConnected || !hasSelectedAdAccount || !hasSelectedPage;
   const metaConnectNext = encodeURIComponent("/workspace/settings?section=integrations");
   const campaigns = dashboardSnapshot.campaigns || [];
   const publishedCampaigns = campaigns.filter((campaign) => campaign.status === "published");
@@ -436,8 +409,8 @@ export default async function WorkspaceSettingsPage({
                   This connection is scoped to this workspace. New workspaces need their own Meta connection.
                 </p>
 
-                <div className="mt-8 grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
-                  <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
+                <div className="mt-8">
+                  <div className="rounded-[1.5rem] border border-[var(--line)] bg-white px-6 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
                     {workspaceContextMissing ? (
                       <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                         <strong>Workspace could not be loaded.</strong> This usually means the required database migrations have not been applied to your Supabase project. Run migrations 004 and 011 from <code>supabase/migrations/</code> against your project.
@@ -454,46 +427,73 @@ export default async function WorkspaceSettingsPage({
                       </div>
                     ) : null}
 
-                    <div className="mb-4 flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-1 text-xs font-semibold text-[var(--ink)]">
-                        {metaConnected ? "Connected" : "Not connected"}
-                      </span>
-                      {connection?.provider_user_name ? (
-                        <span className="text-xs text-[var(--muted)]">Connected as {connection.provider_user_name}</span>
-                      ) : null}
-                    </div>
+                    <div className="flex flex-col gap-6">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#f3f7ff] text-[#1877f2] shadow-[inset_0_0_0_1px_rgba(24,119,242,0.08)]">
+                            <span className="text-2xl font-black leading-none">∞</span>
+                          </div>
+                          <div>
+                            <div className="flex flex-wrap items-center gap-3">
+                              <h3 className="text-[1.35rem] font-semibold tracking-[-0.04em] text-[var(--ink)]">Facebook</h3>
+                              <span
+                                className={cn(
+                                  "rounded-full border px-3 py-1 text-xs font-semibold",
+                                  metaConnected
+                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                    : "border-amber-300 bg-amber-50 text-amber-700",
+                                )}
+                              >
+                                {metaConnected ? "Connected" : "Needs Attention"}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-sm text-[var(--muted)]">Meta Ads Manager</p>
+                            {connection?.provider_user_name ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">Connected as {connection.provider_user_name}</p>
+                            ) : null}
+                          </div>
+                        </div>
 
-                    <div className="flex flex-wrap gap-3">
-                      <Button asChild disabled={!isMetaConfigured() || !workspaceId}>
-                        <Link href={`/api/meta/connect?next=${metaConnectNext}`}>
-                          {metaConnected ? "Reconnect Facebook" : "Connect Facebook"}
-                        </Link>
-                      </Button>
+                        <div className="flex flex-wrap gap-2 sm:justify-end">
+                          {connection ? (
+                            <form action={disconnectMetaIntegrationAction}>
+                              <Button type="submit" variant="outline">Disconnect</Button>
+                            </form>
+                          ) : null}
+                        </div>
+                      </div>
 
-                      {metaConnected ? (
-                        <form action={refreshMetaIntegrationAssetsAction}>
-                          <Button type="submit" variant="outline">Refresh assets</Button>
-                        </form>
-                      ) : null}
+                      <div className="flex flex-wrap gap-2">
+                        <Button asChild disabled={!isMetaConfigured() || !workspaceId}>
+                          <Link href={`/api/meta/connect?next=${metaConnectNext}`}>
+                            {metaConnected ? "Reconnect" : "Connect Facebook"}
+                          </Link>
+                        </Button>
 
-                      {connection ? (
-                        <form action={disconnectMetaIntegrationAction}>
-                          <Button type="submit" variant="outline">Disconnect</Button>
-                        </form>
-                      ) : null}
+                        {metaConnected ? (
+                          <form action={refreshMetaIntegrationAssetsAction}>
+                            <Button type="submit" variant="outline">Refresh assets</Button>
+                          </form>
+                        ) : null}
+                      </div>
                     </div>
 
                     {connection ? (
-                      <form action={saveMetaIntegrationSelectionsAction} className="mt-6 space-y-4">
-                        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                          <div>
-                            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                              Ad account
-                            </label>
+                      <form action={saveMetaIntegrationSelectionsAction} className="mt-6 border-t border-[var(--line)] pt-6">
+                        <div className="space-y-5">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <label className="block text-sm font-medium text-[var(--ink)]">
+                                Ad Account
+                              </label>
+                              <span className="text-sm font-medium text-[var(--brand)]">
+                                create new
+                              </span>
+                            </div>
                             <select
                               name="adAccountId"
                               defaultValue={integrationState?.selected.adAccountId || ""}
-                              className="h-11 w-full rounded-[14px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)]"
+                              className="h-12 w-full rounded-[14px] border border-[var(--line)] bg-white px-4 text-sm text-[var(--ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand)]"
                             >
                               <option value="">Select ad account</option>
                               {adAccounts.map((account) => (
@@ -503,126 +503,76 @@ export default async function WorkspaceSettingsPage({
                               ))}
                             </select>
                           </div>
-                          <div>
-                            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                              Facebook Page
-                            </label>
-                            <select
-                              name="pageId"
-                              defaultValue={integrationState?.selected.pageId || ""}
-                              className="h-11 w-full rounded-[14px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)]"
-                            >
-                              <option value="">Select page</option>
-                              {pages.map((page) => (
-                                <option key={page.asset_id} value={page.asset_id}>
-                                  {page.name || page.asset_id}
-                                </option>
-                              ))}
-                            </select>
+
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <label className="block text-sm font-medium text-[var(--ink)]">
+                                Facebook Page
+                              </label>
+                              <span className="text-sm font-medium text-[var(--brand)]">
+                                create page
+                              </span>
+                            </div>
+                            <div className="flex gap-2">
+                              <select
+                                name="pageId"
+                                defaultValue={integrationState?.selected.pageId || ""}
+                                className="h-12 min-w-0 flex-1 rounded-[14px] border border-[var(--line)] bg-white px-4 text-sm text-[var(--ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand)]"
+                              >
+                                <option value="">Select page</option>
+                                {pages.map((page) => (
+                                  <option key={page.asset_id} value={page.asset_id}>
+                                    {page.name || page.asset_id}
+                                  </option>
+                                ))}
+                              </select>
+                              <div className="flex h-12 w-12 items-center justify-center rounded-[14px] border border-[var(--line)] bg-white text-[var(--muted)] shadow-sm">
+                                ↻
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                              Pixel
-                            </label>
-                            <select
-                              name="pixelId"
-                              defaultValue={integrationState?.selected.pixelId || ""}
-                              className="h-11 w-full rounded-[14px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)]"
-                            >
-                              <option value="">No pixel selected</option>
-                              {pixels.map((pixel) => (
-                                <option key={pixel.asset_id} value={pixel.asset_id}>
-                                  {pixel.name || pixel.asset_id}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                              Lead form
-                            </label>
-                            <select
-                              name="leadFormId"
-                              defaultValue={integrationState?.selected.leadFormId || ""}
-                              className="h-11 w-full rounded-[14px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)]"
-                            >
-                              <option value="">No lead form selected</option>
-                              {leadForms.map((leadForm) => (
-                                <option key={leadForm.asset_id} value={leadForm.asset_id}>
-                                  {leadForm.name || leadForm.asset_id}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                              Instagram (optional)
-                            </label>
-                            <select
-                              name="instagramActorId"
-                              defaultValue={integrationState?.selected.instagramActorId || ""}
-                              className="h-11 w-full rounded-[14px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)]"
-                            >
-                              <option value="">No Instagram actor selected</option>
-                              {instagramActors.map((actor) => (
-                                <option key={actor.asset_id} value={actor.asset_id}>
-                                  {actor.name || actor.asset_id}
-                                </option>
-                              ))}
-                            </select>
+
+                          {instagramActors.length ? (
+                            <div className="space-y-2">
+                              <label className="block text-sm font-medium text-[var(--ink)]">
+                                Instagram (optional)
+                              </label>
+                              <select
+                                name="instagramActorId"
+                                defaultValue={integrationState?.selected.instagramActorId || ""}
+                                className="h-12 w-full rounded-[14px] border border-[var(--line)] bg-white px-4 text-sm text-[var(--ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand)]"
+                              >
+                                <option value="">No Instagram actor selected</option>
+                                {instagramActors.map((actor) => (
+                                  <option key={actor.asset_id} value={actor.asset_id}>
+                                    {actor.name || actor.asset_id}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-7 flex flex-col items-center gap-4 border-t border-[var(--line)] pt-6">
+                          <Button type="submit" className="min-w-[13rem]">
+                            Save
+                          </Button>
+                          <div className="text-center">
+                            {metaConnected ? (
+                              <Link
+                                href={`/api/meta/connect?next=${metaConnectNext}`}
+                                className="text-sm font-medium text-[var(--brand)] transition-colors hover:text-[var(--brand-ink)]"
+                              >
+                                Reconnect
+                              </Link>
+                            ) : null}
+                            <p className="mt-1 text-xs text-[var(--muted)]">
+                              Update permissions or switch accounts
+                            </p>
                           </div>
                         </div>
-                        <Button type="submit">Save integration selections</Button>
                       </form>
                     ) : null}
-                  </div>
-
-                  <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Connection details</p>
-                    <div className="mt-4 space-y-2.5 text-xs text-[var(--muted)]">
-                      <p>Workspace: {workspaceName}</p>
-                      <p>Status: {connection?.status || "Not connected"}</p>
-                      <p>Selected ad account: {selectedAdAccountName}</p>
-                      <p>Selected page: {selectedPageName}</p>
-                      <p>Selected pixel: {selectedPixelName}</p>
-                      <p>Selected lead form: {selectedLeadFormName}</p>
-                      <p>Selected Instagram: {selectedInstagramName}</p>
-                      <p>Token expires: {connection?.token_expires_at ? new Date(connection.token_expires_at).toLocaleString() : "Unknown"}</p>
-                      <p>Last sync: {connection?.last_synced_at ? new Date(connection.last_synced_at).toLocaleString() : "Not yet synced"}</p>
-                    </div>
-                    <div className="mt-6 border-t border-[var(--line)] pt-4">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                        Launch readiness preview
-                      </p>
-                      <div className="mt-3 space-y-2">
-                        {draftReadinessItems.map((item) => (
-                          <div key={item.label} className="flex items-center justify-between gap-3 text-xs">
-                            <span className="text-[var(--muted)]">
-                              {item.label}
-                              {!item.required ? " (optional)" : ""}
-                            </span>
-                            <span
-                              className={cn(
-                                "rounded-full px-2 py-0.5 font-medium",
-                                item.ready
-                                  ? "bg-emerald-100 text-emerald-700"
-                                  : item.required
-                                    ? "bg-rose-100 text-rose-700"
-                                    : "bg-amber-100 text-amber-700",
-                              )}
-                            >
-                              {item.ready ? "Ready" : item.required ? "Missing" : "Not set"}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="mt-3 text-xs text-[var(--muted)]">
-                        Draft publish is usually available once connection, ad account, and page are set.{" "}
-                        {liveReadinessBlocked
-                          ? "Live publish will stay blocked until required items are ready."
-                          : "Live publish can proceed if Meta account checks pass preflight."}
-                      </p>
-                    </div>
                   </div>
                 </div>
               </section>

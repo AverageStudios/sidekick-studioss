@@ -7,6 +7,8 @@ import { onboardingIndustries } from "@/data/onboarding";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { FacebookAdPreview } from "@/components/facebook-ad-preview";
+import { Input } from "@/components/ui/input";
 import { TemplateSeed } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +37,7 @@ export function DashboardOnboarding({
 
   const [industry, setIndustry] = useState(defaultIndustry);
   const [templateId, setTemplateId] = useState(defaultTemplate);
+  const [industryQuery, setIndustryQuery] = useState("");
 
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.id === templateId) ?? templates[0],
@@ -88,8 +91,22 @@ export function DashboardOnboarding({
             </p>
           </div>
 
+          <div className="mt-5">
+            <Input
+              value={industryQuery}
+              onChange={(event) => setIndustryQuery(event.target.value)}
+              placeholder="Search industries"
+            />
+          </div>
+
           <div className="mt-5 space-y-3">
-            {onboardingIndustries.map((item) => {
+            {onboardingIndustries
+              .filter((item) => {
+                const query = industryQuery.trim().toLowerCase();
+                if (!query) return true;
+                return [item.label, item.description, item.helper].join(" ").toLowerCase().includes(query);
+              })
+              .map((item) => {
               const available = item.status === "available";
               const selected = industry === item.id;
 
@@ -126,7 +143,7 @@ export function DashboardOnboarding({
                   </div>
                 </button>
               );
-            })}
+              })}
           </div>
           <input type="hidden" name="industry" value={industry} />
         </Card>
@@ -158,19 +175,17 @@ export function DashboardOnboarding({
                       : "border-[var(--line)] bg-white/82 shadow-[var(--shadow-soft)] hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--brand)_18%,white)] hover:bg-white active:translate-y-px",
                   )}
                 >
-                  <div className="rounded-[20px] border border-white/70 bg-[linear-gradient(135deg,#fafbff_0%,#f0efff_45%,#f5f3ee_100%)] p-4">
-                    <div className="flex items-center justify-between">
-                      <Badge className="bg-white/86">{template.category}</Badge>
-                      {selected ? <Check className="h-4 w-4 text-[var(--brand)]" /> : <LayoutTemplate className="h-4 w-4 text-[var(--brand)]" />}
-                    </div>
-                    <div className="mt-5 rounded-[18px] bg-white/90 p-3 shadow-[0_10px_18px_rgba(17,24,39,0.05)]">
-                      <div className="h-3 w-2/3 rounded-full bg-[#cfd4ff]" />
-                      <div className="mt-3 grid gap-2">
-                        <div className="h-2.5 rounded-full bg-[#e9ebfa]" />
-                        <div className="h-2.5 w-5/6 rounded-full bg-[#ececf5]" />
-                      </div>
-                    </div>
-                  </div>
+                  <FacebookAdPreview
+                    template={template}
+                    primaryText={template.adCopy.primary}
+                    headline={template.adCopy.headlines[0] || template.name}
+                    description={template.promoDetails}
+                    ctaLabel={template.ctaDefault}
+                    imageUrl={template.previewImage}
+                    compact
+                    showMetaBar={false}
+                    className="rounded-[20px]"
+                  />
                   <h3 className="mt-4 text-base font-semibold text-[var(--ink)]">{template.name}</h3>
                   <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">{template.description}</p>
                 </button>

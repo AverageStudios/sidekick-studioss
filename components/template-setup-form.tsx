@@ -132,7 +132,8 @@ export function TemplateSetupForm({
 
       <div className="flex flex-col gap-4 rounded-[28px] border border-[var(--line)] bg-white/80 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-2">
-          <Badge>{template.category}</Badge>
+          <Badge>{template.industry || template.category}</Badge>
+          <Badge>{template.offerType || "Offer type"}</Badge>
           <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{template.name}</p>
           <p className="mt-1 text-sm text-[var(--muted)]">This creates your own campaign instance from the published master template.</p>
         </div>

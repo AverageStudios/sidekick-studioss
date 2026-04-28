@@ -1,14 +1,19 @@
 import {
   BusinessProfile,
   CampaignDetailsStep,
+  CampaignAdType,
   CampaignGoal,
   CampaignLaunchState,
   CampaignLocationTargetingType,
   CampaignLaunchStep,
+  CampaignThankYouButtonAction,
+  CampaignThankYouDestinationMode,
   TemplatePlaceholderField,
   TemplateSeed,
   TemplateSetupValues,
 } from "@/types";
+import { normalizeIndustryLabel, normalizeOfferTypeLabel } from "@/data/template-taxonomy";
+import { extractTemplatePlaceholderFields } from "@/lib/template-placeholders";
 
 function normalizeCampaignGoal(goal?: string | null): CampaignGoal {
   switch (goal) {
@@ -27,6 +32,50 @@ function normalizeCampaignGoal(goal?: string | null): CampaignGoal {
       return goal;
     default:
       return "OUTCOME_LEADS";
+  }
+}
+
+export function normalizeCampaignAdType(value?: string | null): CampaignAdType {
+  switch (value) {
+    case "landing_page":
+    case "call_now":
+    case "messenger_leads":
+    case "messenger_engagement":
+    case "lead_form":
+      return value;
+    default:
+      return "lead_form";
+  }
+}
+
+export function getCampaignGoalForAdType(adType: CampaignAdType): CampaignGoal {
+  switch (adType) {
+    case "landing_page":
+      return "OUTCOME_TRAFFIC";
+    case "call_now":
+    case "messenger_engagement":
+      return "OUTCOME_ENGAGEMENT";
+    case "messenger_leads":
+    case "lead_form":
+    default:
+      return "OUTCOME_LEADS";
+  }
+}
+
+export function getAdTypeLabel(adType: CampaignAdType) {
+  switch (adType) {
+    case "lead_form":
+      return "Lead Form";
+    case "landing_page":
+      return "Landing Page";
+    case "call_now":
+      return "Call Now";
+    case "messenger_leads":
+      return "Messenger (Leads)";
+    case "messenger_engagement":
+      return "Messenger (Engagement)";
+    default:
+      return "Lead Form";
   }
 }
 
@@ -64,8 +113,142 @@ function normalizeLocationTargetingMode(
   }
 }
 
+function normalizeCampaignDetailsStep(value?: string | null): CampaignDetailsStep {
+  switch (value) {
+    case "goal":
+      return "ad-type";
+    case "pixel":
+      return "tracking-pixel";
+    case "advanced":
+      return "review";
+    case "ad-type":
+    case "budget":
+    case "location":
+    case "tracking-pixel":
+    case "placeholders":
+    case "thank-you":
+    case "landing-page":
+    case "phone-number":
+    case "messenger-setup":
+    case "review":
+    case "launch":
+      return value;
+    default:
+      return "ad-type";
+  }
+}
+
 function normalizeLeadFormMode(value?: string | null) {
   return value === "managed_new" ? "managed_new" : "existing";
+}
+
+function normalizeThankYouDestinationMode(
+  value?: string | null,
+  websiteUrl?: string | null,
+): CampaignThankYouDestinationMode {
+  if (value === "website" || value === "facebook") {
+    return value;
+  }
+  return websiteUrl?.trim() ? "website" : "facebook";
+}
+
+function normalizeThankYouButtonAction(
+  value?: string | null,
+): CampaignThankYouButtonAction {
+  if (value === "DOWNLOAD" || value === "CALL_BUSINESS" || value === "OPEN_WEBSITE") {
+    return value;
+  }
+  return "OPEN_WEBSITE";
+}
+
+function normalizeAdTypeConfig(
+  partial?: Partial<CampaignLaunchState> | null,
+  template?: TemplateSeed | null,
+) {
+  return normalizeCampaignAdType(partial?.adType || template?.defaultAdType || null);
+}
+
+function resolveTemplateAdTypeConfig(
+  template: TemplateSeed | null | undefined,
+  adType: CampaignAdType,
+) {
+  return template?.adTypeConfig?.[adType] || {};
+}
+
+function deriveThankYouDestinationMode(
+  buttonAction: CampaignThankYouButtonAction,
+): CampaignThankYouDestinationMode {
+  return buttonAction === "CALL_BUSINESS" ? "facebook" : "website";
+}
+
+export function getDefaultThankYouButtonLabel(
+  buttonAction: CampaignThankYouButtonAction,
+) {
+  if (buttonAction === "DOWNLOAD") return "Download";
+  if (buttonAction === "CALL_BUSINESS") return "Call Now";
+  return "Continue";
+}
+
+export function getCampaignDetailsStepsForAdType(adType: CampaignAdType): Array<{ id: CampaignDetailsStep; label: string; description: string }> {
+  const common: Array<{ id: CampaignDetailsStep; label: string; description: string }> = [
+    { id: "ad-type", label: "Pick Ad Type", description: "Choose the campaign flow that fits this template." },
+    { id: "budget", label: "Budget", description: "Set the daily spend for this campaign." },
+    { id: "location", label: "Target Location", description: "Pick where the campaign should run." },
+  ];
+
+  const byType: Record<CampaignAdType, Array<{ id: CampaignDetailsStep; label: string; description: string }>> = {
+    lead_form: [
+      ...common,
+      { id: "placeholders", label: "Fill Placeholders", description: "Complete template variables across the ad." },
+      { id: "thank-you", label: "Thank You Page", description: "Optionally configure the post-submit screen." },
+      { id: "review", label: "Review & Launch", description: "Review the full lead form campaign before launch." },
+    ],
+    landing_page: [
+      ...common,
+      { id: "tracking-pixel", label: "Tracking Pixel", description: "Attach the pixel from your connected Meta account." },
+      { id: "placeholders", label: "Fill Placeholders", description: "Complete template variables across the ad." },
+      { id: "landing-page", label: "Landing Page", description: "Set the website destination for this ad." },
+      { id: "review", label: "Review & Launch", description: "Review the full landing page campaign before launch." },
+    ],
+    call_now: [
+      ...common,
+      { id: "placeholders", label: "Fill Placeholders", description: "Complete template variables across the ad." },
+      { id: "phone-number", label: "Phone Number", description: "Add the call destination for the CTA." },
+      { id: "review", label: "Review & Launch", description: "Review the full call campaign before launch." },
+    ],
+    messenger_leads: [
+      ...common,
+      { id: "placeholders", label: "Fill Placeholders", description: "Complete template variables across the ad." },
+      { id: "messenger-setup", label: "Messenger Setup", description: "Configure the messaging handoff and welcome text." },
+      { id: "review", label: "Review & Launch", description: "Review the full Messenger leads campaign before launch." },
+    ],
+    messenger_engagement: [
+      ...common,
+      { id: "placeholders", label: "Fill Placeholders", description: "Complete template variables across the ad." },
+      { id: "messenger-setup", label: "Messenger Setup", description: "Configure the messaging handoff and welcome text." },
+      { id: "review", label: "Review & Launch", description: "Review the full Messenger engagement campaign before launch." },
+    ],
+  };
+
+  return byType[adType];
+}
+
+export function getNextCampaignDetailsStep(
+  adType: CampaignAdType,
+  currentStep: CampaignDetailsStep,
+): CampaignDetailsStep {
+  const steps = getCampaignDetailsStepsForAdType(adType);
+  const index = steps.findIndex((step) => step.id === currentStep);
+  return steps[Math.min(Math.max(index, 0) + 1, steps.length - 1)].id;
+}
+
+export function getPreviousCampaignDetailsStep(
+  adType: CampaignAdType,
+  currentStep: CampaignDetailsStep,
+): CampaignDetailsStep {
+  const steps = getCampaignDetailsStepsForAdType(adType);
+  const index = steps.findIndex((step) => step.id === currentStep);
+  return steps[Math.max(index - 1, 0)].id;
 }
 
 function normalizeTargetLocations(
@@ -77,31 +260,35 @@ function normalizeTargetLocations(
     id: location.id || `location-${index + 1}`,
     label: location.label,
     radius: location.radius || "10",
+    radiusAllowed:
+      location.radiusAllowed ??
+      (location.scope === "city" || location.scope === "zip" || location.scope === "neighborhood" || location.scope === "address"),
+    distanceUnit: location.distanceUnit || "mile",
     scope: location.scope,
     lat: typeof location.lat === "number" ? location.lat : undefined,
     lon: typeof location.lon === "number" ? location.lon : undefined,
     countryCode: location.countryCode,
+    metaLocation: location.metaLocation
+      ? {
+          ...location.metaLocation,
+          raw:
+            location.metaLocation.raw && typeof location.metaLocation.raw === "object"
+              ? { ...location.metaLocation.raw }
+              : location.metaLocation.raw,
+        }
+      : undefined,
     targetingMode: normalizeLocationTargetingMode(location.targetingMode),
   }));
 }
 
 export const campaignWizardSteps: Array<{ id: CampaignLaunchStep; label: string }> = [
   { id: "platform", label: "Choose platform" },
-  { id: "category", label: "Select category" },
+  { id: "industry", label: "Select industry" },
   { id: "template", label: "Select template" },
   { id: "campaign-details", label: "Campaign details" },
 ];
 
-export const campaignDetailsSteps: Array<{ id: CampaignDetailsStep; label: string; description: string }> = [
-  { id: "goal", label: "Campaign goal", description: "Pick the ad type and objective." },
-  { id: "budget", label: "Daily budget", description: "Set what you want to spend each day." },
-  { id: "location", label: "Target location", description: "Choose where this ad should run." },
-  { id: "pixel", label: "Tracking pixel", description: "Pick the pixel you want tied to this campaign." },
-  { id: "placeholders", label: "Placeholders", description: "Fill the template-specific offer values." },
-  { id: "thank-you", label: "Thank-you page", description: "Configure the post-submit experience." },
-  { id: "review", label: "Review & launch", description: "Review the campaign setup before launch." },
-  { id: "advanced", label: "Advanced settings", description: "Optional campaign naming and policy settings." },
-];
+export const campaignDetailsSteps = getCampaignDetailsStepsForAdType("lead_form");
 
 export const locationTargetingModeOptions: Array<{
   value: CampaignLocationTargetingType;
@@ -157,38 +344,8 @@ export const campaignGoalOptions: Array<{
   },
 ];
 
-const fallbackPlaceholderMap: Record<string, TemplatePlaceholderField[]> = {
-  "full-detail-promo": [
-    { id: "offerPrice", label: "Offer price", placeholder: "$179", inputType: "currency", required: true, defaultValue: "179" },
-    { id: "regularPrice", label: "Normal price", placeholder: "$249", inputType: "currency", required: true, defaultValue: "249" },
-    { id: "savings", label: "Savings", placeholder: "$70", inputType: "currency", defaultValue: "70" },
-  ],
-  "interior-detail-promo": [
-    { id: "offerPrice", label: "Offer price", placeholder: "$129", inputType: "currency", required: true, defaultValue: "129" },
-    { id: "regularPrice", label: "Normal price", placeholder: "$179", inputType: "currency", required: true, defaultValue: "179" },
-    { id: "savings", label: "Savings", placeholder: "$50", inputType: "currency", defaultValue: "50" },
-  ],
-  "ceramic-coating-promo": [
-    { id: "offerPrice", label: "Intro price", placeholder: "$899", inputType: "currency", required: true, defaultValue: "899" },
-    { id: "regularPrice", label: "Normal price", placeholder: "$1,099", inputType: "currency", required: true, defaultValue: "1099" },
-    { id: "savings", label: "Savings", placeholder: "$200", inputType: "currency", defaultValue: "200" },
-  ],
-  "paint-correction-promo": [
-    { id: "offerPrice", label: "Correction price", placeholder: "$499", inputType: "currency", required: true, defaultValue: "499" },
-    { id: "regularPrice", label: "Normal price", placeholder: "$649", inputType: "currency", required: true, defaultValue: "649" },
-    { id: "savings", label: "Savings", placeholder: "$150", inputType: "currency", defaultValue: "150" },
-  ],
-  "monthly-maintenance-promo": [
-    { id: "monthlyRate", label: "Monthly rate", placeholder: "$59", inputType: "currency", required: true, defaultValue: "59" },
-    { id: "joinFee", label: "Join fee", placeholder: "$0", inputType: "currency", defaultValue: "0" },
-    { id: "yearlySavings", label: "Yearly savings", placeholder: "$180", inputType: "currency", defaultValue: "180" },
-  ],
-};
-
 export function getTemplatePlaceholderFields(template: TemplateSeed) {
-  return template.placeholderFields?.length
-    ? template.placeholderFields
-    : fallbackPlaceholderMap[template.slug] || [];
+  return extractTemplatePlaceholderFields(template);
 }
 
 function defaultPlaceholderValues(template: TemplateSeed) {
@@ -207,21 +364,40 @@ export function createInitialCampaignLaunchState({
   partial?: Partial<CampaignLaunchState> | null;
 }): CampaignLaunchState {
   const resolvedTemplate = template || null;
+  const initialStep = (partial?.currentStep as string | undefined) === "offer-type" ? "template" : partial?.currentStep;
+  const resolvedAdType = normalizeAdTypeConfig(partial, resolvedTemplate);
+  const templateAdTypeConfig = resolveTemplateAdTypeConfig(resolvedTemplate, resolvedAdType);
   const defaultCampaignName =
     partial?.advanced?.campaignName ||
     (resolvedTemplate
       ? `${businessProfile?.business_name || "SideKick"} ${resolvedTemplate.name}`
       : "");
+  const thankYouDestinationMode = normalizeThankYouDestinationMode(
+    partial?.thankYouPage?.destinationMode,
+    partial?.thankYouPage?.websiteUrl,
+  );
+  const thankYouButtonAction = normalizeThankYouButtonAction(
+    partial?.thankYouPage?.buttonAction,
+  );
 
   return {
     platform: "meta",
-    category: partial?.category || resolvedTemplate?.category || "",
+    adType: resolvedAdType,
+    category: normalizeIndustryLabel(partial?.category || partial?.industry || resolvedTemplate?.industry || resolvedTemplate?.category || ""),
+    industry: normalizeIndustryLabel(partial?.industry || partial?.category || resolvedTemplate?.industry || resolvedTemplate?.category || ""),
+    offerType: normalizeOfferTypeLabel(partial?.offerType || resolvedTemplate?.offerType || ""),
     templateSlug: partial?.templateSlug || resolvedTemplate?.slug || "",
-    currentStep: partial?.currentStep || (resolvedTemplate ? "template" : "platform"),
-    currentDetailsStep: partial?.currentDetailsStep || "goal",
-    campaignGoal: normalizeCampaignGoal(partial?.campaignGoal),
+    currentStep: initialStep || (resolvedTemplate ? "template" : "platform"),
+    currentDetailsStep: normalizeCampaignDetailsStep(partial?.currentDetailsStep),
+    campaignGoal: normalizeCampaignGoal(partial?.campaignGoal || getCampaignGoalForAdType(resolvedAdType)),
     dailyBudget: partial?.dailyBudget || "25",
     targetLocation: partial?.targetLocation || businessProfile?.location || "",
+    landingPageUrl: partial?.landingPageUrl || templateAdTypeConfig.landingPageUrl || "",
+    phoneNumber: partial?.phoneNumber || templateAdTypeConfig.phoneNumber || businessProfile?.phone || "",
+    messengerWelcomeMessage:
+      partial?.messengerWelcomeMessage || templateAdTypeConfig.messengerWelcomeMessage || "",
+    messengerReplyPrompt:
+      partial?.messengerReplyPrompt || templateAdTypeConfig.messengerReplyPrompt || "",
     targetLocations:
       partial?.targetLocations?.length
         ? normalizeTargetLocations(partial.targetLocations)
@@ -231,6 +407,8 @@ export function createInitialCampaignLaunchState({
                 id: "primary-location",
                 label: partial?.targetLocation || businessProfile?.location || "",
                 radius: "10",
+                radiusAllowed: true,
+                distanceUnit: "mile",
                 targetingMode: "home" as const,
                 scope: "city" as const,
               },
@@ -246,12 +424,24 @@ export function createInitialCampaignLaunchState({
       ...(partial?.placeholderValues || {}),
     },
     thankYouPage: {
-      headline: partial?.thankYouPage?.headline || "Thanks, we got your request.",
+      enabled: partial?.thankYouPage?.enabled ?? templateAdTypeConfig.thankYouEnabled ?? true,
+      headline:
+        partial?.thankYouPage?.headline ||
+        templateAdTypeConfig.thankYouHeadline ||
+        "Thanks, we got your request.",
       description:
         partial?.thankYouPage?.description ||
+        templateAdTypeConfig.thankYouDescription ||
         `We'll follow up from ${businessProfile?.business_name || "your workspace"} shortly.`,
-      buttonLabel: partial?.thankYouPage?.buttonLabel || "Back to site",
-      destinationUrl: partial?.thankYouPage?.destinationUrl || "",
+      buttonLabel:
+        partial?.thankYouPage?.buttonLabel ||
+        templateAdTypeConfig.thankYouButtonLabel ||
+        getDefaultThankYouButtonLabel(thankYouButtonAction),
+      buttonAction: thankYouButtonAction,
+      websiteUrl: partial?.thankYouPage?.websiteUrl || templateAdTypeConfig.thankYouWebsiteUrl || "",
+      completionCountryCode: partial?.thankYouPage?.completionCountryCode || "+1",
+      completionPhone: partial?.thankYouPage?.completionPhone || "",
+      destinationMode: partial?.thankYouPage?.destinationMode || deriveThankYouDestinationMode(thankYouButtonAction),
     },
     advanced: {
       campaignName: defaultCampaignName,
@@ -314,8 +504,15 @@ export function getTemplateSetupValuesFromLaunchState(
   const offerPrice = placeholderValues.offerPrice || placeholderValues.monthlyRate || "";
   const regularPrice = placeholderValues.regularPrice || placeholderValues.joinFee || "";
   const primaryLocation = state.targetLocations?.[0]?.label || state.targetLocation;
+  const thankYouDestinationUrl =
+    state.thankYouPage.buttonAction === "OPEN_WEBSITE" || state.thankYouPage.buttonAction === "DOWNLOAD"
+      ? state.thankYouPage.websiteUrl
+      : state.integrationSelections.pageId
+        ? `https://www.facebook.com/${state.integrationSelections.pageId}`
+        : "";
 
   return {
+    adType: state.adType,
     businessName: businessProfile?.business_name || "Your Business",
     city: businessProfile?.location || primaryLocation || "",
     phone: businessProfile?.phone || "",
@@ -333,9 +530,14 @@ export function getTemplateSetupValuesFromLaunchState(
     campaignGoal: normalizeCampaignGoal(state.campaignGoal),
     dailyBudget: state.dailyBudget,
     targetLocation: primaryLocation,
+    landingPageUrl: state.landingPageUrl,
+    phoneNumber: state.phoneNumber,
+    messengerWelcomeMessage: state.messengerWelcomeMessage,
+    messengerReplyPrompt: state.messengerReplyPrompt,
+    thankYouEnabled: state.thankYouPage.enabled,
     thankYouHeadline: state.thankYouPage.headline,
     thankYouDescription: state.thankYouPage.description,
     thankYouButtonText: state.thankYouPage.buttonLabel,
-    destinationUrl: state.thankYouPage.destinationUrl,
+    destinationUrl: thankYouDestinationUrl,
   };
 }

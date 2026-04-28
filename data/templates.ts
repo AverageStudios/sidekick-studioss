@@ -1,5 +1,6 @@
-import { TemplateRecord, TemplateSeed } from "@/types";
-import { getTemplatePlaceholderFields } from "@/lib/campaign-launch";
+import { TemplateIndustry, TemplateOfferType, TemplateRecord, TemplateSeed } from "@/types";
+import { normalizeIndustryLabel, normalizeOfferTypeLabel } from "@/data/template-taxonomy";
+import { extractTemplatePlaceholderFields } from "@/lib/template-placeholders";
 
 // Dev fallback only. The real source of truth for customer-facing template browsing
 // should be the Supabase `templates` table.
@@ -9,8 +10,9 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     slug: "full-detail-promo",
     name: "Full Detail Promo",
     description: "A fast-launch offer for drivers who want the full interior and exterior reset.",
-    category: "Lead Generation",
-    industry: "Auto detailing",
+    category: "Car Detailing",
+    industry: "Car Detailing",
+    offerType: "Service Booking",
     positioning: "Best for shops pushing a flagship full detail with a clean entry offer.",
     previewImage: "/placeholders/full-detail.jpg",
     ctaDefault: "Claim My Detail",
@@ -73,8 +75,9 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     slug: "interior-detail-promo",
     name: "Interior Detail Promo",
     description: "A focused funnel for detailers selling interior recovery, stain removal, and refresh jobs.",
-    category: "Lead Generation",
-    industry: "Auto detailing",
+    category: "Car Detailing",
+    industry: "Car Detailing",
+    offerType: "Quote Request",
     positioning: "Best for shops booking family vehicles, work trucks, or rideshare interiors.",
     previewImage: "/placeholders/interior-detail.jpg",
     ctaDefault: "Get Interior Pricing",
@@ -137,8 +140,9 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     slug: "ceramic-coating-promo",
     name: "Ceramic Coating Promo",
     description: "A premium-feeling campaign for high-ticket coating jobs and paint protection offers.",
-    category: "Premium Service",
-    industry: "Auto detailing",
+    category: "Car Detailing",
+    industry: "Car Detailing",
+    offerType: "High-Ticket Offer",
     positioning: "Best for detailers selling higher-ticket paint protection with a premium brand feel.",
     previewImage: "/placeholders/ceramic.jpg",
     ctaDefault: "Request Coating Quote",
@@ -201,8 +205,9 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     slug: "paint-correction-promo",
     name: "Paint Correction Promo",
     description: "A polished campaign for swirl removal, gloss restoration, and paint correction leads.",
-    category: "Premium Service",
-    industry: "Auto detailing",
+    category: "Car Detailing",
+    industry: "Car Detailing",
+    offerType: "Inspection",
     positioning: "Best for detailers selling transformation-focused correction work.",
     previewImage: "/placeholders/paint-correction.jpg",
     ctaDefault: "See Correction Options",
@@ -265,8 +270,9 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     slug: "monthly-maintenance-promo",
     name: "Monthly Maintenance Promo",
     description: "A recurring-revenue funnel for maintenance washes and simple monthly membership style offers.",
-    category: "Recurring Revenue",
-    industry: "Auto detailing",
+    category: "Car Detailing",
+    industry: "Car Detailing",
+    offerType: "Recurring Maintenance",
     positioning: "Best for detailers wanting steadier repeat business with a lightweight offer.",
     previewImage: "/placeholders/maintenance.jpg",
     ctaDefault: "Join The Wash Plan",
@@ -337,23 +343,29 @@ export function getTemplateById(id: string) {
 export function hydrateTemplateRecord(record: TemplateRecord): TemplateSeed {
   const fallback = getTemplateById(record.id) || getTemplateBySlug(record.slug);
   const config = record.config_json || {};
-  const placeholderFields =
-    config.placeholderFields ||
-    fallback?.placeholderFields ||
-    (fallback ? getTemplatePlaceholderFields(fallback) : []);
-
-  return {
+  const industry = normalizeIndustryLabel(record.industry || config.industry || fallback?.industry || record.category) as TemplateIndustry;
+  const offerType = normalizeOfferTypeLabel(record.offer_type || config.offerType || fallback?.offerType || "") as TemplateOfferType;
+  const hydratedSeed: TemplateSeed = {
     id: record.id,
     slug: record.slug,
     name: record.name,
     description: record.description,
-    category: record.category,
-    industry: config.industry || fallback?.industry || "",
+    category: normalizeIndustryLabel(record.category || industry) as TemplateIndustry,
+    industry: industry || "Car Detailing",
+    offerType: offerType || fallback?.offerType || "Quote Request",
+    supportedAdTypes: config.supportedAdTypes || fallback?.supportedAdTypes || ["lead_form"],
+    defaultAdType: config.defaultAdType || fallback?.defaultAdType || (config.supportedAdTypes || fallback?.supportedAdTypes || ["lead_form"])[0] || "lead_form",
     positioning: config.positioning || fallback?.positioning || record.description,
     previewImage: record.preview_image_url || fallback?.previewImage || "/placeholders/template.jpg",
+    creativeAssets: {
+      imageUrls:
+        (config.creativeAssets as { imageUrls?: string[] } | undefined)?.imageUrls ||
+        (record.preview_image_url ? [record.preview_image_url] : fallback?.creativeAssets?.imageUrls || []),
+      videoUrls: (config.creativeAssets as { videoUrls?: string[] } | undefined)?.videoUrls || fallback?.creativeAssets?.videoUrls || [],
+    },
     ctaDefault: config.ctaDefault || fallback?.ctaDefault || "Get Started",
+    promoDetails: config.promoDetails || fallback?.promoDetails || "",
     offerStructure: config.offerStructure || fallback?.offerStructure || [],
-    placeholderFields,
     benefits: config.benefits || fallback?.benefits || [],
     faq: config.faq || fallback?.faq || [],
     adCopy: config.adCopy || fallback?.adCopy || {
@@ -371,6 +383,12 @@ export function hydrateTemplateRecord(record: TemplateRecord): TemplateSeed {
       whyChooseUs: [],
       finalCta: "Get Started",
     },
+    adTypeConfig: config.adTypeConfig || fallback?.adTypeConfig || {},
+  };
+
+  return {
+    ...hydratedSeed,
+    placeholderFields: config.placeholderFields || fallback?.placeholderFields || extractTemplatePlaceholderFields(hydratedSeed),
   };
 }
 

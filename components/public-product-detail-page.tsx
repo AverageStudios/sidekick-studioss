@@ -4,9 +4,9 @@ import {
   Blocks,
   CheckCircle2,
   ChevronRight,
-  Layers3,
   Link2,
   Megaphone,
+  MoreHorizontal,
   Send,
 } from "lucide-react";
 import { MarketingNav } from "@/components/marketing-nav";
@@ -19,24 +19,55 @@ function HeroVisual({ item }: { item: PublicProductItem }) {
   switch (item.previewKind) {
     case "templates":
       return (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2">
           {["Roofing estimate", "Cleaning promo"].map((label) => (
-            <div key={label} className="rounded-[22px] border border-[var(--public-line)] bg-white/84 p-4">
-              <div className="rounded-[18px] border border-[rgba(143,124,255,0.14)] bg-[linear-gradient(145deg,rgba(143,124,255,0.12),rgba(255,255,255,0.86))] p-4">
-                <div className="flex items-center justify-between">
-                  <span className="rounded-full border border-[var(--public-line)] bg-white/84 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--public-accent)]">
-                    Template
-                  </span>
-                  <Layers3 className="h-4 w-4 text-[var(--public-accent)]" />
+            <div key={label} className="overflow-hidden rounded-[28px] border border-[var(--public-line)] bg-white/92 shadow-[0_18px_34px_rgba(17,24,39,0.08)]">
+              <div className="flex items-center justify-between border-b border-[rgba(17,18,22,0.08)] px-4 py-3">
+                <div className="inline-flex items-center gap-2 rounded-full border border-[rgba(109,94,248,0.18)] bg-[rgba(109,94,248,0.08)] px-3 py-1.5 text-sm font-semibold text-[var(--public-accent)]">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#1877F2] text-[11px] font-bold text-white">f</span>
+                  Meta
                 </div>
-                <div className="mt-5 space-y-2.5">
-                  <div className="h-3 w-2/3 rounded-full bg-[rgba(17,18,22,0.14)]" />
-                  <div className="h-2.5 w-full rounded-full bg-[rgba(17,18,22,0.08)]" />
-                  <div className="h-2.5 w-5/6 rounded-full bg-[rgba(17,18,22,0.08)]" />
+                <span className="rounded-full border border-[var(--public-line)] bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--public-muted)]">
+                  Template
+                </span>
+              </div>
+              <div className="px-4 py-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1D4BA0] text-sm font-semibold text-white">
+                    f
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-[var(--public-text)]">Your Page Name</p>
+                    <p className="mt-0.5 text-xs text-[var(--public-muted)]">Sponsored • Facebook</p>
+                  </div>
+                  <MoreHorizontal className="h-4 w-4 text-[var(--public-muted)]" />
+                </div>
+                <p className="mt-4 text-sm leading-6 text-[var(--public-text)]">
+                  {label} built as a real Facebook-style ad preview.
+                </p>
+                <div className="mt-3 flex justify-end">
+                  <span className="text-sm font-semibold text-[#1677ff]">see more</span>
                 </div>
               </div>
-              <p className="mt-4 text-sm font-semibold text-[var(--public-text)]">{label}</p>
-              <p className="mt-1 text-xs public-text-soft">Industry-ready starting point</p>
+              <div className="bg-[#f3f6fb] p-4">
+                <div className="relative overflow-hidden rounded-[24px] bg-[linear-gradient(145deg,#2f87ff_0%,#2b6ee8_52%,#eef4ff_100%)] p-5 text-white">
+                  <div className="absolute right-4 top-4 flex gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-white" />
+                    <span className="h-2 w-2 rounded-full bg-white/60" />
+                    <span className="h-2 w-2 rounded-full bg-white/60" />
+                    <span className="h-2 w-2 rounded-full bg-white/60" />
+                  </div>
+                  <p className="text-2xl font-black tracking-[-0.06em]">Your creative here</p>
+                  <p className="mt-2 max-w-[14rem] text-sm leading-6 text-white/85">
+                    The template area can now present like a real social ad rather than a generic mockup.
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2 border-t border-[rgba(17,18,22,0.08)] bg-white px-4 py-3 text-sm font-medium text-[var(--public-text)]">
+                <div className="flex items-center justify-center gap-2 rounded-2xl border border-[var(--public-line)] px-2 py-2">Like</div>
+                <div className="flex items-center justify-center gap-2 rounded-2xl border border-[var(--public-line)] px-2 py-2">Comment</div>
+                <div className="flex items-center justify-center gap-2 rounded-2xl border border-[var(--public-line)] px-2 py-2">Share</div>
+              </div>
             </div>
           ))}
         </div>
@@ -193,9 +224,17 @@ function InsideVisual({ item }: { item: PublicProductItem }) {
       return (
         <div className="grid gap-3 sm:grid-cols-2">
           {["Roofing", "Cleaning", "Landscaping", "Med spa"].map((industry) => (
-            <div key={industry} className="rounded-[18px] border border-[var(--public-line)] bg-white/82 px-4 py-4">
-              <p className="text-sm font-semibold text-[var(--public-text)]">{industry}</p>
-              <p className="mt-1.5 text-xs public-text-soft">Template path ready to customize</p>
+            <div key={industry} className="overflow-hidden rounded-[22px] border border-[var(--public-line)] bg-white/92">
+              <div className="flex items-center justify-between border-b border-[rgba(17,18,22,0.08)] px-4 py-3">
+                <span className="rounded-full border border-[rgba(109,94,248,0.18)] bg-[rgba(109,94,248,0.08)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--public-accent)]">
+                  Meta
+                </span>
+                <span className="text-[11px] public-text-faint">Template</span>
+              </div>
+              <div className="px-4 py-4">
+                <p className="text-sm font-semibold text-[var(--public-text)]">{industry}</p>
+                <p className="mt-1.5 text-xs public-text-soft">Ready to render like a Facebook ad</p>
+              </div>
             </div>
           ))}
         </div>

@@ -4,13 +4,16 @@ import { cache } from "react";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServerConfigured } from "@/lib/env";
 import { TemplateRecord } from "@/types";
+import { normalizeIndustryLabel, normalizeOfferTypeLabel } from "@/data/template-taxonomy";
 
 export async function listAdminTemplates({
   status,
-  category,
+  industry,
+  offerType,
 }: {
   status?: string;
-  category?: string;
+  industry?: string;
+  offerType?: string;
 } = {}) {
   if (!isSupabaseServerConfigured()) {
     return [] as TemplateRecord[];
@@ -27,10 +30,6 @@ export async function listAdminTemplates({
     query = query.eq("status", status);
   }
 
-  if (category && category !== "all") {
-    query = query.eq("category", category);
-  }
-
   const { data, error } = await query;
 
   if (error) {
@@ -38,7 +37,18 @@ export async function listAdminTemplates({
     return [];
   }
 
-  return (data || []) as TemplateRecord[];
+  const records = (data || []) as TemplateRecord[];
+  if ((industry && industry !== "all") || (offerType && offerType !== "all")) {
+    return records.filter((template) => {
+      const templateIndustry = normalizeIndustryLabel(template.industry || template.config_json?.industry || template.category);
+      const templateOfferType = normalizeOfferTypeLabel(template.offer_type || template.config_json?.offerType);
+      const matchesIndustry = !industry || industry === "all" || templateIndustry === industry;
+      const matchesOfferType = !offerType || offerType === "all" || templateOfferType === offerType;
+      return matchesIndustry && matchesOfferType;
+    });
+  }
+
+  return records;
 }
 
 export const getAdminTemplateById = cache(async (id: string) => {

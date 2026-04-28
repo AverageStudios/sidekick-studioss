@@ -26,6 +26,15 @@ export type MetaPage = {
   id: string;
   name?: string;
   access_token?: string;
+  picture?: {
+    data?: {
+      height?: number;
+      is_silhouette?: boolean;
+      url?: string;
+      width?: number;
+    };
+    url?: string;
+  } | null;
   instagram_business_account?: {
     id: string;
     username?: string;
@@ -44,6 +53,23 @@ export type MetaLeadForm = {
   status?: string;
   locale?: string;
   created_time?: string;
+};
+
+export type MetaGeoLocationSearchResult = {
+  key?: string;
+  name?: string;
+  type?: string;
+  country_code?: string;
+  country_name?: string;
+  region?: string;
+  region_id?: string | number;
+  primary_city?: string;
+  primary_city_id?: string | number;
+  supports_region?: boolean;
+  supports_city?: boolean;
+  latitude?: number | string;
+  longitude?: number | string;
+  raw?: Record<string, unknown>;
 };
 
 export type MetaTokenResponse = {
@@ -89,14 +115,13 @@ export function isMetaConfigured() {
 
 export function getMetaScopes() {
   const raw = readMetaEnv("META_SCOPES");
-  if (!raw) {
-    return [...defaultMetaScopes];
-  }
   const parsed = raw
-    .split(",")
-    .map((scope) => scope.trim())
-    .filter(Boolean);
-  return parsed.length ? parsed : [...defaultMetaScopes];
+    ? raw
+        .split(",")
+        .map((scope) => scope.trim())
+        .filter(Boolean)
+    : [];
+  return Array.from(new Set([...defaultMetaScopes, ...parsed]));
 }
 
 function buildMetaGraphUrl(path: string) {
@@ -119,6 +144,8 @@ export function getMetaOAuthUrl(state: string) {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("state", state);
   url.searchParams.set("scope", getMetaScopes().join(","));
+  url.searchParams.set("auth_type", "rerequest");
+  url.searchParams.set("return_scopes", "true");
   return url.toString();
 }
 
@@ -229,7 +256,7 @@ export async function fetchMetaAdAccounts(accessToken: string) {
 
 export async function fetchMetaPages(accessToken: string) {
   const url = new URL(buildMetaGraphUrl("me/accounts"));
-  url.searchParams.set("fields", "id,name,access_token,instagram_business_account{id,username}");
+  url.searchParams.set("fields", "id,name,access_token,picture{url},instagram_business_account{id,username}");
   url.searchParams.set("limit", "200");
   url.searchParams.set("access_token", accessToken);
   const payload = await fetchMetaJson<{ data?: MetaPage[] }>(url.toString());
@@ -255,19 +282,95 @@ export async function fetchMetaLeadForms(accessToken: string, pageId: string) {
   return payload.data || [];
 }
 
+export async function fetchMetaGeoLocationSearch({
+  accessToken,
+  query,
+  locationTypes = ["country", "region", "city", "zip", "address", "neighborhood"],
+  countryCode,
+  limit = 10,
+  searchParam = "q",
+  placeFallback = false,
+}: {
+  accessToken: string;
+  query: string;
+  locationTypes?: string[];
+  countryCode?: string;
+  limit?: number;
+  searchParam?: "q" | "qs";
+  placeFallback?: boolean;
+}) {
+  const url = new URL(buildMetaGraphUrl("search"));
+  url.searchParams.set("type", "adgeolocation");
+  if (searchParam === "qs") {
+    url.searchParams.set("qs", JSON.stringify([query]));
+  } else {
+    url.searchParams.set("q", query);
+  }
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set(
+    "location_types",
+    JSON.stringify(locationTypes.length ? locationTypes : ["country", "region", "city"]),
+  );
+  if (placeFallback) {
+    url.searchParams.set("place_fallback", "true");
+  }
+  if (countryCode) {
+    url.searchParams.set("country_code", countryCode);
+  }
+  url.searchParams.set(
+    "fields",
+    [
+      "key",
+      "name",
+      "type",
+      "country_code",
+      "country_name",
+      "region",
+      "region_id",
+      "primary_city",
+      "primary_city_id",
+      "supports_region",
+      "supports_city",
+      "latitude",
+      "longitude",
+    ].join(","),
+  );
+  url.searchParams.set("access_token", accessToken);
+
+  const payload = await fetchMetaJson<{ data?: MetaGeoLocationSearchResult[] }>(url.toString());
+  return payload.data || [];
+}
+
 export async function createMetaLeadForm({
   accessToken,
   pageId,
   name,
   privacyPolicyUrl,
   fields,
+  thankYouPage,
 }: {
   accessToken: string;
   pageId: string;
   name: string;
   privacyPolicyUrl: string;
   fields: Array<"FULL_NAME" | "EMAIL" | "PHONE">;
+  thankYouPage?: {
+    title?: string;
+    body?: string;
+    buttonText?: string;
+    buttonType?: "OPEN_WEBSITE" | "DOWNLOAD" | "CALL_BUSINESS";
+    websiteUrl?: string;
+    completionCountryCode?: string;
+    completionPhone?: string;
+  };
 }) {
+  const resolvedButtonType =
+    thankYouPage?.buttonType === "CALL_BUSINESS"
+      ? "CALL_BUSINESS"
+      : thankYouPage?.buttonType === "DOWNLOAD"
+        ? (thankYouPage.websiteUrl ? "DOWNLOAD" : "VIEW_ON_FACEBOOK")
+        : (thankYouPage?.websiteUrl ? "VIEW_WEBSITE" : "VIEW_ON_FACEBOOK");
+
   const url = new URL(buildMetaGraphUrl(`${pageId}/leadgen_forms`));
   const questions = fields.map((type) => ({ type }));
   const body = new URLSearchParams();
@@ -281,6 +384,33 @@ export async function createMetaLeadForm({
       link_text: "Privacy Policy",
     }),
   );
+  if (thankYouPage) {
+    body.set(
+      "thank_you_page",
+      JSON.stringify({
+        title: thankYouPage.title || "Thanks, we got your request.",
+        body: thankYouPage.body || "We'll follow up shortly with the next step.",
+        button_type: resolvedButtonType,
+        button_text: thankYouPage.buttonText || "Continue",
+        ...(
+          thankYouPage.websiteUrl &&
+          (resolvedButtonType === "VIEW_WEBSITE" || resolvedButtonType === "DOWNLOAD")
+            ? { website_url: thankYouPage.websiteUrl }
+            : {}
+        ),
+        ...(
+          resolvedButtonType === "CALL_BUSINESS" && thankYouPage.completionCountryCode
+            ? { country_code: thankYouPage.completionCountryCode }
+            : {}
+        ),
+        ...(
+          resolvedButtonType === "CALL_BUSINESS" && thankYouPage.completionPhone
+            ? { business_phone_number: thankYouPage.completionPhone }
+            : {}
+        ),
+      }),
+    );
+  }
   body.set("access_token", accessToken);
 
   return fetchMetaJson<{ id?: string }>(url.toString(), {

@@ -4,6 +4,8 @@ insert into templates (
   name,
   description,
   category,
+  industry,
+  offer_type,
   preview_image_url,
   config_json,
   status,
@@ -12,7 +14,7 @@ insert into templates (
   updated_at
 )
 values
-  ('tpl-full-detail', 'full-detail-promo', 'Full Detail Promo', 'A fast-launch offer for drivers who want the full interior and exterior reset.', 'Lead Generation', '/placeholders/full-detail.jpg', $${
+  ('tpl-full-detail', 'full-detail-promo', 'Full Detail Promo', 'A fast-launch offer for drivers who want the full interior and exterior reset.', 'Car Detailing', 'Car Detailing', 'Service Booking', '/placeholders/full-detail.jpg', $${
     "positioning": "Best for shops pushing a flagship full detail with a clean entry offer.",
     "ctaDefault": "Claim My Detail",
     "benefits": [
@@ -40,7 +42,7 @@ values
       "finalCta": "Get your detail quote"
     }
   }$$::jsonb, 'published', true, now(), now()),
-  ('tpl-interior', 'interior-detail-promo', 'Interior Detail Promo', 'A focused funnel for detailers selling interior recovery, stain removal, and refresh jobs.', 'Lead Generation', '/placeholders/interior-detail.jpg', $${
+  ('tpl-interior', 'interior-detail-promo', 'Interior Detail Promo', 'A focused funnel for detailers selling interior recovery, stain removal, and refresh jobs.', 'Car Detailing', 'Car Detailing', 'Quote Request', '/placeholders/interior-detail.jpg', $${
     "positioning": "Best for shops booking family vehicles, work trucks, or rideshare interiors.",
     "ctaDefault": "Get Interior Pricing",
     "benefits": [
@@ -68,7 +70,7 @@ values
       "finalCta": "See interior pricing"
     }
   }$$::jsonb, 'published', true, now(), now()),
-  ('tpl-ceramic', 'ceramic-coating-promo', 'Ceramic Coating Promo', 'A premium-feeling campaign for high-ticket coating jobs and paint protection offers.', 'Premium Service', '/placeholders/ceramic.jpg', $${
+  ('tpl-ceramic', 'ceramic-coating-promo', 'Ceramic Coating Promo', 'A premium-feeling campaign for high-ticket coating jobs and paint protection offers.', 'Car Detailing', 'Car Detailing', 'High-Ticket Offer', '/placeholders/ceramic.jpg', $${
     "positioning": "Best for detailers selling higher-ticket paint protection with a premium brand feel.",
     "ctaDefault": "Request Coating Quote",
     "benefits": [
@@ -96,7 +98,7 @@ values
       "finalCta": "Request my coating quote"
     }
   }$$::jsonb, 'published', true, now(), now()),
-  ('tpl-paint-correction', 'paint-correction-promo', 'Paint Correction Promo', 'A polished campaign for swirl removal, gloss restoration, and paint correction leads.', 'Premium Service', '/placeholders/paint-correction.jpg', $${
+  ('tpl-paint-correction', 'paint-correction-promo', 'Paint Correction Promo', 'A polished campaign for swirl removal, gloss restoration, and paint correction leads.', 'Car Detailing', 'Car Detailing', 'Inspection', '/placeholders/paint-correction.jpg', $${
     "positioning": "Best for detailers selling transformation-focused correction work.",
     "ctaDefault": "See Correction Options",
     "benefits": [
@@ -124,7 +126,7 @@ values
       "finalCta": "Get my paint quote"
     }
   }$$::jsonb, 'published', false, now(), now()),
-  ('tpl-maintenance', 'monthly-maintenance-promo', 'Monthly Maintenance Promo', 'A recurring-revenue funnel for maintenance washes and simple monthly membership style offers.', 'Recurring Revenue', '/placeholders/maintenance.jpg', $${
+  ('tpl-maintenance', 'monthly-maintenance-promo', 'Monthly Maintenance Promo', 'A recurring-revenue funnel for maintenance washes and simple monthly membership style offers.', 'Car Detailing', 'Car Detailing', 'Recurring Maintenance', '/placeholders/maintenance.jpg', $${
     "positioning": "Best for detailers wanting steadier repeat business with a lightweight offer.",
     "ctaDefault": "Join The Wash Plan",
     "benefits": [
@@ -158,6 +160,8 @@ set
   name = excluded.name,
   description = excluded.description,
   category = excluded.category,
+  industry = excluded.industry,
+  offer_type = excluded.offer_type,
   preview_image_url = excluded.preview_image_url,
   config_json = excluded.config_json,
   status = excluded.status,

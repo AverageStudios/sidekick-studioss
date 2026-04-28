@@ -11,6 +11,7 @@ import {
   normalizeCampaignLaunchState,
   parseDailyBudgetToCents,
 } from "@/lib/campaign-launch";
+import { readLatestCampaignLaunchSnapshot } from "@/lib/campaign-snapshots";
 import { createCampaignBlueprint } from "@/lib/template-engine";
 import {
   createMetaAd,
@@ -19,6 +20,7 @@ import {
   createMetaCampaign,
   createMetaLeadForm,
   fetchMetaAdAccountDetails,
+  fetchMetaLeadForms,
   fetchMetaTokenDebugInfo,
   getMetaScopes,
   updateMetaObjectStatus,
@@ -27,8 +29,10 @@ import {
   getWorkspaceMetaAccessToken,
   getWorkspaceMetaIntegrationState,
 } from "@/lib/meta-integration";
+import { env } from "@/lib/env";
 import {
   CampaignGoal,
+  CampaignAdType,
   CampaignLaunchState,
   CampaignPublishMode,
   CampaignRecord,
@@ -126,12 +130,48 @@ type MetaLaunchContext = {
   } | null;
   workspaceId: string;
   accessToken: string;
+  pageAccessToken: string | null;
   resolvedAssets: MetaResolvedAssets;
   integrationState: Awaited<ReturnType<typeof getWorkspaceMetaIntegrationState>>;
 };
 
 function goalLabel(goal: CampaignGoal) {
   return campaignGoalOptions.find((item) => item.id === goal)?.label || "Leads";
+}
+
+function adTypeRequiresLeadForm(adType: CampaignAdType) {
+  return adType === "lead_form";
+}
+
+function adTypeRequiresPixel(adType: CampaignAdType) {
+  return adType === "landing_page";
+}
+
+function adTypeUsesWebsiteDestination(adType: CampaignAdType) {
+  return adType === "landing_page";
+}
+
+function adTypeRequiresPhone(adType: CampaignAdType) {
+  return adType === "call_now";
+}
+
+function adTypeUsesMessengerSetup(adType: CampaignAdType) {
+  return adType === "messenger_leads" || adType === "messenger_engagement";
+}
+
+function mapAdTypeToCta(adType: CampaignAdType) {
+  switch (adType) {
+    case "landing_page":
+      return "LEARN_MORE";
+    case "call_now":
+      return "CALL_NOW";
+    case "messenger_leads":
+    case "messenger_engagement":
+      return "SEND_MESSAGE";
+    case "lead_form":
+    default:
+      return "SIGN_UP";
+  }
 }
 
 function mapGoalToOptimizationGoal(goal: CampaignGoal) {
@@ -152,14 +192,6 @@ function mapGoalToCta(goal: CampaignGoal) {
 
 function goalUsesWebsiteDestination(goal: CampaignGoal) {
   return goal === "OUTCOME_TRAFFIC" || goal === "OUTCOME_SALES";
-}
-
-function goalRequiresLeadForm(goal: CampaignGoal) {
-  return goal === "OUTCOME_LEADS";
-}
-
-function goalRequiresPixel(goal: CampaignGoal) {
-  return goal === "OUTCOME_SALES";
 }
 
 function buildIssuesForMode(mode: CampaignPublishMode, issues: InternalIssue[]) {
@@ -213,6 +245,181 @@ function sanitizeDestinationUrl(value: string) {
   if (!trimmed) return "";
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   return `https://${trimmed}`;
+}
+
+function resolvePlaceholderRuntimeValue(
+  fieldId: string,
+  launchState: CampaignLaunchState,
+  setupValues: ReturnType<typeof getTemplateSetupValuesFromLaunchState>,
+) {
+  const directValue = launchState.placeholderValues?.[fieldId];
+  if (directValue && directValue.trim()) {
+    return directValue.trim();
+  }
+
+  const setupValue = (setupValues as Record<string, unknown>)[fieldId];
+  if (typeof setupValue === "string" && setupValue.trim()) {
+    return setupValue.trim();
+  }
+
+  const normalizedId = fieldId.trim().toLowerCase();
+  const aliases: Record<string, string[]> = {
+    price: ["offerPrice"],
+    offerprice: ["offerPrice"],
+    regularprice: ["regularPrice"],
+    businessname: ["businessName"],
+    business_name: ["businessName"],
+    location: ["city", "targetLocation"],
+  };
+
+  for (const aliasKey of aliases[normalizedId] || []) {
+    const aliasValue = (setupValues as Record<string, unknown>)[aliasKey];
+    if (typeof aliasValue === "string" && aliasValue.trim()) {
+      return aliasValue.trim();
+    }
+  }
+
+  const setupEntry = Object.entries(setupValues).find(([key, value]) => {
+    return key.toLowerCase() === normalizedId && typeof value === "string" && value.trim();
+  });
+
+  if (setupEntry && typeof setupEntry[1] === "string") {
+    return setupEntry[1].trim();
+  }
+
+  return "";
+}
+
+function absolutizeAppUrl(path: string) {
+  const base = env.appUrl?.trim();
+  if (!base) return path;
+  try {
+    return new URL(path, base.endsWith("/") ? base : `${base}/`).toString();
+  } catch {
+    return path;
+  }
+}
+
+function normalizeCreativeMediaUrl(url?: string | null) {
+  const trimmed = url?.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("/")) return absolutizeAppUrl(trimmed);
+  return sanitizeDestinationUrl(trimmed);
+}
+
+function isPrivateOrLocalHost(hostname: string) {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized.endsWith(".local") ||
+    /^10\./.test(normalized) ||
+    /^192\.168\./.test(normalized) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(normalized)
+  );
+}
+
+function resolveCreativeImageUrl(context: MetaLaunchContext) {
+  const candidates = [
+    ...(context.template.creativeAssets?.imageUrls || []),
+    context.template.previewImage,
+    context.businessProfile?.logo_url || "",
+  ]
+    .map((candidate) => normalizeCreativeMediaUrl(candidate))
+    .filter(Boolean);
+
+  return candidates[0] || "";
+}
+
+async function validateCreativeImageUrl(url: string) {
+  if (!url) {
+    return { ok: false, reason: "Campaign creative needs a preview image or image asset before it can publish." };
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return { ok: false, reason: "Creative image URL is invalid." };
+  }
+
+  if (parsed.protocol !== "https:") {
+    return { ok: false, reason: "Creative image URL must be HTTPS and publicly reachable by Meta." };
+  }
+
+  if (isPrivateOrLocalHost(parsed.hostname)) {
+    return { ok: false, reason: "Creative image URL points to a local/private host. Meta cannot fetch media from localhost or private networks." };
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      return { ok: false, reason: `Creative image URL returned ${response.status}.` };
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.toLowerCase().startsWith("image/")) {
+      return { ok: false, reason: "Creative image URL does not return an image content type." };
+    }
+  } catch {
+    return { ok: false, reason: "Creative image URL could not be fetched from the server environment." };
+  }
+
+  return { ok: true, reason: "" };
+}
+
+function resolveThankYouDestinationUrl(context: MetaLaunchContext) {
+  if (
+    context.launchState.thankYouPage.buttonAction === "OPEN_WEBSITE" ||
+    context.launchState.thankYouPage.buttonAction === "DOWNLOAD"
+  ) {
+    return sanitizeDestinationUrl(context.launchState.thankYouPage.websiteUrl);
+  }
+
+  if (context.resolvedAssets.page?.id) {
+    return `https://www.facebook.com/${context.resolvedAssets.page.id}`;
+  }
+
+  const fallbackPageId = context.launchState.integrationSelections.pageId;
+  if (fallbackPageId) {
+    return `https://www.facebook.com/${fallbackPageId}`;
+  }
+
+  return "https://www.facebook.com";
+}
+
+function resolveAdTypeDestinationUrl(context: MetaLaunchContext) {
+  switch (context.launchState.adType) {
+    case "landing_page":
+      return sanitizeDestinationUrl(context.launchState.landingPageUrl) || "https://facebook.com";
+    case "call_now":
+      return context.launchState.phoneNumber?.trim()
+        ? `tel:${resolveCallPhoneNumber(context)}`
+        : "https://facebook.com";
+    case "messenger_leads":
+    case "messenger_engagement":
+      return context.resolvedAssets.page?.id
+        ? `https://m.me/${context.resolvedAssets.page.id}`
+        : context.launchState.integrationSelections.pageId
+          ? `https://m.me/${context.launchState.integrationSelections.pageId}`
+          : "https://facebook.com";
+    case "lead_form":
+    default:
+      return resolveThankYouDestinationUrl(context);
+  }
+}
+
+function resolveCallPhoneNumber(context: MetaLaunchContext) {
+  const rawPhone = context.launchState.phoneNumber.trim();
+  if (!rawPhone) return "";
+  if (/^\+/.test(rawPhone)) return rawPhone;
+  const countryCode = context.launchState.thankYouPage.completionCountryCode || "+1";
+  return `${countryCode}${rawPhone}`;
 }
 
 async function loadMetaLaunchContext({
@@ -278,6 +485,11 @@ async function loadMetaLaunchContext({
   const businessProfile =
     (businessProfileData as MetaLaunchContext["businessProfile"]) || null;
 
+  const latestLaunchSnapshot = await readLatestCampaignLaunchSnapshot({
+    admin,
+    campaignId: campaign.id,
+  }).catch(() => null);
+
   const integrationState = await getWorkspaceMetaIntegrationState({
     admin,
     workspaceId: campaign.workspace_id,
@@ -292,7 +504,7 @@ async function loadMetaLaunchContext({
   }
 
   const launchState = normalizeCampaignLaunchState(
-    campaign.launch_state_json || {},
+    latestLaunchSnapshot || campaign.launch_state_json || {},
     template,
     businessProfile
       ? {
@@ -342,6 +554,12 @@ async function loadMetaLaunchContext({
 
   const adAccountAsset = integrationState.assets.adAccounts.find((asset) => asset.asset_id === selectedAdAccountId) || null;
   const pageAsset = integrationState.assets.pages.find((asset) => asset.asset_id === selectedPageId) || null;
+  const selectedPageAccessToken =
+    pageAsset?.metadata_json &&
+    typeof pageAsset.metadata_json === "object" &&
+    typeof pageAsset.metadata_json.access_token === "string"
+      ? pageAsset.metadata_json.access_token
+      : null;
   const pixelAsset = integrationState.assets.pixels.find((asset) => asset.asset_id === selectedPixelId) || null;
   const leadFormAsset = integrationState.assets.leadForms.find((asset) => asset.asset_id === selectedLeadFormId) || null;
   const instagramAsset = integrationState.assets.instagramActors.find((asset) => asset.asset_id === selectedInstagramActorId) || null;
@@ -375,6 +593,7 @@ async function loadMetaLaunchContext({
     businessProfile,
     workspaceId: campaign.workspace_id,
     accessToken: tokenContext.accessToken,
+    pageAccessToken: selectedPageAccessToken,
     resolvedAssets,
     integrationState,
   };
@@ -407,12 +626,12 @@ export async function runMetaLaunchPreflight({
     });
   }
 
-  const tokenScopes = tokenData?.scopes || [];
+  const tokenScopes = tokenData?.scopes || context.integrationState.connection?.scopes || [];
   const missingScopes = requiredScopes.filter((scope) => !tokenScopes.includes(scope));
   if (missingScopes.length) {
     issues.push({
       code: "token_missing_scopes",
-      message: `Meta connection is missing required scopes: ${missingScopes.join(", ")}.`,
+      message: `Meta connection is missing required scopes: ${missingScopes.join(", ")}. Reconnect Meta for this workspace to grant them.`,
       type: "blocking",
       scope: "both",
       field: "metaScopes",
@@ -474,11 +693,31 @@ export async function runMetaLaunchPreflight({
     });
   }
 
+  const setupValues = getTemplateSetupValuesFromLaunchState(
+    context.template,
+    context.launchState,
+    context.businessProfile
+      ? {
+          id: "",
+          user_id: context.campaign.user_id,
+          workspace_id: context.workspaceId,
+          business_name: context.businessProfile.business_name,
+          location: context.businessProfile.location,
+          phone: context.businessProfile.phone,
+          email: context.businessProfile.email,
+          description: context.businessProfile.description,
+          logo_url: context.businessProfile.logo_url,
+          brand_color: "#6D5EF8",
+          default_cta: context.campaign.cta_text,
+        }
+      : null,
+  );
+
   const placeholderFields = getTemplatePlaceholderFields(context.template);
   for (const field of placeholderFields) {
     if (!field.required) continue;
-    const value = context.launchState.placeholderValues[field.id];
-    if (!value || !value.trim()) {
+    const value = resolvePlaceholderRuntimeValue(field.id, context.launchState, setupValues);
+    if (!value) {
       issues.push({
         code: `missing_placeholder_${field.id}`,
         message: `${field.label} is required before launch.`,
@@ -489,34 +728,118 @@ export async function runMetaLaunchPreflight({
     }
   }
 
-  const destinationUrl = sanitizeDestinationUrl(context.launchState.thankYouPage.destinationUrl);
-  if (goalUsesWebsiteDestination(context.launchState.campaignGoal)) {
-    if (!destinationUrl) {
+  const thankYouWebsiteUrl = sanitizeDestinationUrl(context.launchState.thankYouPage.websiteUrl);
+  const resolvedThankYouUrl = resolveAdTypeDestinationUrl(context);
+
+  if (context.launchState.adType === "landing_page") {
+    const landingPageUrl = sanitizeDestinationUrl(context.launchState.landingPageUrl);
+    if (!landingPageUrl) {
       issues.push({
-        code: "missing_destination_url",
-        message: "Destination URL is required for website campaign goals.",
+        code: "missing_landing_page_url",
+        message: "Landing page campaigns need a website URL.",
         type: "blocking",
         scope: "both",
-        field: "thankYouPage.destinationUrl",
+        field: "landingPageUrl",
       });
     } else {
       try {
         // Validate URL shape.
         // eslint-disable-next-line no-new
-        new URL(destinationUrl);
+        new URL(landingPageUrl);
       } catch {
         issues.push({
-          code: "invalid_destination_url",
-          message: "Destination URL is invalid.",
+          code: "invalid_landing_page_url",
+          message: "Landing page URL is invalid.",
           type: "blocking",
           scope: "both",
-          field: "thankYouPage.destinationUrl",
+          field: "landingPageUrl",
         });
       }
     }
   }
 
-  if (goalRequiresLeadForm(context.launchState.campaignGoal)) {
+  if (adTypeRequiresPhone(context.launchState.adType)) {
+    if (!context.launchState.phoneNumber?.trim()) {
+      issues.push({
+        code: "missing_call_phone",
+        message: "Call Now campaigns need a phone number.",
+        type: "blocking",
+        scope: "both",
+        field: "phoneNumber",
+      });
+    }
+  }
+
+  if (context.launchState.thankYouPage.enabled && adTypeRequiresLeadForm(context.launchState.adType)) {
+    if (
+      context.launchState.thankYouPage.buttonAction === "OPEN_WEBSITE" ||
+      context.launchState.thankYouPage.buttonAction === "DOWNLOAD" ||
+      goalUsesWebsiteDestination(context.launchState.campaignGoal)
+    ) {
+      if (thankYouWebsiteUrl) {
+        try {
+          // Validate URL shape.
+          // eslint-disable-next-line no-new
+          new URL(thankYouWebsiteUrl);
+        } catch {
+          issues.push({
+            code: "invalid_destination_url",
+            message: "Destination URL is invalid.",
+            type: "blocking",
+            scope: "both",
+            field: "thankYouPage.websiteUrl",
+          });
+        }
+      }
+    }
+
+    if (context.launchState.thankYouPage.buttonAction === "CALL_BUSINESS") {
+      if (!context.launchState.thankYouPage.completionPhone?.trim()) {
+        issues.push({
+          code: "missing_call_phone",
+          message: "Call Business thank-you actions need a phone number.",
+          type: "blocking",
+          scope: "both",
+          field: "thankYouPage.completionPhone",
+        });
+      }
+    }
+  }
+
+  if (adTypeRequiresLeadForm(context.launchState.adType)) {
+    if (
+      context.launchState.leadForm.mode === "managed_new" &&
+      context.resolvedAssets.page?.id
+    ) {
+      try {
+        await fetchMetaLeadForms(
+          context.pageAccessToken || context.accessToken,
+          context.resolvedAssets.page.id,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (/pages_manage_ads/i.test(message)) {
+          issues.push({
+            code: "page_manage_ads_missing",
+            message:
+              "The selected Meta connection cannot manage lead forms for this Page. Reconnect Meta and approve pages_manage_ads, then refresh assets.",
+            type: "blocking",
+            scope: "both",
+            field: "metaScopes",
+          });
+        } else {
+          issues.push({
+            code: "lead_form_page_access_unavailable",
+            message:
+              "Meta lead form access for the selected Page could not be confirmed. Refresh assets or reconnect Meta before publishing.",
+            type: "blocking",
+            scope: "both",
+            field: "pageId",
+          });
+        }
+      }
+    }
+
     if (context.launchState.leadForm.mode === "existing") {
       if (!context.launchState.leadForm.selectedFormId) {
         issues.push({
@@ -588,7 +911,22 @@ export async function runMetaLaunchPreflight({
     }
   }
 
-  if (goalRequiresPixel(context.launchState.campaignGoal) && !context.resolvedAssets.pixel) {
+  if (adTypeUsesMessengerSetup(context.launchState.adType)) {
+    if (
+      !context.launchState.messengerWelcomeMessage.trim() &&
+      !context.launchState.messengerReplyPrompt.trim()
+    ) {
+      issues.push({
+        code: "missing_messenger_setup",
+        message: "Messenger campaigns work best with a welcome message or reply prompt.",
+        type: "warning",
+        scope: "both",
+        field: "messengerSetup",
+      });
+    }
+  }
+
+  if (adTypeRequiresPixel(context.launchState.adType) && !context.resolvedAssets.pixel) {
     issues.push({
       code: "missing_pixel_required",
       message: "A selected pixel is required for this campaign goal.",
@@ -598,11 +936,10 @@ export async function runMetaLaunchPreflight({
     });
   }
 
-  if (context.launchState.campaignGoal === "OUTCOME_TRAFFIC" && !context.resolvedAssets.pixel) {
+  if (context.launchState.adType === "landing_page" && !context.resolvedAssets.pixel) {
     issues.push({
       code: "pixel_recommended",
-      message:
-        "No pixel is selected. Traffic campaigns can still draft, but optimization quality may be limited.",
+      message: "No pixel is selected. Landing page campaigns can still draft, but optimization quality may be limited.",
       type: "warning",
       scope: "both",
       field: "pixelId",
@@ -678,31 +1015,32 @@ export async function runMetaLaunchPreflight({
     }
   }
 
-  const setupValues = getTemplateSetupValuesFromLaunchState(
-    context.template,
-    context.launchState,
-    context.businessProfile
-      ? {
-          id: "",
-          user_id: context.campaign.user_id,
-          workspace_id: context.workspaceId,
-          business_name: context.businessProfile.business_name,
-          location: context.businessProfile.location,
-          phone: context.businessProfile.phone,
-          email: context.businessProfile.email,
-          description: context.businessProfile.description,
-          logo_url: context.businessProfile.logo_url,
-          brand_color: "#6D5EF8",
-          default_cta: context.campaign.cta_text,
-        }
-      : null,
-  );
-
   const blueprint = createCampaignBlueprint(context.template, setupValues, {
     logoUrl: context.businessProfile?.logo_url || null,
     beforeImageUrls: (context.campaign.before_images_json as string[]) || [],
     afterImageUrls: (context.campaign.after_images_json as string[]) || [],
   });
+  const creativeImageUrl = resolveCreativeImageUrl(context);
+  const creativeImageValidation = await validateCreativeImageUrl(creativeImageUrl);
+  if (!creativeImageValidation.ok) {
+    issues.push({
+      code: "creative_image_unavailable",
+      message: creativeImageValidation.reason,
+      type: "blocking",
+      scope: "both",
+      field: "creative.image",
+    });
+  }
+
+  if ((context.template.creativeAssets?.videoUrls || []).length > 0 && !creativeImageUrl) {
+    issues.push({
+      code: "video_only_creative_unsupported",
+      message: "Video-only creative publish is not configured yet. Add a preview image or image asset for this campaign.",
+      type: "blocking",
+      scope: "both",
+      field: "creative.image",
+    });
+  }
 
   const { interests, unresolved } = parseInterestTargeting(
     context.launchState.targeting.interests,
@@ -744,7 +1082,7 @@ export async function runMetaLaunchPreflight({
   if (context.resolvedAssets.page) {
     promotedObject.page_id = context.resolvedAssets.page.id;
   }
-  if (context.resolvedAssets.pixel && goalRequiresPixel(context.launchState.campaignGoal)) {
+  if (context.resolvedAssets.pixel && adTypeRequiresPixel(context.launchState.adType)) {
     promotedObject.pixel_id = context.resolvedAssets.pixel.id;
     promotedObject.custom_event_type = "PURCHASE";
   }
@@ -766,9 +1104,9 @@ export async function runMetaLaunchPreflight({
       optimizationGoal: mapGoalToOptimizationGoal(context.launchState.campaignGoal),
       targeting,
       promotedObject,
-      destinationType: goalUsesWebsiteDestination(context.launchState.campaignGoal)
+      destinationType: adTypeUsesWebsiteDestination(context.launchState.adType)
         ? "website"
-        : goalRequiresLeadForm(context.launchState.campaignGoal)
+        : adTypeRequiresLeadForm(context.launchState.adType)
           ? "lead_form"
           : "engagement",
     },
@@ -777,9 +1115,9 @@ export async function runMetaLaunchPreflight({
       primaryText: blueprint.adCopy.primary,
       headline: blueprint.adCopy.headlines[0] || context.campaign.headline,
       description: blueprint.adCopy.descriptions[0] || context.campaign.subheadline,
-      ctaType: mapGoalToCta(context.launchState.campaignGoal),
-      destinationUrl: destinationUrl || "https://facebook.com",
-      imageUrl: context.template.previewImage || "",
+      ctaType: mapAdTypeToCta(context.launchState.adType),
+      destinationUrl: resolveAdTypeDestinationUrl(context) || resolvedThankYouUrl || "https://facebook.com",
+      imageUrl: creativeImageUrl,
       leadFormMode: context.launchState.leadForm.mode,
       leadFormId: context.launchState.leadForm.selectedFormId || null,
       managedLeadFormName:
@@ -827,6 +1165,7 @@ export async function publishMetaFromPreflight({
 
   const context = await loadMetaLaunchContext({ admin, campaignId, userId });
   const summary = preflight.normalizedPayloadSummary;
+  const resolvedThankYouUrl = resolveThankYouDestinationUrl(context);
   const now = new Date().toISOString();
   const statusSeed = "PAUSED";
   const externalIds: Record<string, string> = {};
@@ -834,16 +1173,29 @@ export async function publishMetaFromPreflight({
   const launchWarnings = [...preflight.warnings];
   let resolvedLeadFormId = summary.creative.leadFormId;
 
-  if (goalRequiresLeadForm(context.launchState.campaignGoal) && summary.creative.leadFormMode === "managed_new") {
+  if (adTypeRequiresLeadForm(context.launchState.adType) && summary.creative.leadFormMode === "managed_new") {
+    const thankYouPage = context.launchState.thankYouPage.enabled
+      ? {
+          title: context.launchState.thankYouPage.headline,
+          body: context.launchState.thankYouPage.description,
+          buttonText: context.launchState.thankYouPage.buttonLabel,
+          buttonType: context.launchState.thankYouPage.buttonAction,
+          websiteUrl: resolvedThankYouUrl,
+          completionCountryCode: context.launchState.thankYouPage.completionCountryCode,
+          completionPhone: context.launchState.thankYouPage.completionPhone,
+        }
+      : undefined;
+
     const createdLeadForm = await createMetaLeadForm({
-      accessToken: context.accessToken,
+      accessToken: context.pageAccessToken || context.accessToken,
       pageId: context.resolvedAssets.page?.id || "",
       name: summary.creative.managedLeadFormName,
       privacyPolicyUrl: context.launchState.advanced.privacyPolicyUrl,
       fields: summary.creative.leadFormFields,
+      thankYouPage,
     });
 
-    if (!createdLeadForm.id) {
+      if (!createdLeadForm.id) {
       throw new Error("Meta lead form could not be created.");
     }
     resolvedLeadFormId = createdLeadForm.id;
@@ -902,10 +1254,15 @@ export async function publishMetaFromPreflight({
       call_to_action: {
         type: summary.creative.ctaType,
         value:
-          goalRequiresLeadForm(context.launchState.campaignGoal)
+          adTypeRequiresLeadForm(context.launchState.adType)
             ? {
                 lead_gen_form_id: resolvedLeadFormId,
               }
+            : context.launchState.adType === "call_now"
+              ? {
+                  link: summary.creative.destinationUrl,
+                  phone_number: resolveCallPhoneNumber(context),
+                }
             : {
                 link: summary.creative.destinationUrl,
               },

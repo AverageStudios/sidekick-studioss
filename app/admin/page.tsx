@@ -100,7 +100,7 @@ export default async function AdminPage() {
                   <div className="min-w-0">
                     <p className="font-medium text-[var(--ink)]">{template.name}</p>
                     <p className="mt-1 text-sm text-[var(--muted)]">
-                      {template.category} • Updated {formatDate(template.updated_at || template.created_at)}
+                      {template.industry || template.category} • {template.offer_type || template.config_json?.offerType || "Offer type not set"} • Updated {formatDate(template.updated_at || template.created_at)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">

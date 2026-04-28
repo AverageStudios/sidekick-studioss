@@ -3,15 +3,22 @@ import { Folder, MoreHorizontal } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { FacebookAdPreview } from "@/components/facebook-ad-preview";
 import { requireUser } from "@/lib/auth";
-import { getDashboardSnapshot, getTemplates } from "@/lib/data";
+import { getDashboardSnapshot, getTemplates, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
+import { resolveMetaPagePreviewIdentity } from "@/lib/meta-page-identity";
 
 export default async function TemplatesPage() {
   const user = await requireUser();
-  const [snapshot, templates] = await Promise.all([
+  const [snapshot, templates, metaIntegration] = await Promise.all([
     getDashboardSnapshot(user.id),
     getTemplates(),
+    getWorkspaceMetaIntegrationForUser(user.id),
   ]);
+  const pagePreviewIdentity = resolveMetaPagePreviewIdentity({
+    integration: metaIntegration,
+    fallbackName: "No Facebook Page selected",
+  });
 
   const templateMap = new Map(templates.map((template) => [template.id, template]));
   const draftCampaigns = snapshot.campaigns.filter((campaign) => campaign.status === "draft");
@@ -86,20 +93,19 @@ export default async function TemplatesPage() {
               return (
                 <Link key={campaign.id} href={`/campaigns/${campaign.id}`} className="block">
                   <Card className="group max-w-[20rem] overflow-hidden rounded-[24px] border-[var(--line)] bg-white transition duration-200 hover:shadow-[0_8px_28px_rgba(16,24,40,0.06)]">
-                    <div className="aspect-[16/9] overflow-hidden border-b border-[var(--line)] bg-[var(--soft-panel)]">
-                      {template ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={template.previewImage}
-                          alt={campaign.name}
-                          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-sm text-[var(--muted)]">
-                          Campaign preview
-                        </div>
-                      )}
-                    </div>
+                    <FacebookAdPreview
+                      template={template || undefined}
+                      pageName={pagePreviewIdentity.pageName}
+                      pageAvatarUrl={pagePreviewIdentity.pageAvatarUrl}
+                      primaryText={template?.adCopy.primary || campaign.name}
+                      headline={template?.adCopy.headlines?.[0] || campaign.name}
+                      description={template?.adCopy.descriptions?.[0] || template?.description || "Campaign preview"}
+                      ctaLabel={template?.ctaDefault || "Open"}
+                      imageUrl={template?.previewImage || null}
+                      compact
+                      showMetaBar={false}
+                      className="rounded-none border-0 shadow-none"
+                    />
 
                     <div className="space-y-3 p-4">
                       <div>

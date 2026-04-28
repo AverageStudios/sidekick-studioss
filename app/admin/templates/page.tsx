@@ -4,25 +4,28 @@ import { duplicateAdminTemplateAction } from "@/app/actions";
 import { AdminShell } from "@/components/admin-shell";
 import { AdminTemplateStatusBadge } from "@/components/admin-template-status-badge";
 import { PageHeader } from "@/components/page-header";
+import { FacebookAdPreview } from "@/components/facebook-ad-preview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { requireAdmin } from "@/lib/auth";
 import { listAdminTemplates, getAdminTemplateStats } from "@/lib/admin-templates";
 import { formatDate } from "@/lib/utils";
+import { supportedIndustries, supportedOfferTypes } from "@/data/template-taxonomy";
 
 const statusFilters = ["all", "draft", "published", "archived"] as const;
-const categoryFilters = ["all", "Lead Generation", "Premium Service", "Recurring Revenue", "Seasonal Offer"] as const;
+const industryFilters = ["all", ...supportedIndustries] as const;
+const offerTypeFilters = ["all", ...supportedOfferTypes] as const;
 
 export default async function AdminTemplatesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; category?: string; success?: string; error?: string }>;
+  searchParams: Promise<{ status?: string; industry?: string; offerType?: string; success?: string; error?: string }>;
 }) {
   await requireAdmin();
-  const { status = "all", category = "all", success, error } = await searchParams;
+  const { status = "all", industry = "all", offerType = "all", success, error } = await searchParams;
   const [templates, stats] = await Promise.all([
-    listAdminTemplates({ status, category }),
+    listAdminTemplates({ status, industry, offerType }),
     getAdminTemplateStats(),
   ]);
 
@@ -73,7 +76,7 @@ export default async function AdminTemplatesPage({
             {statusFilters.map((filter) => (
               <Link
                 key={filter}
-                href={`/admin/templates?status=${filter}&category=${encodeURIComponent(category)}`}
+                href={`/admin/templates?status=${filter}&industry=${encodeURIComponent(industry)}&offerType=${encodeURIComponent(offerType)}`}
                 className={`rounded-full px-4 py-2.5 text-sm font-medium capitalize transition ${
                   filter === status
                     ? "bg-[var(--soft-brand)] text-[var(--brand-ink)] shadow-[0_10px_24px_rgba(109,94,248,0.12)]"
@@ -83,15 +86,30 @@ export default async function AdminTemplatesPage({
                 {filter}
               </Link>
             ))}
-          </div>
-          <div className="flex flex-wrap gap-2.5">
-            {categoryFilters.map((filter) => (
+        </div>
+        <div className="flex flex-wrap gap-2.5">
+            {industryFilters.map((filter) => (
               <Link
                 key={filter}
-                href={`/admin/templates?status=${status}&category=${encodeURIComponent(filter)}`}
+                href={`/admin/templates?status=${status}&industry=${encodeURIComponent(filter)}&offerType=${encodeURIComponent(offerType)}`}
                 className={`rounded-full px-4 py-2.5 text-sm font-medium transition ${
-                  filter === category
+                  filter === industry
                     ? "bg-[var(--ink)] text-white shadow-[0_10px_24px_rgba(17,24,39,0.12)]"
+                    : "border border-[var(--line)] bg-white/82 text-[var(--muted-strong)] shadow-[var(--shadow-soft)] hover:border-[color-mix(in_oklab,var(--brand)_18%,white)] hover:bg-white"
+                }`}
+              >
+                {filter}
+              </Link>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2.5">
+            {offerTypeFilters.map((filter) => (
+              <Link
+                key={filter}
+                href={`/admin/templates?status=${status}&industry=${encodeURIComponent(industry)}&offerType=${encodeURIComponent(filter)}`}
+                className={`rounded-full px-4 py-2.5 text-sm font-medium transition ${
+                  filter === offerType
+                    ? "bg-[var(--soft-brand)] text-[var(--brand-ink)] shadow-[0_10px_24px_rgba(109,94,248,0.12)]"
                     : "border border-[var(--line)] bg-white/82 text-[var(--muted-strong)] shadow-[var(--shadow-soft)] hover:border-[color-mix(in_oklab,var(--brand)_18%,white)] hover:bg-white"
                 }`}
               >
@@ -108,22 +126,19 @@ export default async function AdminTemplatesPage({
             <Card key={template.id} className="group flex h-full flex-col overflow-hidden">
               <div className="border-b border-[var(--line)] bg-[linear-gradient(145deg,#fafbff_0%,#f2efff_48%,#fbfaf5_100%)] p-5">
                 <div className="rounded-[22px] border border-white/80 bg-white/92 p-4 shadow-[0_18px_36px_rgba(17,24,39,0.06)]">
-                  <div className="overflow-hidden rounded-[18px] border border-[var(--line)] bg-[var(--soft-panel)]">
-                    {template.preview_image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={template.preview_image_url}
-                        alt={`${template.name} preview`}
-                        className="h-40 w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-40 items-center justify-center text-sm text-[var(--muted)]">
-                        No preview image yet
-                      </div>
-                    )}
-                  </div>
+                  <FacebookAdPreview
+                    pageName={template.name}
+                    primaryText={template.config_json?.adCopy?.primary || template.description}
+                    headline={template.config_json?.funnel?.heroHeadline || template.name}
+                    description={template.config_json?.adCopy?.descriptions?.[0] || template.config_json?.positioning || template.description}
+                    ctaLabel={template.config_json?.ctaDefault || template.offer_type || "Learn more"}
+                    imageUrl={template.preview_image_url}
+                    compact
+                    showMetaBar={false}
+                    className="rounded-[18px]"
+                  />
                   <div className="mt-4 flex items-start justify-between gap-3">
-                    <Badge>{template.category}</Badge>
+                    <Badge>{template.industry || template.category}</Badge>
                     <div className="flex flex-wrap justify-end gap-2">
                       {template.is_featured ? (
                         <span className="rounded-full bg-[var(--soft-brand)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
@@ -141,10 +156,10 @@ export default async function AdminTemplatesPage({
                   </p>
                   <div className="mt-5 flex flex-wrap gap-2">
                     <span className="rounded-full border border-[var(--line)] bg-[var(--soft-panel)] px-3 py-2 text-xs font-medium text-[var(--muted-strong)]">
-                      {template.config_json?.industry || "Industry not set"}
+                      {template.industry || template.config_json?.industry || "Industry not set"}
                     </span>
                     <span className="rounded-full border border-[var(--line)] bg-white px-3 py-2 text-xs font-medium text-[var(--muted-strong)]">
-                      {template.config_json?.adCopy?.objective || "Lead generation"}
+                      {template.offer_type || template.config_json?.offerType || "Offer type not set"}
                     </span>
                     <span className="rounded-full border border-[var(--line)] bg-white px-3 py-2 text-xs font-medium text-[var(--muted-strong)]">
                       v{template.version || 1}

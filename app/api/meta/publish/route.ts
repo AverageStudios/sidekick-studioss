@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/auth";
+import { ensureCampaignDraft } from "@/lib/campaign-drafts";
 import {
   buildPublishRequestPayloadSummary,
   markMetaPublishJobResult,
@@ -11,6 +12,8 @@ import {
 
 const publishRequestSchema = z.object({
   campaignId: z.string().uuid(),
+  templateSlug: z.string().min(1).optional(),
+  state: z.record(z.string(), z.any()).optional(),
   mode: z.enum(["draft", "live"]),
 });
 
@@ -38,9 +41,21 @@ export async function POST(request: Request) {
 
   let jobId: string | null = null;
   try {
+    let campaignId = parsed.data.campaignId;
+    if (parsed.data.templateSlug && parsed.data.state) {
+      const ensured = await ensureCampaignDraft({
+        admin,
+        userId: user.id,
+        draftId: parsed.data.campaignId,
+        templateSlug: parsed.data.templateSlug,
+        state: parsed.data.state,
+      });
+      campaignId = ensured.draftId;
+    }
+
     const preflightContext = await runMetaPreflightAndCreateJob({
       admin,
-      campaignId: parsed.data.campaignId,
+      campaignId,
       userId: user.id,
       mode: parsed.data.mode,
     });
@@ -70,7 +85,7 @@ export async function POST(request: Request) {
 
     const publishResult = await publishMetaFromPreflight({
       admin,
-      campaignId: parsed.data.campaignId,
+      campaignId,
       userId: user.id,
       mode: parsed.data.mode,
       preflight,
@@ -94,7 +109,7 @@ export async function POST(request: Request) {
         .update({
           status: "published",
         })
-        .eq("id", parsed.data.campaignId);
+        .eq("id", campaignId);
     }
 
     return NextResponse.json({

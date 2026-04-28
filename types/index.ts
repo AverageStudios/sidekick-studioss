@@ -1,25 +1,87 @@
-export type TemplateCategory =
-  | "Lead Generation"
-  | "Premium Service"
-  | "Recurring Revenue"
-  | "Seasonal Offer";
+export type TemplateIndustry =
+  | "Car Detailing"
+  | "Chiropractic"
+  | "Physical Therapy"
+  | "Cleaning Services"
+  | "Fitness / Personal Training"
+  | "Flooring"
+  | "Landscape / Lawn Care"
+  | "Plumbing"
+  | "Pool Services"
+  | "Roofing"
+  | "Spas & Massage";
+
+export type TemplateOfferType =
+  | "Consultation"
+  | "Quote Request"
+  | "Service Booking"
+  | "Inspection"
+  | "Route Fill"
+  | "Appointment Booking"
+  | "Emergency Service"
+  | "Recurring Maintenance"
+  | "Membership / Program"
+  | "High-Ticket Offer"
+  | "Seasonal Promotion"
+  | "Reactivation / Follow-Up";
+
+export type TemplateCategory = TemplateIndustry;
 
 export type UserRole = "admin" | "user";
 export type TemplateStatus = "draft" | "published" | "archived";
 export type LeadStatus = "new" | "contacted" | "booked" | "closed";
 export type CampaignPlatform = "meta";
-export type CampaignLocationScope = "world" | "country" | "state" | "city" | "address";
+export type CampaignLocationScope = "world" | "country" | "state" | "city" | "zip" | "neighborhood" | "address";
 export type CampaignLocationTargetingType = "home" | "recent" | "travel_in" | "recent_and_home";
-export type CampaignLaunchStep = "platform" | "category" | "template" | "campaign-details";
+export type CampaignAdType =
+  | "lead_form"
+  | "landing_page"
+  | "call_now"
+  | "messenger_leads"
+  | "messenger_engagement";
+export type MetaLocationClassification =
+  | "world"
+  | "country"
+  | "region"
+  | "city"
+  | "zip"
+  | "neighborhood"
+  | "address"
+  | "unknown";
+export type MetaLocationTargeting = {
+  key?: string;
+  type?: string;
+  classification?: MetaLocationClassification;
+  name?: string;
+  addressString?: string;
+  countryCode?: string;
+  countryName?: string;
+  region?: string;
+  regionId?: string;
+  primaryCity?: string;
+  primaryCityId?: string;
+  latitude?: number;
+  longitude?: number;
+  supportsCity?: boolean;
+  supportsRegion?: boolean;
+  raw?: Record<string, unknown>;
+};
+export type CampaignLaunchStep = "platform" | "industry" | "template" | "campaign-details";
 export type CampaignDetailsStep =
   | "goal"
+  | "ad-type"
   | "budget"
   | "location"
   | "pixel"
+  | "tracking-pixel"
   | "placeholders"
   | "thank-you"
+  | "landing-page"
+  | "phone-number"
+  | "messenger-setup"
   | "review"
-  | "advanced";
+  | "advanced"
+  | "launch";
 export type CampaignGoal =
   | "OUTCOME_AWARENESS"
   | "OUTCOME_TRAFFIC"
@@ -29,6 +91,8 @@ export type CampaignGoal =
   | "OUTCOME_SALES";
 export type CampaignLeadFormMode = "existing" | "managed_new";
 export type CampaignPublishMode = "draft" | "live";
+export type CampaignThankYouDestinationMode = "facebook" | "website";
+export type CampaignThankYouButtonAction = "OPEN_WEBSITE" | "DOWNLOAD" | "CALL_BUSINESS";
 
 export type TemplatePlaceholderField = {
   id: string;
@@ -42,31 +106,46 @@ export type TemplatePlaceholderField = {
 
 export type CampaignLaunchState = {
   platform: CampaignPlatform;
+  adType: CampaignAdType;
   category: string;
+  industry: string;
+  offerType: string;
   templateSlug: string;
   currentStep: CampaignLaunchStep;
   currentDetailsStep: CampaignDetailsStep;
   campaignGoal: CampaignGoal;
   dailyBudget: string;
   targetLocation: string;
+  landingPageUrl: string;
+  phoneNumber: string;
+  messengerWelcomeMessage: string;
+  messengerReplyPrompt: string;
   targetLocations?: Array<{
     id: string;
     label: string;
     radius: string;
+    radiusAllowed?: boolean;
+    distanceUnit?: "mile" | "kilometer";
     targetingMode: CampaignLocationTargetingType;
     scope?: CampaignLocationScope;
     lat?: number;
     lon?: number;
     countryCode?: string;
+    metaLocation?: MetaLocationTargeting;
   }>;
   trackingPixelId: string;
   trackingPixelName: string;
   placeholderValues: Record<string, string>;
   thankYouPage: {
+    enabled: boolean;
     headline: string;
     description: string;
     buttonLabel: string;
-    destinationUrl: string;
+    buttonAction: CampaignThankYouButtonAction;
+    websiteUrl: string;
+    completionCountryCode?: string;
+    completionPhone?: string;
+    destinationMode: CampaignThankYouDestinationMode;
   };
   advanced: {
     campaignName: string;
@@ -104,9 +183,40 @@ export type TemplateSeed = {
   name: string;
   description: string;
   category: TemplateCategory;
-  industry?: string;
+  industry: TemplateIndustry;
+  offerType: TemplateOfferType;
+  campaignType?: string;
+  audienceType?: string;
+  offerFramework?: string;
+  displayLink?: string;
+  promoDetails?: string;
+  adFormat?: string;
+  mediaType?: string;
+  campaignSettings?: {
+    adSetStructure?: string;
+    advantagePlusSettings?: string;
+    placements?: string;
+    dynamicCreative?: string;
+    conversionEvent?: string;
+  };
+  additionalSettings?: {
+    specialAdCategory?: string;
+    kpiThresholds?: {
+      ctrAll?: string;
+      ctrLink?: string;
+      cr?: string;
+      cpa?: string;
+    };
+    utmParameters?: string;
+  };
+  supportedAdTypes?: CampaignAdType[];
+  defaultAdType?: CampaignAdType;
   positioning: string;
   previewImage: string;
+  creativeAssets?: {
+    imageUrls?: string[];
+    videoUrls?: string[];
+  };
   ctaDefault: string;
   offerStructure?: string[];
   placeholderFields?: TemplatePlaceholderField[];
@@ -132,12 +242,39 @@ export type TemplateSeed = {
     formFields?: string[];
     nextStepFlow?: string[];
   };
+  adTypeConfig?: Partial<
+    Record<
+      CampaignAdType,
+      {
+        landingPageUrl?: string;
+        phoneNumber?: string;
+        messengerWelcomeMessage?: string;
+        messengerReplyPrompt?: string;
+        thankYouEnabled?: boolean;
+        thankYouHeadline?: string;
+        thankYouDescription?: string;
+        thankYouButtonLabel?: string;
+        thankYouWebsiteUrl?: string;
+      }
+    >
+  >;
 };
 
 export type TemplateConfigJson = Partial<{
   industry: string;
+  category: string;
   positioning: string;
   offerType: string;
+  campaignType: string;
+  audienceType: string;
+  offerFramework: string;
+  displayLink: string;
+  adFormat: string;
+  mediaType: string;
+  campaignSettings: TemplateSeed["campaignSettings"];
+  additionalSettings: TemplateSeed["additionalSettings"];
+  supportedAdTypes: CampaignAdType[];
+  defaultAdType: CampaignAdType;
   promoDetails: string;
   ctaDefault: string;
   offerStructure: string[];
@@ -146,11 +283,36 @@ export type TemplateConfigJson = Partial<{
   faq: Array<{ question: string; answer: string }>;
   adCopy: TemplateSeed["adCopy"];
   funnel: TemplateSeed["funnel"];
+  adTypeConfig: TemplateSeed["adTypeConfig"];
+  creativeAssets: {
+    imageUrls?: string[];
+    videoUrls?: string[];
+  };
   leadFlowDefaults: {
     pageIntro: string;
     formCta: string;
     formFields: string[];
     nextStepFlow: string[];
+  };
+  leadFormSettings: {
+    formType: "higher_intent" | "more_volume";
+    locale: string;
+    sameLeadForm: boolean;
+    enablePhoneOtp: boolean;
+    backgroundImageSource: "default" | "custom";
+    greetingTitle: string;
+    greetingBody: string;
+    multipleChoiceQuestions: Array<{
+      label: string;
+      options: string[];
+    }>;
+    shortQuestions: string[];
+    standardQuestions: string[];
+    disclaimerTitle: string;
+    disclaimerBody: string;
+    disclaimerConsent: string;
+    privacyPolicyUrl: string;
+    enableMessenger: boolean;
   };
   followUpDefaults: {
     subject: string;
@@ -166,6 +328,8 @@ export type TemplateRecord = {
   name: string;
   description: string;
   category: TemplateCategory;
+  industry?: TemplateIndustry | string | null;
+  offer_type?: TemplateOfferType | string | null;
   preview_image_url: string | null;
   config_json: TemplateConfigJson | null;
   status: TemplateStatus;
@@ -178,6 +342,7 @@ export type TemplateRecord = {
 };
 
 export type TemplateSetupValues = {
+  adType?: CampaignAdType;
   businessName: string;
   city: string;
   phone: string;
@@ -195,6 +360,11 @@ export type TemplateSetupValues = {
   campaignGoal?: CampaignGoal;
   dailyBudget?: string;
   targetLocation?: string;
+  landingPageUrl?: string;
+  phoneNumber?: string;
+  messengerWelcomeMessage?: string;
+  messengerReplyPrompt?: string;
+  thankYouEnabled?: boolean;
   thankYouHeadline?: string;
   thankYouDescription?: string;
   thankYouButtonText?: string;
@@ -304,6 +474,8 @@ export type CampaignRecord = {
   template_id: string;
   launch_platform?: CampaignPlatform | null;
   launch_category?: string | null;
+  launch_industry?: string | null;
+  launch_offer_type?: string | null;
   name: string;
   slug: string;
   offer_price: number | null;

@@ -23,6 +23,13 @@ export default async function NewTemplateCampaignPage({
   ]);
 
   const initialDraftBundle = draft ? await getCampaignBundle(user.id, draft) : null;
+  const connectNextUrl = (() => {
+    const params = new URLSearchParams();
+    if (draft) params.set("draft", draft);
+    if (template) params.set("template", template);
+    const query = params.toString();
+    return query ? `/templates/new?${query}` : "/templates/new";
+  })();
 
   return (
     <AppShell currentPath="/templates">
@@ -32,6 +39,7 @@ export default async function NewTemplateCampaignPage({
         initialDraftBundle={initialDraftBundle}
         initialTemplateSlug={template || null}
         metaIntegration={metaIntegration}
+        connectNextUrl={connectNextUrl}
       />
     </AppShell>
   );

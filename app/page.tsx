@@ -5,6 +5,7 @@ import { PublicSiteFooter } from "@/components/public-site-footer";
 import { HomeProductShowcase } from "@/components/home-product-showcase";
 import { HomeTrialCta } from "@/components/home-trial-cta";
 import { WhySidekickSection } from "@/components/why-sidekick-section";
+import { FacebookAdPreview } from "@/components/facebook-ad-preview";
 import { InteractiveGlowCard } from "@/components/ui/interactive-glow-card";
 import { HeroGeometric } from "@/components/ui/shape-landing-hero";
 import { Button } from "@/components/ui/button";
@@ -173,24 +174,17 @@ export default async function HomePage() {
                 className="h-full rounded-[32px] border border-[var(--public-line)] bg-[var(--public-surface)] p-6"
             >
               <div className="flex h-full flex-col">
-                <div className="rounded-[24px] border border-[var(--public-line)] bg-[radial-gradient(circle_at_top_left,rgba(109,94,248,0.12),transparent_35%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,244,255,0.78))] p-5">
-                  <div className="rounded-[20px] border border-[var(--public-line)] bg-[rgba(255,255,255,0.82)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.96)]">
-                    <div className="flex items-center justify-between">
-                      <span className="rounded-full border border-[var(--public-line)] bg-white/72 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--public-muted)]">
-                        {template.category}
-                      </span>
-                      <span className="text-[11px] font-medium uppercase tracking-[0.14em] public-text-faint">
-                        Industry-ready
-                      </span>
-                    </div>
-                    <div className="mt-8 space-y-3">
-                      <div className="h-3 w-2/3 rounded-full bg-[rgba(17,18,22,0.14)]" />
-                      <div className="h-2.5 w-full rounded-full bg-[rgba(17,18,22,0.08)]" />
-                      <div className="h-2.5 w-5/6 rounded-full bg-[rgba(17,18,22,0.08)]" />
-                      <div className="h-2.5 w-3/4 rounded-full bg-[rgba(17,18,22,0.06)]" />
-                    </div>
-                  </div>
-                </div>
+                <FacebookAdPreview
+                  template={template}
+                  primaryText={template.adCopy.primary}
+                  headline={template.adCopy.headlines[0] || template.name}
+                  description={template.adCopy.descriptions[0] || template.positioning}
+                  ctaLabel={template.ctaDefault}
+                  imageUrl={template.previewImage}
+                  compact
+                  showMetaBar={false}
+                  className="rounded-[24px]"
+                />
 
                 <div className="mt-6 flex flex-1 flex-col">
                   <h3 className="text-xl font-semibold tracking-[-0.03em] text-[var(--public-text)]">

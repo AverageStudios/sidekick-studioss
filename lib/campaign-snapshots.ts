@@ -24,6 +24,28 @@ export function createLaunchStateHash(state: CampaignLaunchState) {
   return createHash("sha256").update(stableStringify(state)).digest("hex");
 }
 
+export async function readLatestCampaignLaunchSnapshot({
+  admin,
+  campaignId,
+}: {
+  admin: SupabaseAdmin;
+  campaignId: string;
+}) {
+  const { data, error } = await admin
+    .from("campaign_launch_snapshots")
+    .select("snapshot_json")
+    .eq("campaign_id", campaignId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data?.snapshot_json as CampaignLaunchState | null | undefined) || null;
+}
+
 export async function persistCampaignLaunchSnapshot({
   admin,
   campaignId,
