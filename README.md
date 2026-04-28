@@ -80,7 +80,7 @@ SUPABASE_STORAGE_BUCKET=assets
 
 What each env var is used for:
 
-- `NEXT_PUBLIC_APP_URL`: canonical app URL for local/dev links
+- `NEXT_PUBLIC_APP_URL`: canonical app URL used for auth redirects and OAuth callbacks
 - `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL for public and server clients
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: public anon key used by auth/public clients
 - `SUPABASE_SERVICE_ROLE_KEY`: server-only key used for writes, storage uploads, and server data access
@@ -91,6 +91,20 @@ What each env var is used for:
 If Supabase public env vars are missing, auth will stay disabled unless you explicitly enable demo mode.
 
 If the service-role key is missing, the app still renders safely, but writes, uploads, and persisted lead actions are skipped.
+
+## Production domain setup
+
+For the live site at `https://sidekickstudioss.com`, set:
+
+- `NEXT_PUBLIC_APP_URL=https://sidekickstudioss.com`
+- `META_REDIRECT_URI=https://sidekickstudioss.com/api/meta/callback`
+
+In Supabase, make sure the auth settings allow:
+
+- Site URL: `https://sidekickstudioss.com`
+- Redirect URL(s): `https://sidekickstudioss.com/auth/callback`
+
+If you use the Meta connect flow, make sure the Meta app's redirect URI matches `https://sidekickstudioss.com/api/meta/callback` exactly.
 
 ## Schema notes for Phase 2
 

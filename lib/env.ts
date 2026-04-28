@@ -11,7 +11,7 @@ function missing(keys: string[]) {
 }
 
 export const env = {
-  appUrl: readEnv("NEXT_PUBLIC_APP_URL") || "http://localhost:3000",
+  appUrl: readEnv("NEXT_PUBLIC_APP_URL") || "https://sidekickstudioss.com",
   demoMode: readEnv("NEXT_PUBLIC_DEMO_MODE") || readEnv("DEMO_MODE"),
   supabaseUrl: readEnv("NEXT_PUBLIC_SUPABASE_URL"),
   supabaseAnonKey: readEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
