@@ -6,9 +6,6 @@ const defaultMetaScopes = [
   "business_management",
   "pages_show_list",
   "pages_read_engagement",
-  "pages_manage_ads",
-  "pages_manage_metadata",
-  "leads_retrieval",
 ] as const;
 
 export type MetaAdAccount = {
@@ -114,14 +111,17 @@ export function isMetaConfigured() {
 }
 
 export function getMetaScopes() {
-  const raw = readMetaEnv("META_SCOPES");
+  const raw = readMetaEnv("META_SCOPES") || env.metaScopes;
+  if (!raw) {
+    return [...defaultMetaScopes];
+  }
+
   const parsed = raw
-    ? raw
-        .split(",")
-        .map((scope) => scope.trim())
-        .filter(Boolean)
-    : [];
-  return Array.from(new Set([...defaultMetaScopes, ...parsed]));
+    .split(",")
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+
+  return parsed.length ? parsed : [...defaultMetaScopes];
 }
 
 function buildMetaGraphUrl(path: string) {

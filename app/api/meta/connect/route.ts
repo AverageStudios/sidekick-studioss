@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { env } from "@/lib/env";
-import { getMetaOAuthUrl, isMetaConfigured } from "@/lib/meta";
+import { getMetaOAuthUrl, getMetaScopes, isMetaConfigured } from "@/lib/meta";
 import { getCurrentUser } from "@/lib/auth";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 
@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
   const next = request.nextUrl.searchParams.get("next");
   const safeNext = next?.startsWith("/") ? next : "/workspace/settings?section=integrations";
   const state = randomUUID();
+  const requestedScopes = getMetaScopes();
   const oauthUrl = getMetaOAuthUrl(state);
 
   if (!oauthUrl) {
@@ -50,6 +51,8 @@ export async function GET(request: NextRequest) {
     settingsUrl.searchParams.set("error", "Could not start Meta connection.");
     return NextResponse.redirect(settingsUrl);
   }
+
+  console.info("[meta connect] OAuth scopes", requestedScopes.join(","));
 
   const response = NextResponse.redirect(oauthUrl);
   response.cookies.set("meta_oauth_state", state, {
