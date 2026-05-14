@@ -100,22 +100,171 @@ function getMetaPageAvatarUrl(page: MetaPage) {
   return dataUrl || directUrl;
 }
 
-async function getActiveMetaConnection(admin: SupabaseAdmin, workspaceId: string) {
+function getConnectionMetadata(connection: Pick<WorkspaceProviderConnectionRow, "metadata_json">) {
+  return connection.metadata_json && typeof connection.metadata_json === "object"
+    ? connection.metadata_json
+    : {};
+}
+
+function getConnectionScopes(connection: Pick<WorkspaceProviderConnectionRow, "scopes">) {
+  return Array.isArray(connection.scopes)
+    ? connection.scopes.filter((scope): scope is string => typeof scope === "string" && scope.trim().length > 0)
+    : [];
+}
+
+function getConnectionSortTimestamp(connection: Pick<WorkspaceProviderConnectionRow, "connected_at" | "created_at">) {
+  const timestamp = Date.parse(connection.connected_at || connection.created_at || "");
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function hasOauthScopeTrace(connection: Pick<WorkspaceProviderConnectionRow, "metadata_json">) {
+  const metadata = getConnectionMetadata(connection);
+  return Boolean(
+    typeof metadata.oauth_scope_set === "string" ||
+      Array.isArray(metadata.oauth_requested_scopes) ||
+      Array.isArray(metadata.oauth_granted_scopes),
+  );
+}
+
+function inferOauthScopeSet(scopes: string[]) {
+  return scopes.includes("pages_manage_ads") ? "lead_forms" : "default";
+}
+
+function buildOauthScopeTrace(connection: Pick<WorkspaceProviderConnectionRow, "metadata_json" | "scopes">) {
+  const metadata = getConnectionMetadata(connection);
+  const scopes = getConnectionScopes(connection);
+  const requestedScopes = Array.isArray(metadata.oauth_requested_scopes)
+    ? metadata.oauth_requested_scopes.filter((scope): scope is string => typeof scope === "string" && scope.trim().length > 0)
+    : scopes;
+  const grantedScopes = Array.isArray(metadata.oauth_granted_scopes)
+    ? metadata.oauth_granted_scopes.filter((scope): scope is string => typeof scope === "string" && scope.trim().length > 0)
+    : scopes;
+  const scopeSet =
+    typeof metadata.oauth_scope_set === "string" && metadata.oauth_scope_set.trim().length > 0
+      ? metadata.oauth_scope_set
+      : inferOauthScopeSet([...requestedScopes, ...grantedScopes]);
+
+  return {
+    oauth_scope_set: scopeSet,
+    oauth_requested_scopes: Array.from(new Set(requestedScopes)),
+    oauth_granted_scopes: Array.from(new Set(grantedScopes)),
+  };
+}
+
+function connectionHasUsableToken(connection: WorkspaceProviderConnectionRow) {
+  return Boolean(decryptMetaToken(connection));
+}
+
+async function listMetaConnections(admin: SupabaseAdmin, workspaceId: string) {
   const { data, error } = await admin
     .from("workspace_provider_connections")
     .select("*")
     .eq("workspace_id", workspaceId)
     .eq("provider", "meta")
-    .eq("is_active", true)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order("connected_at", { ascending: false })
+    .order("created_at", { ascending: false });
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return (data as WorkspaceProviderConnectionRow | null) || null;
+  return (data || []) as WorkspaceProviderConnectionRow[];
+}
+
+async function repairAndResolveActiveMetaConnection(admin: SupabaseAdmin, workspaceId: string) {
+  const connections = await listMetaConnections(admin, workspaceId);
+  if (!connections.length) return null;
+
+  const activeConnections = connections.filter((connection) => connection.is_active);
+  const connectedCandidates = connections
+    .filter(
+      (connection) => connection.status === "connected" && connectionHasUsableToken(connection),
+    )
+    .sort((left, right) => getConnectionSortTimestamp(right) - getConnectionSortTimestamp(left));
+  const tracedCandidates = connectedCandidates.filter((connection) => hasOauthScopeTrace(connection));
+  const preferredConnection =
+    tracedCandidates[0] || connectedCandidates[0] || activeConnections[0] || connections[0];
+
+  if (!preferredConnection) {
+    return null;
+  }
+
+  const activeConnection = activeConnections.find((connection) => connection.id === preferredConnection.id)
+    ? preferredConnection
+    : activeConnections[0] || null;
+  const needsPromotion =
+    !activeConnection ||
+    activeConnection.id !== preferredConnection.id ||
+    !activeConnection.is_active ||
+    activeConnection.status !== "connected";
+  const needsScopeTraceBackfill = !hasOauthScopeTrace(preferredConnection);
+
+  if (!needsPromotion && !needsScopeTraceBackfill) {
+    return preferredConnection;
+  }
+
+  const mergedMetadata = {
+    ...getConnectionMetadata(preferredConnection),
+    ...buildOauthScopeTrace(preferredConnection),
+  };
+
+  if (needsPromotion) {
+    console.info(
+      "[meta integration] promoting Meta connection",
+      preferredConnection.id,
+      "for workspace",
+      workspaceId,
+    );
+  }
+  if (needsScopeTraceBackfill) {
+    console.info(
+      "[meta integration] backfilling Meta OAuth scope trace",
+      preferredConnection.id,
+      "for workspace",
+      workspaceId,
+    );
+  }
+
+  const deactivateIds = connections
+    .filter((connection) => connection.id !== preferredConnection.id && connection.is_active)
+    .map((connection) => connection.id);
+
+  if (deactivateIds.length) {
+    const { error: deactivateError } = await admin
+      .from("workspace_provider_connections")
+      .update({
+        is_active: false,
+        status: "disconnected",
+        disconnected_at: new Date().toISOString(),
+      })
+      .in("id", deactivateIds);
+
+    if (deactivateError) {
+      throw new Error(deactivateError.message);
+    }
+  }
+
+  const { data, error: activateError } = await admin
+    .from("workspace_provider_connections")
+    .update({
+      is_active: true,
+      status: "connected",
+      disconnected_at: null,
+      metadata_json: mergedMetadata,
+    })
+    .eq("id", preferredConnection.id)
+    .select("*")
+    .single();
+
+  if (activateError) {
+    throw new Error(activateError.message);
+  }
+
+  return data as WorkspaceProviderConnectionRow;
+}
+
+async function getActiveMetaConnection(admin: SupabaseAdmin, workspaceId: string) {
+  return repairAndResolveActiveMetaConnection(admin, workspaceId);
 }
 
 async function listMetaAssets(admin: SupabaseAdmin, workspaceId: string) {
@@ -264,27 +413,6 @@ export async function upsertWorkspaceMetaConnection({
   const encryptedToken = encryptMetaToken(accessToken);
   const existing = await getActiveMetaConnection(admin, workspaceId);
 
-  if (existing) {
-    const { error: deactivateError } = await admin
-      .from("workspace_provider_connections")
-      .update({
-        is_active: false,
-        status: "disconnected",
-        disconnected_at: new Date().toISOString(),
-        token_ciphertext: null,
-        token_iv: null,
-        token_tag: null,
-        refresh_token_ciphertext: null,
-        refresh_token_iv: null,
-        refresh_token_tag: null,
-      })
-      .eq("id", existing.id);
-
-    if (deactivateError) {
-      throw new Error(deactivateError.message);
-    }
-  }
-
   const payload = {
     workspace_id: workspaceId,
     provider: "meta" as const,
@@ -301,6 +429,7 @@ export async function upsertWorkspaceMetaConnection({
     metadata_json: existing
       ? {
           reconnected_from_connection_id: existing.id,
+          previous_active_connection_id: existing.id,
           ...(metadataJson || {}),
         }
       : metadataJson || {},
@@ -318,7 +447,32 @@ export async function upsertWorkspaceMetaConnection({
   if (error) {
     throw new Error(error.message);
   }
-  return data as WorkspaceProviderConnectionRow;
+
+  const insertedConnection = data as WorkspaceProviderConnectionRow;
+  const { error: deactivateError } = await admin
+    .from("workspace_provider_connections")
+    .update({
+      is_active: false,
+      status: "disconnected",
+      disconnected_at: new Date().toISOString(),
+      token_ciphertext: null,
+      token_iv: null,
+      token_tag: null,
+      refresh_token_ciphertext: null,
+      refresh_token_iv: null,
+      refresh_token_tag: null,
+    })
+    .eq("workspace_id", workspaceId)
+    .eq("provider", "meta")
+    .neq("id", insertedConnection.id)
+    .eq("is_active", true);
+
+  if (deactivateError) {
+    throw new Error(deactivateError.message);
+  }
+
+  const repairedConnection = await getActiveMetaConnection(admin, workspaceId);
+  return repairedConnection || insertedConnection;
 }
 
 export async function disconnectWorkspaceMetaConnection({
