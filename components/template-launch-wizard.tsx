@@ -975,7 +975,6 @@ export function TemplateLaunchWizard({
       metaIntegration.tokenAvailable &&
       metaIntegration.connection.status === "connected",
   );
-  const metaConnectHref = `/api/meta/connect?next=${encodeURIComponent(connectNextUrl)}`;
   const selectedAdAccountAsset = metaIntegration?.assets.adAccounts.find((asset) => asset.asset_id === metaIntegration?.selected.adAccountId) || null;
   const availablePixels = metaIntegration?.assets.pixels || [];
   const availableLeadForms = metaIntegration?.assets.leadForms || [];
@@ -1055,6 +1054,9 @@ export function TemplateLaunchWizard({
   const [preflight, setPreflight] = useState<LaunchPreflightResponse | null>(null);
   const [preflightMode, setPreflightMode] = useState<CampaignPublishMode>("draft");
   const [preflightError, setPreflightError] = useState<string | null>(null);
+  const metaConnectScopeSet =
+    launchState.adType === "lead_form" ? "&scopeSet=lead_forms" : "";
+  const metaConnectHref = `/api/meta/connect?next=${encodeURIComponent(connectNextUrl)}${metaConnectScopeSet}`;
   const [isPreflighting, setIsPreflighting] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);

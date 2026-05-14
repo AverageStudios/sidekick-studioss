@@ -40,10 +40,12 @@ export async function GET(request: NextRequest) {
   }
 
   const next = request.nextUrl.searchParams.get("next");
+  const scopeSet = request.nextUrl.searchParams.get("scopeSet");
+  const includeLeadFormManagement = scopeSet === "lead_forms";
   const safeNext = next?.startsWith("/") ? next : "/workspace/settings?section=integrations";
   const state = randomUUID();
-  const requestedScopes = getMetaScopes();
-  const oauthUrl = getMetaOAuthUrl(state);
+  const requestedScopes = getMetaScopes({ includeLeadFormManagement });
+  const oauthUrl = getMetaOAuthUrl(state, { includeLeadFormManagement });
 
   if (!oauthUrl) {
     const settingsUrl = new URL("/workspace/settings", env.appUrl);
@@ -52,7 +54,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(settingsUrl);
   }
 
-  console.info("[meta connect] OAuth scopes", requestedScopes.join(","));
+  console.info("[meta connect] OAuth scopes", requestedScopes.join(","), "scopeSet=", scopeSet || "default");
 
   const response = NextResponse.redirect(oauthUrl);
   response.cookies.set("meta_oauth_state", state, {

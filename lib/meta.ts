@@ -8,6 +8,8 @@ const defaultMetaScopes = [
   "pages_read_engagement",
 ] as const;
 
+const leadFormManagementMetaScopes = ["pages_manage_ads"] as const;
+
 export type MetaAdAccount = {
   id: string;
   account_id?: string;
@@ -23,6 +25,7 @@ export type MetaPage = {
   id: string;
   name?: string;
   access_token?: string;
+  tasks?: string[];
   picture?: {
     data?: {
       height?: number;
@@ -50,6 +53,18 @@ export type MetaLeadForm = {
   status?: string;
   locale?: string;
   created_time?: string;
+};
+
+export type MetaLeadFormAccessResult = {
+  ok: boolean;
+  pageId: string;
+  errorMessage?: string;
+  errorCode?: number;
+  errorSubcode?: number;
+  errorType?: string;
+  errorTraceId?: string;
+  missingPermissions: string[];
+  checkedAt: string;
 };
 
 export type MetaGeoLocationSearchResult = {
@@ -110,10 +125,17 @@ export function isMetaConfigured() {
   return getMetaEnvStatus().configured;
 }
 
-export function getMetaScopes() {
+function dedupeScopes(scopes: string[]) {
+  return Array.from(new Set(scopes.map((scope) => scope.trim()).filter(Boolean)));
+}
+
+export function getMetaScopes(options?: { includeLeadFormManagement?: boolean }) {
   const raw = readMetaEnv("META_SCOPES") || env.metaScopes;
+  const fallback = [...defaultMetaScopes];
   if (!raw) {
-    return [...defaultMetaScopes];
+    return options?.includeLeadFormManagement
+      ? dedupeScopes([...fallback, ...leadFormManagementMetaScopes])
+      : fallback;
   }
 
   const parsed = raw
@@ -121,7 +143,10 @@ export function getMetaScopes() {
     .map((scope) => scope.trim())
     .filter(Boolean);
 
-  return parsed.length ? parsed : [...defaultMetaScopes];
+  const scopes = parsed.length ? parsed : fallback;
+  return options?.includeLeadFormManagement
+    ? dedupeScopes([...scopes, ...leadFormManagementMetaScopes])
+    : dedupeScopes(scopes);
 }
 
 function buildMetaGraphUrl(path: string) {
@@ -133,7 +158,7 @@ function getMetaOauthDialogUrl() {
   return `https://www.facebook.com/${getMetaGraphApiVersion()}/dialog/oauth`;
 }
 
-export function getMetaOAuthUrl(state: string) {
+export function getMetaOAuthUrl(state: string, options?: { includeLeadFormManagement?: boolean }) {
   const appId = readMetaEnv("META_APP_ID") || env.metaAppId;
   const redirectUri = readMetaEnv("META_REDIRECT_URI") || env.metaRedirectUri || `${env.appUrl}/api/meta/callback`;
   if (!appId || !redirectUri) return null;
@@ -143,7 +168,7 @@ export function getMetaOAuthUrl(state: string) {
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("state", state);
-  url.searchParams.set("scope", getMetaScopes().join(","));
+  url.searchParams.set("scope", getMetaScopes(options).join(","));
   url.searchParams.set("auth_type", "rerequest");
   url.searchParams.set("return_scopes", "true");
   return url.toString();
@@ -256,7 +281,10 @@ export async function fetchMetaAdAccounts(accessToken: string) {
 
 export async function fetchMetaPages(accessToken: string) {
   const url = new URL(buildMetaGraphUrl("me/accounts"));
-  url.searchParams.set("fields", "id,name,access_token,picture{url},instagram_business_account{id,username}");
+  url.searchParams.set(
+    "fields",
+    "id,name,access_token,tasks,picture{url},instagram_business_account{id,username}",
+  );
   url.searchParams.set("limit", "200");
   url.searchParams.set("access_token", accessToken);
   const payload = await fetchMetaJson<{ data?: MetaPage[] }>(url.toString());
@@ -280,6 +308,49 @@ export async function fetchMetaLeadForms(accessToken: string, pageId: string) {
   url.searchParams.set("access_token", accessToken);
   const payload = await fetchMetaJson<{ data?: MetaLeadForm[] }>(url.toString());
   return payload.data || [];
+}
+
+function extractMissingMetaPermissions(message: string) {
+  const normalized = message.toLowerCase();
+  const known = ["pages_manage_ads", "leads_retrieval", "pages_manage_metadata"];
+  return known.filter((permission) => normalized.includes(permission.toLowerCase()));
+}
+
+export async function inspectMetaLeadFormAccess({
+  accessToken,
+  pageId,
+}: {
+  accessToken: string;
+  pageId: string;
+}): Promise<MetaLeadFormAccessResult> {
+  try {
+    await fetchMetaLeadForms(accessToken, pageId);
+    return {
+      ok: true,
+      pageId,
+      missingPermissions: [],
+      checkedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    const metaError = error as Error & {
+      metaCode?: number;
+      metaSubcode?: number;
+      metaType?: string;
+      metaTraceId?: string;
+    };
+    const message = metaError?.message || "Meta lead form access check failed.";
+    return {
+      ok: false,
+      pageId,
+      errorMessage: message,
+      errorCode: metaError?.metaCode,
+      errorSubcode: metaError?.metaSubcode,
+      errorType: metaError?.metaType,
+      errorTraceId: metaError?.metaTraceId,
+      missingPermissions: extractMissingMetaPermissions(message),
+      checkedAt: new Date().toISOString(),
+    };
+  }
 }
 
 export async function fetchMetaGeoLocationSearch({

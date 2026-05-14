@@ -20,7 +20,7 @@ import {
   createMetaCampaign,
   createMetaLeadForm,
   fetchMetaAdAccountDetails,
-  fetchMetaLeadForms,
+  inspectMetaLeadFormAccess,
   fetchMetaTokenDebugInfo,
   getMetaScopes,
   updateMetaObjectStatus,
@@ -134,6 +134,9 @@ type MetaLaunchContext = {
   resolvedAssets: MetaResolvedAssets;
   integrationState: Awaited<ReturnType<typeof getWorkspaceMetaIntegrationState>>;
 };
+
+const leadFormManagementScopes = ["pages_manage_ads"] as const;
+const leadFormManagementTasks = ["ADVERTISE", "MANAGE"] as const;
 
 function goalLabel(goal: CampaignGoal) {
   return campaignGoalOptions.find((item) => item.id === goal)?.label || "Leads";
@@ -422,6 +425,68 @@ function resolveCallPhoneNumber(context: MetaLaunchContext) {
   return `${countryCode}${rawPhone}`;
 }
 
+function getSelectedPageAsset(context: MetaLaunchContext) {
+  const pageId = context.resolvedAssets.page?.id;
+  if (!pageId) return null;
+  return context.integrationState.assets.pages.find((asset) => asset.asset_id === pageId) || null;
+}
+
+function getSelectedPageTasks(context: MetaLaunchContext) {
+  const pageAsset = getSelectedPageAsset(context);
+  const rawTasks = pageAsset?.metadata_json?.tasks;
+  return Array.isArray(rawTasks) ? rawTasks.filter((task): task is string => typeof task === "string") : [];
+}
+
+function formatMetaAssetLabel(asset: { id: string; name: string } | null, fallback: string) {
+  if (!asset) return fallback;
+  return `${asset.name} (${asset.id})`;
+}
+
+function buildLeadFormCapabilityMessage({
+  context,
+  tokenScopes,
+  configuredScopes,
+  errorMessage,
+  missingPermissions,
+}: {
+  context: MetaLaunchContext;
+  tokenScopes: string[];
+  configuredScopes: string[];
+  errorMessage: string;
+  missingPermissions: string[];
+}) {
+  const pageLabel = formatMetaAssetLabel(context.resolvedAssets.page, "selected Page");
+  const adAccountLabel = formatMetaAssetLabel(context.resolvedAssets.adAccount, "selected ad account");
+  const pageTasks = getSelectedPageTasks(context);
+  const hasLeadFormTasks = leadFormManagementTasks.every((task) => pageTasks.includes(task));
+  const tokenMissingLeadFormScopes = leadFormManagementScopes.filter((scope) => !tokenScopes.includes(scope));
+  const oauthMissingLeadFormScopes = leadFormManagementScopes.filter((scope) => !configuredScopes.includes(scope));
+
+  if (tokenMissingLeadFormScopes.length) {
+    const roleHint = hasLeadFormTasks
+      ? `The Page already grants tasks ${pageTasks.join(", ")}.`
+      : pageTasks.length
+        ? `The Page currently grants tasks ${pageTasks.join(", ")}. Managed lead forms need at least ${leadFormManagementTasks.join(" and ")} tasks on the selected Page.`
+        : "The current Page tasks could not be confirmed from the latest asset sync.";
+
+    const reconnectHint = oauthMissingLeadFormScopes.length
+      ? `This workspace's standard OAuth scope list is ${configuredScopes.join(", ")}, so a normal reconnect from settings will not add ${oauthMissingLeadFormScopes.join(", ")}. Use the launch-flow Facebook reconnect, which requests the extra lead-form scope, then refresh assets.`
+      : `Reconnect Meta with ${tokenMissingLeadFormScopes.join(", ")} approved, then refresh assets.`;
+
+    return `Lead-form access failed for Page ${pageLabel} on ad account ${adAccountLabel}. ${roleHint} The active Meta token scopes are ${tokenScopes.join(", ") || "none"}, so Meta rejected /leadgen_forms with: ${errorMessage}. ${reconnectHint}`;
+  }
+
+  if (!hasLeadFormTasks && pageTasks.length) {
+    return `Lead-form access failed for Page ${pageLabel} on ad account ${adAccountLabel}. The active Meta token already has the needed scope, but the selected Page only grants tasks ${pageTasks.join(", ")}. Managed lead forms need ${leadFormManagementTasks.join(" and ")} Page access.`;
+  }
+
+  if (missingPermissions.length) {
+    return `Lead-form access failed for Page ${pageLabel} on ad account ${adAccountLabel}. Meta returned: ${errorMessage}. Missing permission(s): ${missingPermissions.join(", ")}.`;
+  }
+
+  return `Lead-form access could not be confirmed for Page ${pageLabel} on ad account ${adAccountLabel}. Meta returned: ${errorMessage}. Refresh assets to reload the selected Page token, and if the error persists confirm the Meta user has Page access plus business access to the selected ad account.`;
+}
+
 async function loadMetaLaunchContext({
   admin,
   campaignId,
@@ -628,6 +693,7 @@ export async function runMetaLaunchPreflight({
 
   const tokenScopes = tokenData?.scopes || context.integrationState.connection?.scopes || [];
   const missingScopes = requiredScopes.filter((scope) => !tokenScopes.includes(scope));
+  const configuredScopes = getMetaScopes();
   if (missingScopes.length) {
     issues.push({
       code: "token_missing_scopes",
@@ -807,36 +873,27 @@ export async function runMetaLaunchPreflight({
   }
 
   if (adTypeRequiresLeadForm(context.launchState.adType)) {
-    if (
-      context.launchState.leadForm.mode === "managed_new" &&
-      context.resolvedAssets.page?.id
-    ) {
-      try {
-        await fetchMetaLeadForms(
-          context.pageAccessToken || context.accessToken,
-          context.resolvedAssets.page.id,
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "";
-        if (/pages_manage_ads/i.test(message)) {
-          issues.push({
-            code: "page_manage_ads_missing",
-            message:
-              "The selected Meta connection cannot manage lead forms for this Page. Reconnect Meta and approve pages_manage_ads, then refresh assets.",
-            type: "blocking",
-            scope: "both",
-            field: "metaScopes",
-          });
-        } else {
-          issues.push({
-            code: "lead_form_page_access_unavailable",
-            message:
-              "Meta lead form access for the selected Page could not be confirmed. Refresh assets or reconnect Meta before publishing.",
-            type: "blocking",
-            scope: "both",
-            field: "pageId",
-          });
-        }
+    if (context.resolvedAssets.page?.id) {
+      const leadFormAccess = await inspectMetaLeadFormAccess({
+        accessToken: context.pageAccessToken || context.accessToken,
+        pageId: context.resolvedAssets.page.id,
+      });
+      if (!leadFormAccess.ok) {
+        const missingPermissions = leadFormAccess.missingPermissions;
+        const hasMissingPagesManageAds = missingPermissions.includes("pages_manage_ads");
+        issues.push({
+          code: hasMissingPagesManageAds ? "page_manage_ads_missing" : "lead_form_page_access_unavailable",
+          message: buildLeadFormCapabilityMessage({
+            context,
+            tokenScopes,
+            configuredScopes,
+            errorMessage: leadFormAccess.errorMessage || "Meta lead form access check failed.",
+            missingPermissions,
+          }),
+          type: "blocking",
+          scope: "both",
+          field: hasMissingPagesManageAds ? "metaScopes" : "pageId",
+        });
       }
     }
 

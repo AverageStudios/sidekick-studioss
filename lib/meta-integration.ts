@@ -6,6 +6,7 @@ import {
   fetchMetaPixels,
   fetchMetaTokenDebugInfo,
   fetchMetaUser,
+  inspectMetaLeadFormAccess,
   MetaAdAccount,
   MetaLeadForm,
   MetaPage,
@@ -412,9 +413,18 @@ export async function syncWorkspaceMetaAssets({
     selectedAdAccountId
       ? await fetchMetaPixels(accessToken, selectedAdAccountId).catch(() => [] as MetaPixel[])
       : ([] as MetaPixel[]);
-  const leadForms =
+  const leadFormAccess =
     selectedPageId
-      ? await fetchMetaLeadForms(selectedPage?.access_token || accessToken, selectedPageId).catch(() => [] as MetaLeadForm[])
+      ? await inspectMetaLeadFormAccess({
+          accessToken: selectedPage?.access_token || accessToken,
+          pageId: selectedPageId,
+        })
+      : null;
+  const leadForms =
+    selectedPageId && leadFormAccess?.ok
+      ? await fetchMetaLeadForms(selectedPage?.access_token || accessToken, selectedPageId).catch(
+          () => [] as MetaLeadForm[],
+        )
       : ([] as MetaLeadForm[]);
 
   const selectedPixelId =
@@ -461,6 +471,14 @@ export async function syncWorkspaceMetaAssets({
           avatar_url: getMetaPageAvatarUrl(page),
           profile_picture_url: getMetaPageAvatarUrl(page),
           picture_url: getMetaPageAvatarUrl(page),
+          ...(page.id === selectedPageId && leadFormAccess
+            ? {
+                lead_form_access: {
+                  ...leadFormAccess,
+                  page_tasks: page.tasks || [],
+                },
+              }
+            : {}),
         },
         is_selected: page.id === selectedPageId,
       })),
@@ -533,6 +551,7 @@ export async function syncWorkspaceMetaAssets({
           pixels: pixels.length,
           lead_forms: leadForms.length,
         },
+        selected_page_lead_form_access: leadFormAccess,
       },
     })
     .eq("id", connection.id);
