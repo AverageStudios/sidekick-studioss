@@ -461,6 +461,18 @@ function buildLeadFormCapabilityMessage({
   const hasLeadFormTasks = leadFormManagementTasks.every((task) => pageTasks.includes(task));
   const tokenMissingLeadFormScopes = leadFormManagementScopes.filter((scope) => !tokenScopes.includes(scope));
   const oauthMissingLeadFormScopes = leadFormManagementScopes.filter((scope) => !configuredScopes.includes(scope));
+  const connectionMetadata = context.integrationState.connection?.metadata_json || {};
+  const oauthRequestedScopes = Array.isArray(connectionMetadata.oauth_requested_scopes)
+    ? connectionMetadata.oauth_requested_scopes.filter((scope): scope is string => typeof scope === "string")
+    : [];
+  const oauthGrantedScopes = Array.isArray(connectionMetadata.oauth_granted_scopes)
+    ? connectionMetadata.oauth_granted_scopes.filter((scope): scope is string => typeof scope === "string")
+    : [];
+  const oauthScopeSet =
+    typeof connectionMetadata.oauth_scope_set === "string" ? connectionMetadata.oauth_scope_set : null;
+  const reconnectTraceMissing = !oauthRequestedScopes.length;
+  const leadFormScopeWasRequested = oauthRequestedScopes.includes("pages_manage_ads");
+  const leadFormScopeWasGranted = oauthGrantedScopes.includes("pages_manage_ads");
 
   if (tokenMissingLeadFormScopes.length) {
     const roleHint = hasLeadFormTasks
@@ -469,9 +481,15 @@ function buildLeadFormCapabilityMessage({
         ? `The Page currently grants tasks ${pageTasks.join(", ")}. Managed lead forms need at least ${leadFormManagementTasks.join(" and ")} tasks on the selected Page.`
         : "The current Page tasks could not be confirmed from the latest asset sync.";
 
-    const reconnectHint = oauthMissingLeadFormScopes.length
-      ? `This workspace's standard OAuth scope list is ${configuredScopes.join(", ")}, so a normal reconnect from settings will not add ${oauthMissingLeadFormScopes.join(", ")}. Use the launch-flow Facebook reconnect, which requests the extra lead-form scope, then refresh assets.`
-      : `Reconnect Meta with ${tokenMissingLeadFormScopes.join(", ")} approved, then refresh assets.`;
+    const reconnectHint = reconnectTraceMissing
+      ? `This active connection does not include any saved OAuth scope trace, so it predates the lead-form reconnect upgrade and has never proven that it requested ${tokenMissingLeadFormScopes.join(", ")}. Reconnect once from the updated launch flow or workspace settings, then refresh assets.`
+      : !leadFormScopeWasRequested
+        ? `This connection was created with scope set ${oauthScopeSet || "default"} and requested scopes ${oauthRequestedScopes.join(", ") || configuredScopes.join(", ")}, which did not include ${tokenMissingLeadFormScopes.join(", ")}. Reconnect from the updated launch flow or workspace settings, which now requests the extra lead-form scope, then refresh assets.`
+        : !leadFormScopeWasGranted
+          ? `The updated reconnect flow did request ${tokenMissingLeadFormScopes.join(", ")}, but Meta still granted only ${oauthGrantedScopes.join(", ") || tokenScopes.join(", ")}. The remaining blocker is Meta-side permission approval for this app/user/Page connection.`
+          : oauthMissingLeadFormScopes.length
+            ? `This workspace's standard OAuth scope list is ${configuredScopes.join(", ")}, so a normal reconnect from settings will not add ${oauthMissingLeadFormScopes.join(", ")}. Use the lead-form reconnect path, then refresh assets.`
+            : `Reconnect Meta with ${tokenMissingLeadFormScopes.join(", ")} approved, then refresh assets.`;
 
     return `Lead-form access failed for Page ${pageLabel} on ad account ${adAccountLabel}. ${roleHint} The active Meta token scopes are ${tokenScopes.join(", ") || "none"}, so Meta rejected /leadgen_forms with: ${errorMessage}. ${reconnectHint}`;
   }
