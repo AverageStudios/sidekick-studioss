@@ -1,4 +1,5 @@
-import { CampaignLaunchState } from "@/types";
+import { CampaignLaunchLocation } from "@/types";
+import { CampaignLaunchView } from "@/lib/campaign-launch";
 
 type MetaGeoLocations = {
   location_types?: Array<"home" | "recent" | "travel_in" | "recent_and_home">;
@@ -22,7 +23,7 @@ type MetaGeoLocations = {
  * populate reliably from saved launch state today.
  */
 export function buildMetaGeoLocations(
-  state: CampaignLaunchState,
+  state: Pick<CampaignLaunchView, "targetLocations">,
 ): MetaGeoLocations {
   const locations = state.targetLocations || [];
   if (!locations.length) return {};
@@ -106,7 +107,7 @@ export function buildMetaGeoLocations(
   };
 }
 
-function canUseRadius(location: NonNullable<CampaignLaunchState["targetLocations"]>[number]) {
+function canUseRadius(location: CampaignLaunchLocation) {
   return Boolean(
     location.radiusAllowed ??
       (location.scope === "city" || location.scope === "zip" || location.scope === "neighborhood" || location.scope === "address"),

@@ -66,21 +66,19 @@ export type MetaLocationTargeting = {
   supportsRegion?: boolean;
   raw?: Record<string, unknown>;
 };
-export type CampaignLaunchStep = "platform" | "industry" | "template" | "campaign-details";
-export type CampaignDetailsStep =
-  | "goal"
+export type CampaignWizardStepId =
+  | "industry"
+  | "template"
   | "ad-type"
   | "budget"
   | "location"
-  | "pixel"
   | "tracking-pixel"
   | "placeholders"
   | "thank-you"
   | "landing-page"
   | "phone-number"
   | "messenger-setup"
-  | "review"
-  | "advanced"
+  | "overview"
   | "launch";
 export type CampaignGoal =
   | "OUTCOME_AWARENESS"
@@ -93,6 +91,7 @@ export type CampaignLeadFormMode = "existing" | "managed_new";
 export type CampaignPublishMode = "draft" | "live";
 export type CampaignThankYouDestinationMode = "facebook" | "website";
 export type CampaignThankYouButtonAction = "OPEN_WEBSITE" | "DOWNLOAD" | "CALL_BUSINESS";
+export type CampaignLeadFormField = "FULL_NAME" | "EMAIL" | "PHONE";
 
 export type TemplatePlaceholderField = {
   id: string;
@@ -104,68 +103,79 @@ export type TemplatePlaceholderField = {
   required?: boolean;
 };
 
+export type CampaignLaunchLocation = {
+  id: string;
+  label: string;
+  radius: string;
+  radiusAllowed?: boolean;
+  distanceUnit?: "mile" | "kilometer";
+  targetingMode: CampaignLocationTargetingType;
+  scope?: CampaignLocationScope;
+  lat?: number;
+  lon?: number;
+  countryCode?: string;
+  metaLocation?: MetaLocationTargeting;
+};
+
 export type CampaignLaunchState = {
+  version: 2;
   platform: CampaignPlatform;
-  adType: CampaignAdType;
-  category: string;
-  industry: string;
-  offerType: string;
-  templateSlug: string;
-  currentStep: CampaignLaunchStep;
-  currentDetailsStep: CampaignDetailsStep;
-  campaignGoal: CampaignGoal;
-  dailyBudget: string;
-  targetLocation: string;
-  landingPageUrl: string;
-  phoneNumber: string;
-  messengerWelcomeMessage: string;
-  messengerReplyPrompt: string;
-  targetLocations?: Array<{
-    id: string;
-    label: string;
-    radius: string;
-    radiusAllowed?: boolean;
-    distanceUnit?: "mile" | "kilometer";
-    targetingMode: CampaignLocationTargetingType;
-    scope?: CampaignLocationScope;
-    lat?: number;
-    lon?: number;
-    countryCode?: string;
-    metaLocation?: MetaLocationTargeting;
-  }>;
-  trackingPixelId: string;
-  trackingPixelName: string;
-  placeholderValues: Record<string, string>;
-  thankYouPage: {
-    enabled: boolean;
-    headline: string;
-    description: string;
-    buttonLabel: string;
-    buttonAction: CampaignThankYouButtonAction;
-    websiteUrl: string;
-    completionCountryCode?: string;
-    completionPhone?: string;
-    destinationMode: CampaignThankYouDestinationMode;
+  stepId: CampaignWizardStepId;
+  selection: {
+    industry: string;
+    category: string;
+    offerType: string;
+    templateSlug: string;
+    adType: CampaignAdType;
   };
-  advanced: {
-    campaignName: string;
-    leadFormName: string;
-    customAudiences: string;
-    privacyPolicyUrl: string;
+  campaign: {
+    objective: CampaignGoal;
+    name: string;
+    dailyBudget: string;
   };
   targeting: {
+    locations: CampaignLaunchLocation[];
     ageMin: string;
     ageMax: string;
     gender: "all" | "male" | "female";
     interests: string;
     customAudiences: string;
   };
-  leadForm: {
-    mode: CampaignLeadFormMode;
-    selectedFormId: string;
-    selectedFormName: string;
-    managedFormName: string;
-    fields: Array<"FULL_NAME" | "EMAIL" | "PHONE">;
+  placeholders: {
+    values: Record<string, string>;
+  };
+  adTypeConfig: {
+    leadForm: {
+      mode: CampaignLeadFormMode;
+      selectedFormId: string;
+      selectedFormName: string;
+      managedFormName: string;
+      fields: CampaignLeadFormField[];
+      privacyPolicyUrl: string;
+      thankYou: {
+        enabled: boolean;
+        headline: string;
+        description: string;
+        buttonLabel: string;
+        buttonAction: CampaignThankYouButtonAction;
+        websiteUrl: string;
+        completionCountryCode: string;
+        completionPhone: string;
+        destinationMode: CampaignThankYouDestinationMode;
+      };
+    };
+    landingPage: {
+      url: string;
+      pixelId: string;
+      pixelName: string;
+    };
+    callNow: {
+      phoneNumber: string;
+    };
+    messenger: {
+      welcomeMessage: string;
+      replyPrompt: string;
+    };
   };
   integrationSelections: {
     adAccountId: string;
@@ -173,6 +183,13 @@ export type CampaignLaunchState = {
     pixelId: string;
     leadFormId: string;
     instagramActorId: string;
+  };
+  review: {
+    headline: string;
+    subheadline: string;
+    businessDescription: string;
+    testimonialText: string;
+    ctaText: string;
   };
   previewTab?: "ad" | "lead-form" | "thank-you";
 };

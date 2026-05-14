@@ -6,10 +6,13 @@ import {
 } from "@/lib/meta-targeting";
 import {
   campaignGoalOptions,
+  createLaunchStateView,
   getTemplatePlaceholderFields,
   getTemplateSetupValuesFromLaunchState,
+  CampaignLaunchView,
   normalizeCampaignLaunchState,
   parseDailyBudgetToCents,
+  resolvePlaceholderValue,
 } from "@/lib/campaign-launch";
 import { readLatestCampaignLaunchSnapshot } from "@/lib/campaign-snapshots";
 import { createCampaignBlueprint } from "@/lib/template-engine";
@@ -62,7 +65,7 @@ export type MetaResolvedAssets = {
   adAccount: { id: string; name: string } | null;
   page: { id: string; name: string } | null;
   pixel: { id: string; name: string } | null;
-  leadForm: { id: string; name: string; mode: CampaignLaunchState["leadForm"]["mode"] } | null;
+  leadForm: { id: string; name: string; mode: CampaignLaunchView["leadForm"]["mode"] } | null;
   instagramActor: { id: string; name: string } | null;
 };
 
@@ -96,10 +99,10 @@ type MetaNormalizedPayloadSummary = {
     ctaType: string;
     destinationUrl: string;
     imageUrl: string;
-    leadFormMode: CampaignLaunchState["leadForm"]["mode"];
+    leadFormMode: CampaignLaunchView["leadForm"]["mode"];
     leadFormId: string | null;
     managedLeadFormName: string;
-    leadFormFields: Array<CampaignLaunchState["leadForm"]["fields"][number]>;
+    leadFormFields: Array<CampaignLaunchView["leadForm"]["fields"][number]>;
   };
   ad: {
     name: string;
@@ -119,7 +122,8 @@ export type MetaLaunchPreflight = {
 type MetaLaunchContext = {
   campaign: CampaignRecord;
   template: TemplateSeed;
-  launchState: CampaignLaunchState;
+  launchState: CampaignLaunchView;
+  launchStateModel: CampaignLaunchState;
   businessProfile: {
     business_name: string;
     location: string;
@@ -255,42 +259,7 @@ function resolvePlaceholderRuntimeValue(
   launchState: CampaignLaunchState,
   setupValues: ReturnType<typeof getTemplateSetupValuesFromLaunchState>,
 ) {
-  const directValue = launchState.placeholderValues?.[fieldId];
-  if (directValue && directValue.trim()) {
-    return directValue.trim();
-  }
-
-  const setupValue = (setupValues as Record<string, unknown>)[fieldId];
-  if (typeof setupValue === "string" && setupValue.trim()) {
-    return setupValue.trim();
-  }
-
-  const normalizedId = fieldId.trim().toLowerCase();
-  const aliases: Record<string, string[]> = {
-    price: ["offerPrice"],
-    offerprice: ["offerPrice"],
-    regularprice: ["regularPrice"],
-    businessname: ["businessName"],
-    business_name: ["businessName"],
-    location: ["city", "targetLocation"],
-  };
-
-  for (const aliasKey of aliases[normalizedId] || []) {
-    const aliasValue = (setupValues as Record<string, unknown>)[aliasKey];
-    if (typeof aliasValue === "string" && aliasValue.trim()) {
-      return aliasValue.trim();
-    }
-  }
-
-  const setupEntry = Object.entries(setupValues).find(([key, value]) => {
-    return key.toLowerCase() === normalizedId && typeof value === "string" && value.trim();
-  });
-
-  if (setupEntry && typeof setupEntry[1] === "string") {
-    return setupEntry[1].trim();
-  }
-
-  return "";
+  return resolvePlaceholderValue(fieldId, launchState, setupValues);
 }
 
 function absolutizeAppUrl(path: string) {
@@ -613,7 +582,7 @@ async function loadMetaLaunchContext({
   const selectedPixelId =
     launchState.integrationSelections.pixelId || integrationState.selected.pixelId || "";
   const selectedLeadFormId =
-    launchState.leadForm.selectedFormId ||
+    launchState.adTypeConfig.leadForm.selectedFormId ||
     launchState.integrationSelections.leadFormId ||
     integrationState.selected.leadFormId ||
     "";
@@ -630,10 +599,18 @@ async function loadMetaLaunchContext({
     leadFormId: selectedLeadFormId,
     instagramActorId: selectedInstagramActorId,
   };
-  launchState.leadForm = {
-    ...launchState.leadForm,
-    selectedFormId: selectedLeadFormId,
+  launchState.adTypeConfig = {
+    ...launchState.adTypeConfig,
+    leadForm: {
+      ...launchState.adTypeConfig.leadForm,
+      selectedFormId: selectedLeadFormId,
+    },
+    landingPage: {
+      ...launchState.adTypeConfig.landingPage,
+      pixelId: selectedPixelId || launchState.adTypeConfig.landingPage.pixelId,
+    },
   };
+  const launchStateView = createLaunchStateView(launchState);
 
   const adAccountAsset = integrationState.assets.adAccounts.find((asset) => asset.asset_id === selectedAdAccountId) || null;
   const pageAsset = integrationState.assets.pages.find((asset) => asset.asset_id === selectedPageId) || null;
@@ -661,7 +638,7 @@ async function loadMetaLaunchContext({
       ? {
           id: leadFormAsset.asset_id,
           name: leadFormAsset.name || leadFormAsset.asset_id,
-          mode: launchState.leadForm.mode,
+          mode: launchStateView.leadForm.mode,
         }
       : null,
     instagramActor: instagramAsset
@@ -672,7 +649,8 @@ async function loadMetaLaunchContext({
   return {
     campaign,
     template,
-    launchState,
+    launchState: launchStateView,
+    launchStateModel: launchState,
     businessProfile,
     workspaceId: campaign.workspace_id,
     accessToken: tokenContext.accessToken,
@@ -787,7 +765,7 @@ export async function runMetaLaunchPreflight({
 
   const setupValues = getTemplateSetupValuesFromLaunchState(
     context.template,
-    context.launchState,
+    context.launchStateModel,
     context.businessProfile
       ? {
           id: "",
@@ -808,7 +786,7 @@ export async function runMetaLaunchPreflight({
   const placeholderFields = getTemplatePlaceholderFields(context.template);
   for (const field of placeholderFields) {
     if (!field.required) continue;
-    const value = resolvePlaceholderRuntimeValue(field.id, context.launchState, setupValues);
+    const value = resolvePlaceholderRuntimeValue(field.id, context.launchStateModel, setupValues);
     if (!value) {
       issues.push({
         code: `missing_placeholder_${field.id}`,

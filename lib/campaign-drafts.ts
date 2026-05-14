@@ -126,7 +126,7 @@ export async function ensureCampaignDraft({
     beforeImageUrls: [],
     afterImageUrls: [],
   });
-  const baseCampaignName = launchState.advanced.campaignName || blueprint.campaignName;
+  const baseCampaignName = launchState.campaign.name || blueprint.campaignName;
 
   if (draftId) {
     const { data: existingDraft } = await admin
@@ -144,9 +144,9 @@ export async function ensureCampaignDraft({
       workspace_id: workspaceId,
       template_id: template.id,
       launch_platform: launchState.platform,
-      launch_category: launchState.category || template.industry || template.category,
-      launch_industry: launchState.industry || template.industry || template.category,
-      launch_offer_type: launchState.offerType || template.offerType || null,
+      launch_category: launchState.selection.category || template.industry || template.category,
+      launch_industry: launchState.selection.industry || template.industry || template.category,
+      launch_offer_type: launchState.selection.offerType || template.offerType || null,
       name: baseCampaignName,
       offer_price: Number(templateValues.offerPrice) || null,
       regular_price: Number(templateValues.regularPrice) || null,
@@ -207,9 +207,9 @@ export async function ensureCampaignDraft({
     workspace_id: workspaceId,
     template_id: template.id,
     launch_platform: launchState.platform,
-    launch_category: launchState.category || template.industry || template.category,
-    launch_industry: launchState.industry || template.industry || template.category,
-    launch_offer_type: launchState.offerType || template.offerType || null,
+    launch_category: launchState.selection.category || template.industry || template.category,
+    launch_industry: launchState.selection.industry || template.industry || template.category,
+    launch_offer_type: launchState.selection.offerType || template.offerType || null,
     name: baseCampaignName,
     slug,
     offer_price: Number(templateValues.offerPrice) || null,
