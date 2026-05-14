@@ -25,6 +25,8 @@ function clearOauthCookies(response: NextResponse) {
   response.cookies.delete("meta_oauth_state");
   response.cookies.delete("meta_oauth_next");
   response.cookies.delete("meta_oauth_workspace");
+  response.cookies.delete("meta_oauth_scope_set");
+  response.cookies.delete("meta_oauth_requested_scopes");
 }
 
 export async function GET(request: NextRequest) {
@@ -34,6 +36,8 @@ export async function GET(request: NextRequest) {
   const stateCookie = request.cookies.get("meta_oauth_state")?.value;
   const nextCookie = request.cookies.get("meta_oauth_next")?.value;
   const workspaceCookie = request.cookies.get("meta_oauth_workspace")?.value;
+  const scopeSetCookie = request.cookies.get("meta_oauth_scope_set")?.value || "default";
+  const requestedScopesCookie = request.cookies.get("meta_oauth_requested_scopes")?.value || "";
   const safeNext = nextCookie?.startsWith("/")
     ? nextCookie
     : "/workspace/settings?section=integrations";
@@ -119,7 +123,12 @@ export async function GET(request: NextRequest) {
       fetchMetaTokenDebugInfo(accessToken).catch(() => null),
     ]);
 
-    const tokenScopes = debugToken?.data?.scopes || getMetaScopes();
+    const requestedScopes = requestedScopesCookie
+      .split(",")
+      .map((scope) => scope.trim())
+      .filter(Boolean);
+    const tokenScopes =
+      debugToken?.data?.scopes || (requestedScopes.length ? requestedScopes : getMetaScopes());
     const tokenExpiresAt =
       typeof debugToken?.data?.expires_at === "number" &&
       debugToken.data.expires_at > 0
@@ -128,7 +137,16 @@ export async function GET(request: NextRequest) {
           ? new Date(Date.now() + longToken.expires_in * 1000).toISOString()
           : null;
 
-    await upsertWorkspaceMetaConnection({
+    console.info(
+      "[meta callback] granted scopes",
+      tokenScopes.join(","),
+      "requested scopes=",
+      requestedScopes.join(","),
+      "scopeSet=",
+      scopeSetCookie,
+    );
+
+    const savedConnection = await upsertWorkspaceMetaConnection({
       admin,
       workspaceId,
       userId: user.id,
@@ -138,7 +156,20 @@ export async function GET(request: NextRequest) {
       scopes: tokenScopes,
       providerUserId: metaUser.id,
       providerUserName: metaUser.name || null,
+      metadataJson: {
+        oauth_scope_set: scopeSetCookie,
+        oauth_requested_scopes: requestedScopes,
+        oauth_granted_scopes: tokenScopes,
+      },
     });
+    console.info(
+      "[meta callback] saved active connection",
+      savedConnection.id,
+      "workspace=",
+      workspaceId,
+      "granted scopes=",
+      tokenScopes.join(","),
+    );
 
     let syncWarning: string | null = null;
     try {
@@ -155,8 +186,19 @@ export async function GET(request: NextRequest) {
 
     const redirectUrl = new URL(safeNext, env.appUrl);
     redirectUrl.searchParams.set("saved", "meta-connected");
+    const requestedLeadFormScope = requestedScopes.includes("pages_manage_ads");
+    const grantedLeadFormScope = tokenScopes.includes("pages_manage_ads");
+    const callbackWarnings: string[] = [];
+    if (requestedLeadFormScope && !grantedLeadFormScope) {
+      callbackWarnings.push(
+        "Facebook reconnect completed, but Meta did not grant pages_manage_ads. The active workspace token still cannot manage Page lead forms.",
+      );
+    }
     if (syncWarning) {
-      redirectUrl.searchParams.set("error", syncWarning);
+      callbackWarnings.push(syncWarning);
+    }
+    if (callbackWarnings.length) {
+      redirectUrl.searchParams.set("error", callbackWarnings.join(" "));
     }
     const response = NextResponse.redirect(redirectUrl);
     clearOauthCookies(response);

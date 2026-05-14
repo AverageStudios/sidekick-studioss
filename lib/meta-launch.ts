@@ -680,6 +680,14 @@ export async function runMetaLaunchPreflight({
   const requiredScopes = getMetaScopes();
   const debug = await fetchMetaTokenDebugInfo(context.accessToken).catch(() => null);
   const tokenData = debug?.data;
+  console.info(
+    "[meta preflight] active connection",
+    context.integrationState.connection?.id || "missing",
+    "workspace=",
+    context.workspaceId,
+    "token scopes=",
+    (tokenData?.scopes || context.integrationState.connection?.scopes || []).join(","),
+  );
 
   if (!tokenData?.is_valid) {
     issues.push({

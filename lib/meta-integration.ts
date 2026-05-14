@@ -248,6 +248,7 @@ export async function upsertWorkspaceMetaConnection({
   scopes,
   providerUserId,
   providerUserName,
+  metadataJson,
 }: {
   admin: SupabaseAdmin;
   workspaceId: string;
@@ -258,6 +259,7 @@ export async function upsertWorkspaceMetaConnection({
   scopes: string[];
   providerUserId?: string | null;
   providerUserName?: string | null;
+  metadataJson?: Record<string, unknown>;
 }) {
   const encryptedToken = encryptMetaToken(accessToken);
   const existing = await getActiveMetaConnection(admin, workspaceId);
@@ -299,8 +301,9 @@ export async function upsertWorkspaceMetaConnection({
     metadata_json: existing
       ? {
           reconnected_from_connection_id: existing.id,
+          ...(metadataJson || {}),
         }
-      : {},
+      : metadataJson || {},
     connected_at: new Date().toISOString(),
     disconnected_at: null,
     is_active: true,
@@ -545,6 +548,7 @@ export async function syncWorkspaceMetaAssets({
       status: "connected",
       last_synced_at: new Date().toISOString(),
       metadata_json: {
+        ...(connection.metadata_json || {}),
         asset_counts: {
           ad_accounts: adAccounts.length,
           pages: pages.length,

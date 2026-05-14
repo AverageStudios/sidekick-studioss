@@ -81,6 +81,20 @@ export default async function WorkspaceSettingsPage({
   const hasSelectedAdAccount = Boolean(integrationState?.selected.adAccountId);
   const hasSelectedPage = Boolean(integrationState?.selected.pageId);
   const metaConnectNext = encodeURIComponent("/workspace/settings?section=integrations");
+  const selectedPageLeadFormAccess =
+    connection?.metadata_json &&
+    typeof connection.metadata_json === "object" &&
+    connection.metadata_json.selected_page_lead_form_access &&
+    typeof connection.metadata_json.selected_page_lead_form_access === "object"
+      ? (connection.metadata_json.selected_page_lead_form_access as Record<string, unknown>)
+      : null;
+  const selectedPageLeadFormMissingPermissions = Array.isArray(selectedPageLeadFormAccess?.missingPermissions)
+    ? selectedPageLeadFormAccess?.missingPermissions.filter(
+        (permission): permission is string => typeof permission === "string",
+      )
+    : [];
+  const needsLeadFormReconnect = selectedPageLeadFormMissingPermissions.includes("pages_manage_ads");
+  const metaConnectHref = `/api/meta/connect?next=${metaConnectNext}${needsLeadFormReconnect ? "&scopeSet=lead_forms" : ""}`;
   const campaigns = dashboardSnapshot.campaigns || [];
   const publishedCampaigns = campaigns.filter((campaign) => campaign.status === "published");
   const draftCampaigns = campaigns.filter((campaign) => campaign.status === "draft");
@@ -465,7 +479,7 @@ export default async function WorkspaceSettingsPage({
 
                       <div className="flex flex-wrap gap-2">
                         <Button asChild disabled={!isMetaConfigured() || !workspaceId}>
-                          <Link href={`/api/meta/connect?next=${metaConnectNext}`}>
+                          <Link href={metaConnectHref}>
                             {metaConnected ? "Reconnect" : "Connect Facebook"}
                           </Link>
                         </Button>
@@ -560,14 +574,16 @@ export default async function WorkspaceSettingsPage({
                           <div className="text-center">
                             {metaConnected ? (
                               <Link
-                                href={`/api/meta/connect?next=${metaConnectNext}`}
+                                href={metaConnectHref}
                                 className="text-sm font-medium text-[var(--brand)] transition-colors hover:text-[var(--brand-ink)]"
                               >
                                 Reconnect
                               </Link>
                             ) : null}
                             <p className="mt-1 text-xs text-[var(--muted)]">
-                              Update permissions or switch accounts
+                              {needsLeadFormReconnect
+                                ? "Reconnect will request lead-form permissions for the selected Facebook Page."
+                                : "Update permissions or switch accounts"}
                             </p>
                           </div>
                         </div>

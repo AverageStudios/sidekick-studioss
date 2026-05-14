@@ -78,5 +78,19 @@ export async function GET(request: NextRequest) {
     path: "/",
     maxAge: 60 * 10,
   });
+  response.cookies.set("meta_oauth_scope_set", scopeSet || "default", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: env.appUrl.startsWith("https://"),
+    path: "/",
+    maxAge: 60 * 10,
+  });
+  response.cookies.set("meta_oauth_requested_scopes", requestedScopes.join(","), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: env.appUrl.startsWith("https://"),
+    path: "/",
+    maxAge: 60 * 10,
+  });
   return response;
 }
