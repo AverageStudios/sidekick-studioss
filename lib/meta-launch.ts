@@ -676,6 +676,11 @@ export async function runMetaLaunchPreflight({
   const requiredScopes = getMetaScopes();
   const debug = await fetchMetaTokenDebugInfo(context.accessToken).catch(() => null);
   const tokenData = debug?.data;
+  const connectionMetadata =
+    context.integrationState.connection?.metadata_json &&
+    typeof context.integrationState.connection.metadata_json === "object"
+      ? context.integrationState.connection.metadata_json
+      : {};
   console.info(
     "[meta preflight] active connection",
     context.integrationState.connection?.id || "missing",
@@ -683,6 +688,16 @@ export async function runMetaLaunchPreflight({
     context.workspaceId,
     "token scopes=",
     (tokenData?.scopes || context.integrationState.connection?.scopes || []).join(","),
+    "scopeSet=",
+    typeof connectionMetadata.oauth_scope_set === "string" ? connectionMetadata.oauth_scope_set : "missing",
+    "requested scopes=",
+    Array.isArray(connectionMetadata.oauth_requested_scopes)
+      ? connectionMetadata.oauth_requested_scopes.join(",")
+      : "missing",
+    "granted scopes=",
+    Array.isArray(connectionMetadata.oauth_granted_scopes)
+      ? connectionMetadata.oauth_granted_scopes.join(",")
+      : "missing",
   );
 
   if (!tokenData?.is_valid) {

@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { env } from "@/lib/env";
 import { getMetaOAuthUrl, getMetaScopes, isMetaConfigured } from "@/lib/meta";
+import { createMetaOAuthState, MetaOAuthScopeSet } from "@/lib/meta-oauth-state";
 import { getCurrentUser } from "@/lib/auth";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 
@@ -42,9 +43,16 @@ export async function GET(request: NextRequest) {
   const next = request.nextUrl.searchParams.get("next");
   const scopeSet = request.nextUrl.searchParams.get("scopeSet");
   const includeLeadFormManagement = scopeSet === "lead_forms";
+  const resolvedScopeSet: MetaOAuthScopeSet = includeLeadFormManagement ? "lead_forms" : "default";
   const safeNext = next?.startsWith("/") ? next : "/workspace/settings?section=integrations";
-  const state = randomUUID();
   const requestedScopes = getMetaScopes({ includeLeadFormManagement });
+  const state = createMetaOAuthState({
+    nonce: randomUUID(),
+    workspaceId,
+    next: safeNext,
+    scopeSet: resolvedScopeSet,
+    requestedScopes,
+  });
   const oauthUrl = getMetaOAuthUrl(state, { includeLeadFormManagement });
 
   if (!oauthUrl) {
@@ -54,7 +62,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(settingsUrl);
   }
 
-  console.info("[meta connect] OAuth scopes", requestedScopes.join(","), "scopeSet=", scopeSet || "default");
+  console.info(
+    "[meta connect] OAuth scopes",
+    requestedScopes.join(","),
+    "scopeSet=",
+    resolvedScopeSet,
+    "workspace=",
+    workspaceId,
+  );
 
   const response = NextResponse.redirect(oauthUrl);
   response.cookies.set("meta_oauth_state", state, {
@@ -78,7 +93,7 @@ export async function GET(request: NextRequest) {
     path: "/",
     maxAge: 60 * 10,
   });
-  response.cookies.set("meta_oauth_scope_set", scopeSet || "default", {
+  response.cookies.set("meta_oauth_scope_set", resolvedScopeSet, {
     httpOnly: true,
     sameSite: "lax",
     secure: env.appUrl.startsWith("https://"),

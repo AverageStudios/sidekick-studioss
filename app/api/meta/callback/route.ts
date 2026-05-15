@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { env } from "@/lib/env";
 import { getCurrentUser } from "@/lib/auth";
+import { parseMetaOAuthState } from "@/lib/meta-oauth-state";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 import {
@@ -38,11 +39,20 @@ export async function GET(request: NextRequest) {
   const workspaceCookie = request.cookies.get("meta_oauth_workspace")?.value;
   const scopeSetCookie = request.cookies.get("meta_oauth_scope_set")?.value || "default";
   const requestedScopesCookie = request.cookies.get("meta_oauth_requested_scopes")?.value || "";
-  const safeNext = nextCookie?.startsWith("/")
-    ? nextCookie
-    : "/workspace/settings?section=integrations";
+  const statePayload = parseMetaOAuthState(state);
+  const safeNext = statePayload?.next ||
+    (nextCookie?.startsWith("/")
+      ? nextCookie
+      : "/workspace/settings?section=integrations");
+  const resolvedScopeSet = statePayload?.scopeSet || (scopeSetCookie === "lead_forms" ? "lead_forms" : "default");
+  const requestedScopes = statePayload?.requestedScopes?.length
+    ? statePayload.requestedScopes
+    : requestedScopesCookie
+        .split(",")
+        .map((scope) => scope.trim())
+        .filter(Boolean);
 
-  if (!code || !state || !stateCookie || state !== stateCookie) {
+  if (!code || !state || !statePayload || (stateCookie && state !== stateCookie)) {
     settingsUrl.searchParams.set(
       "error",
       "Meta connection was canceled or expired. Please try again.",
@@ -83,7 +93,7 @@ export async function GET(request: NextRequest) {
     return response;
   }
   const fallbackWorkspaceId = workspaceContext?.activeWorkspace.id || null;
-  const workspaceId = workspaceCookie || fallbackWorkspaceId;
+  const workspaceId = statePayload?.workspaceId || workspaceCookie || fallbackWorkspaceId;
   if (!workspaceId) {
     settingsUrl.searchParams.set("error", "No active workspace was found. Ensure database migrations have been applied.");
     const response = NextResponse.redirect(settingsUrl);
@@ -123,12 +133,11 @@ export async function GET(request: NextRequest) {
       fetchMetaTokenDebugInfo(accessToken).catch(() => null),
     ]);
 
-    const requestedScopes = requestedScopesCookie
-      .split(",")
-      .map((scope) => scope.trim())
-      .filter(Boolean);
     const tokenScopes =
-      debugToken?.data?.scopes || (requestedScopes.length ? requestedScopes : getMetaScopes());
+      debugToken?.data?.scopes ||
+      (requestedScopes.length
+        ? requestedScopes
+        : getMetaScopes({ includeLeadFormManagement: resolvedScopeSet === "lead_forms" }));
     const tokenExpiresAt =
       typeof debugToken?.data?.expires_at === "number" &&
       debugToken.data.expires_at > 0
@@ -143,7 +152,11 @@ export async function GET(request: NextRequest) {
       "requested scopes=",
       requestedScopes.join(","),
       "scopeSet=",
-      scopeSetCookie,
+      resolvedScopeSet,
+      "workspace=",
+      workspaceId,
+      "state cookie present=",
+      stateCookie ? "yes" : "no",
     );
 
     const savedConnection = await upsertWorkspaceMetaConnection({
@@ -157,7 +170,7 @@ export async function GET(request: NextRequest) {
       providerUserId: metaUser.id,
       providerUserName: metaUser.name || null,
       metadataJson: {
-        oauth_scope_set: scopeSetCookie,
+        oauth_scope_set: resolvedScopeSet,
         oauth_requested_scopes: requestedScopes,
         oauth_granted_scopes: tokenScopes,
       },
