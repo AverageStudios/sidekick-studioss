@@ -557,9 +557,10 @@ export function TemplateLaunchWizard({
       metaIntegration.tokenAvailable &&
       metaIntegration.connection.status === "connected",
   );
+  const needsLeadFormReconnect = launchState.selection.adType === "lead_form";
   const metaConnectHref = `/api/meta/connect?next=${encodeURIComponent(connectNextUrl)}${
-    launchState.selection.adType === "lead_form" ? "&scopeSet=lead_forms" : ""
-  }`;
+    needsLeadFormReconnect ? "&scopeSet=lead_forms" : ""
+  }${metaConnected || needsLeadFormReconnect ? "&reconnect=1" : ""}`;
 
   function updateLaunchState(updater: (current: CampaignLaunchState) => CampaignLaunchState) {
     setLaunchState((current) => updater(current));

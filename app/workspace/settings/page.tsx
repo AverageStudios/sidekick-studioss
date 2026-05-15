@@ -94,7 +94,7 @@ export default async function WorkspaceSettingsPage({
       )
     : [];
   const needsLeadFormReconnect = selectedPageLeadFormMissingPermissions.includes("pages_manage_ads");
-  const metaConnectHref = `/api/meta/connect?next=${metaConnectNext}${needsLeadFormReconnect ? "&scopeSet=lead_forms" : ""}`;
+  const metaConnectHref = `/api/meta/connect?next=${metaConnectNext}${needsLeadFormReconnect ? "&scopeSet=lead_forms" : ""}${metaConnected || needsLeadFormReconnect ? "&reconnect=1" : ""}`;
   const campaigns = dashboardSnapshot.campaigns || [];
   const publishedCampaigns = campaigns.filter((campaign) => campaign.status === "published");
   const draftCampaigns = campaigns.filter((campaign) => campaign.status === "draft");

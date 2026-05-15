@@ -158,7 +158,10 @@ function getMetaOauthDialogUrl() {
   return `https://www.facebook.com/${getMetaGraphApiVersion()}/dialog/oauth`;
 }
 
-export function getMetaOAuthUrl(state: string, options?: { includeLeadFormManagement?: boolean }) {
+export function getMetaOAuthUrl(
+  state: string,
+  options?: { includeLeadFormManagement?: boolean; forceReauth?: boolean },
+) {
   const appId = readMetaEnv("META_APP_ID") || env.metaAppId;
   const redirectUri = readMetaEnv("META_REDIRECT_URI") || env.metaRedirectUri || `${env.appUrl}/api/meta/callback`;
   if (!appId || !redirectUri) return null;
@@ -169,7 +172,9 @@ export function getMetaOAuthUrl(state: string, options?: { includeLeadFormManage
   url.searchParams.set("response_type", "code");
   url.searchParams.set("state", state);
   url.searchParams.set("scope", getMetaScopes(options).join(","));
-  url.searchParams.set("auth_type", "rerequest");
+  if (options?.forceReauth) {
+    url.searchParams.set("auth_type", "rerequest");
+  }
   url.searchParams.set("return_scopes", "true");
   return url.toString();
 }

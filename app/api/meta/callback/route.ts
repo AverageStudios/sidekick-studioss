@@ -158,6 +158,7 @@ export async function GET(request: NextRequest) {
       "state cookie present=",
       stateCookie ? "yes" : "no",
     );
+    console.info("[meta callback] saved scopes", tokenScopes.join(","));
 
     const savedConnection = await upsertWorkspaceMetaConnection({
       admin,

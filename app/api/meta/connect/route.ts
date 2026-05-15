@@ -42,10 +42,12 @@ export async function GET(request: NextRequest) {
 
   const next = request.nextUrl.searchParams.get("next");
   const scopeSet = request.nextUrl.searchParams.get("scopeSet");
+  const reconnectRequested = request.nextUrl.searchParams.get("reconnect") === "1";
   const includeLeadFormManagement = scopeSet === "lead_forms";
   const resolvedScopeSet: MetaOAuthScopeSet = includeLeadFormManagement ? "lead_forms" : "default";
   const safeNext = next?.startsWith("/") ? next : "/workspace/settings?section=integrations";
   const requestedScopes = getMetaScopes({ includeLeadFormManagement });
+  const forceReauth = reconnectRequested || includeLeadFormManagement;
   const state = createMetaOAuthState({
     nonce: randomUUID(),
     workspaceId,
@@ -53,7 +55,7 @@ export async function GET(request: NextRequest) {
     scopeSet: resolvedScopeSet,
     requestedScopes,
   });
-  const oauthUrl = getMetaOAuthUrl(state, { includeLeadFormManagement });
+  const oauthUrl = getMetaOAuthUrl(state, { includeLeadFormManagement, forceReauth });
 
   if (!oauthUrl) {
     const settingsUrl = new URL("/workspace/settings", env.appUrl);
@@ -62,13 +64,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(settingsUrl);
   }
 
+  const oauthSearchParams = new URL(oauthUrl).searchParams;
+  const oauthScopeString = oauthSearchParams.get("scope") || "";
+  const oauthAuthType = oauthSearchParams.get("auth_type");
+
   console.info(
     "[meta connect] OAuth scopes",
-    requestedScopes.join(","),
+    oauthScopeString,
     "scopeSet=",
     resolvedScopeSet,
     "workspace=",
     workspaceId,
+    "auth_type=",
+    oauthAuthType || "missing",
+    "reconnectRequested=",
+    reconnectRequested ? "yes" : "no",
   );
 
   const response = NextResponse.redirect(oauthUrl);
