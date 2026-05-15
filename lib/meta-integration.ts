@@ -171,6 +171,44 @@ async function listMetaConnections(admin: SupabaseAdmin, workspaceId: string) {
   return (data || []) as WorkspaceProviderConnectionRow[];
 }
 
+async function purgeMetaConnections(admin: SupabaseAdmin, workspaceId: string, keepConnectionId?: string | null) {
+  const connections = await listMetaConnections(admin, workspaceId);
+  const connectionIdsToDelete = connections
+    .map((connection) => connection.id)
+    .filter((connectionId) => connectionId !== keepConnectionId);
+
+  if (connectionIdsToDelete.length) {
+    console.info(
+      "[meta integration] removing stale Meta connections",
+      connectionIdsToDelete.join(","),
+      "for workspace",
+      workspaceId,
+    );
+
+    const { error: deleteConnectionsError } = await admin
+      .from("workspace_provider_connections")
+      .delete()
+      .in("id", connectionIdsToDelete);
+
+    if (deleteConnectionsError) {
+      throw new Error(deleteConnectionsError.message);
+    }
+  }
+
+  const assetsQuery = admin.from("workspace_provider_assets").delete().eq("workspace_id", workspaceId).eq("provider", "meta");
+  const { error: deleteAssetsError } = connectionIdsToDelete.length
+    ? await assetsQuery.in("connection_id", connectionIdsToDelete)
+    : keepConnectionId
+      ? { error: null }
+      : await assetsQuery;
+
+  if (deleteAssetsError) {
+    throw new Error(deleteAssetsError.message);
+  }
+
+  return connectionIdsToDelete.length;
+}
+
 async function repairAndResolveActiveMetaConnection(admin: SupabaseAdmin, workspaceId: string) {
   const connections = await listMetaConnections(admin, workspaceId);
   if (!connections.length) return null;
@@ -225,24 +263,7 @@ async function repairAndResolveActiveMetaConnection(admin: SupabaseAdmin, worksp
     );
   }
 
-  const deactivateIds = connections
-    .filter((connection) => connection.id !== preferredConnection.id && connection.is_active)
-    .map((connection) => connection.id);
-
-  if (deactivateIds.length) {
-    const { error: deactivateError } = await admin
-      .from("workspace_provider_connections")
-      .update({
-        is_active: false,
-        status: "disconnected",
-        disconnected_at: new Date().toISOString(),
-      })
-      .in("id", deactivateIds);
-
-    if (deactivateError) {
-      throw new Error(deactivateError.message);
-    }
-  }
+  await purgeMetaConnections(admin, workspaceId, preferredConnection.id);
 
   const { data, error: activateError } = await admin
     .from("workspace_provider_connections")
@@ -411,7 +432,14 @@ export async function upsertWorkspaceMetaConnection({
   metadataJson?: Record<string, unknown>;
 }) {
   const encryptedToken = encryptMetaToken(accessToken);
-  const existing = await getActiveMetaConnection(admin, workspaceId);
+  const existingConnections = await listMetaConnections(admin, workspaceId);
+  const existing =
+    existingConnections.find((connection) => connection.is_active && connection.status === "connected") ||
+    existingConnections.find((connection) => connection.status === "connected") ||
+    existingConnections[0] ||
+    null;
+
+  await purgeMetaConnections(admin, workspaceId);
 
   const payload = {
     workspace_id: workspaceId,
@@ -448,31 +476,7 @@ export async function upsertWorkspaceMetaConnection({
     throw new Error(error.message);
   }
 
-  const insertedConnection = data as WorkspaceProviderConnectionRow;
-  const { error: deactivateError } = await admin
-    .from("workspace_provider_connections")
-    .update({
-      is_active: false,
-      status: "disconnected",
-      disconnected_at: new Date().toISOString(),
-      token_ciphertext: null,
-      token_iv: null,
-      token_tag: null,
-      refresh_token_ciphertext: null,
-      refresh_token_iv: null,
-      refresh_token_tag: null,
-    })
-    .eq("workspace_id", workspaceId)
-    .eq("provider", "meta")
-    .neq("id", insertedConnection.id)
-    .eq("is_active", true);
-
-  if (deactivateError) {
-    throw new Error(deactivateError.message);
-  }
-
-  const repairedConnection = await getActiveMetaConnection(admin, workspaceId);
-  return repairedConnection || insertedConnection;
+  return data as WorkspaceProviderConnectionRow;
 }
 
 export async function disconnectWorkspaceMetaConnection({
@@ -482,36 +486,7 @@ export async function disconnectWorkspaceMetaConnection({
   admin: SupabaseAdmin;
   workspaceId: string;
 }) {
-  const connection = await getActiveMetaConnection(admin, workspaceId);
-  if (!connection) return;
-
-  const { error: disconnectError } = await admin
-    .from("workspace_provider_connections")
-    .update({
-      status: "disconnected",
-      disconnected_at: new Date().toISOString(),
-      is_active: false,
-      token_ciphertext: null,
-      token_iv: null,
-      token_tag: null,
-      refresh_token_ciphertext: null,
-      refresh_token_iv: null,
-      refresh_token_tag: null,
-    })
-    .eq("id", connection.id);
-  if (disconnectError) {
-    throw new Error(disconnectError.message);
-  }
-
-  const { error: assetsError } = await admin
-    .from("workspace_provider_assets")
-    .update({ is_selected: false, is_available: false })
-    .eq("workspace_id", workspaceId)
-    .eq("provider", "meta");
-
-  if (assetsError) {
-    throw new Error(assetsError.message);
-  }
+  await purgeMetaConnections(admin, workspaceId);
 }
 
 export async function getWorkspaceMetaAccessToken({
