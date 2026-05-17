@@ -574,14 +574,17 @@ export async function createMetaLeadForm({
         : (thankYouPage?.websiteUrl ? "VIEW_WEBSITE" : "VIEW_ON_FACEBOOK");
 
   const url = new URL(buildMetaGraphUrl(`${pageId}/leadgen_forms`));
-  const standardQuestions = fields.map((type) => ({ type }));
+  const questions = fields.map((type) => ({
+    type,
+    key: type.toLowerCase(),
+  }));
   const body = new URLSearchParams();
   body.set("name", name);
   body.set("locale", "en_US");
   body.set("allow_organic_lead", "true");
   body.set("is_optimized_for_quality", "false");
   body.set("block_display_for_non_targeted_viewer", "false");
-  body.set("standard_questions", JSON.stringify(standardQuestions));
+  body.set("questions", JSON.stringify(questions));
   body.set(
     "privacy_policy",
     JSON.stringify({

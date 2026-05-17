@@ -1344,7 +1344,10 @@ export async function publishMetaFromPreflight({
       allow_organic_lead: "true",
       is_optimized_for_quality: "false",
       block_display_for_non_targeted_viewer: "false",
-      standard_questions: summary.creative.leadFormFields.map((type) => ({ type })),
+      questions: summary.creative.leadFormFields.map((type) => ({
+        type,
+        key: type.toLowerCase(),
+      })),
       privacy_policy: {
         url: context.launchState.advanced.privacyPolicyUrl,
         link_text: "Privacy Policy",
