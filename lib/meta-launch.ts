@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getTemplateById, hydrateTemplateRecord } from "@/data/templates";
 import {
@@ -23,6 +23,7 @@ import {
   createMetaCampaign,
   createMetaLeadForm,
   fetchMetaAdAccountDetails,
+  fetchMetaLeadForms,
   inspectMetaLeadFormAccess,
   fetchMetaTokenDebugInfo,
   getMetaScopes,
@@ -433,6 +434,62 @@ function stringifyMetaPayload(payload: Record<string, unknown>) {
   return JSON.parse(JSON.stringify(payload)) as Record<string, unknown>;
 }
 
+function formatUtcTimestampForName(date = new Date()) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const hours = String(date.getUTCHours()).padStart(2, "0");
+  const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hours}:${minutes} UTC`;
+}
+
+function buildManagedLeadFormName(context: MetaLaunchContext) {
+  const templateName = context.template.name?.trim() || context.launchState.advanced.campaignName?.trim() || "Lead Form";
+  const businessName = context.businessProfile?.business_name?.trim() || context.campaign.name?.trim() || "Workspace";
+  const timestamp = formatUtcTimestampForName();
+  const suffix = randomUUID().slice(0, 6);
+  const name = `${templateName} - ${businessName} - ${timestamp} - ${suffix}`;
+  return name.length > 120 ? name.slice(0, 117).trimEnd() + "..." : name;
+}
+
+function buildManagedLeadFormFingerprint({
+  pageId,
+  privacyPolicyUrl,
+  fields,
+  thankYouPage,
+}: {
+  pageId: string;
+  privacyPolicyUrl: string;
+  fields: Array<CampaignLaunchView["leadForm"]["fields"][number]>;
+  thankYouPage?: {
+    title?: string;
+    body?: string;
+    buttonText?: string;
+    buttonType?: "OPEN_WEBSITE" | "DOWNLOAD" | "CALL_BUSINESS";
+    websiteUrl?: string;
+    completionCountryCode?: string;
+    completionPhone?: string;
+  };
+}) {
+  const payload = {
+    pageId,
+    privacyPolicyUrl,
+    fields,
+    thankYouPage: thankYouPage
+      ? {
+          title: thankYouPage.title || "",
+          body: thankYouPage.body || "",
+          buttonText: thankYouPage.buttonText || "",
+          buttonType: thankYouPage.buttonType || "",
+          websiteUrl: thankYouPage.websiteUrl || "",
+          completionCountryCode: thankYouPage.completionCountryCode || "",
+          completionPhone: thankYouPage.completionPhone || "",
+        }
+      : null,
+  };
+  return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
 export function summarizeMetaError(error: unknown) {
   if (!(error instanceof Error)) {
     return { message: String(error) };
@@ -469,6 +526,13 @@ function annotateMetaPublishError(
   metaError.metaPublishEndpoint = metaPublishEndpoint;
   metaError.metaPublishPayload = stringifyMetaPayload(metaPublishPayload);
   return metaError;
+}
+
+function describeDuplicateLeadFormError(metaError: MetaRequestError) {
+  if (metaError.metaSubcode === 1892019) {
+    return "Meta rejected the lead form name because it already exists. A unique name is now generated automatically, so retry the launch. If this keeps happening, delete the old form or change the managed form name.";
+  }
+  return null;
 }
 
 function buildLeadFormCapabilityMessage({
@@ -1308,6 +1372,8 @@ export async function publishMetaFromPreflight({
   const metaResponses: Record<string, unknown> = {};
   const launchWarnings = [...preflight.warnings];
   let resolvedLeadFormId = summary.creative.leadFormId;
+  const pageId = context.resolvedAssets.page?.id || context.launchState.integrationSelections.pageId || "";
+  const pageAccessToken = context.pageAccessToken || context.accessToken;
 
   console.info("[meta publish] normalized wizard state", {
     campaignId,
@@ -1337,76 +1403,156 @@ export async function publishMetaFromPreflight({
           completionPhone: context.launchState.thankYouPage.completionPhone,
         }
       : undefined;
-
-    const leadFormPayloadDebug = {
-      name: summary.creative.managedLeadFormName,
-      locale: "en_US",
-      allow_organic_lead: "true",
-      is_optimized_for_quality: "false",
-      block_display_for_non_targeted_viewer: "false",
-      questions: summary.creative.leadFormFields.map((type) => ({
-        type,
-        key: type.toLowerCase(),
-      })),
-      privacy_policy: {
-        url: context.launchState.advanced.privacyPolicyUrl,
-        link_text: "Privacy Policy",
-      },
-      ...(thankYouPage
-        ? {
-            thank_you_page: {
-              title: thankYouPage.title || "Thanks, we got your request.",
-              body: thankYouPage.body || "We'll follow up shortly with the next step.",
-              button_type:
-                thankYouPage.buttonType === "CALL_BUSINESS"
-                  ? "CALL_BUSINESS"
-                  : thankYouPage.buttonType === "DOWNLOAD"
-                    ? thankYouPage.websiteUrl
-                      ? "DOWNLOAD"
-                      : "VIEW_ON_FACEBOOK"
-                    : thankYouPage.websiteUrl
-                      ? "VIEW_WEBSITE"
-                      : "VIEW_ON_FACEBOOK",
-              button_text: thankYouPage.buttonText || "Continue",
-              ...(thankYouPage.websiteUrl
-                ? { website_url: thankYouPage.websiteUrl }
-                : {}),
-              ...(thankYouPage.completionCountryCode && thankYouPage.buttonType === "CALL_BUSINESS"
-                ? { country_code: thankYouPage.completionCountryCode }
-                : {}),
-              ...(thankYouPage.completionPhone && thankYouPage.buttonType === "CALL_BUSINESS"
-                ? { business_phone_number: thankYouPage.completionPhone }
-                : {}),
-            },
-          }
-        : {}),
-    };
-
-    console.info("[meta publish] lead form create request", {
-      endpoint: `${context.resolvedAssets.page?.id || context.launchState.integrationSelections.pageId || ""}/leadgen_forms`,
-      payload: leadFormPayloadDebug,
-    });
-
-    const createdLeadForm = await createMetaLeadForm({
-      accessToken: context.pageAccessToken || context.accessToken,
-      pageId: context.resolvedAssets.page?.id || "",
-      name: summary.creative.managedLeadFormName,
+    const managedLeadFormName = buildManagedLeadFormName(context);
+    const leadFormFingerprint = buildManagedLeadFormFingerprint({
+      pageId,
       privacyPolicyUrl: context.launchState.advanced.privacyPolicyUrl,
       fields: summary.creative.leadFormFields,
-        thankYouPage,
+      thankYouPage,
+    });
+    const existingExternalIds =
+      context.campaign.external_ids_json && typeof context.campaign.external_ids_json === "object"
+        ? (context.campaign.external_ids_json as Record<string, unknown>)
+        : {};
+    const storedLeadFormId =
+      typeof existingExternalIds.lead_form_id === "string" ? existingExternalIds.lead_form_id : null;
+    const storedLeadFormFingerprint =
+      typeof existingExternalIds.lead_form_fingerprint === "string"
+        ? existingExternalIds.lead_form_fingerprint
+        : null;
+    const storedLeadFormName =
+      typeof existingExternalIds.lead_form_name === "string" ? existingExternalIds.lead_form_name : null;
+    const canReuseStoredLeadForm =
+      Boolean(storedLeadFormId) && storedLeadFormFingerprint === leadFormFingerprint;
+    const reusableLeadForms = canReuseStoredLeadForm
+      ? await fetchMetaLeadForms(pageAccessToken, pageId).catch(
+          () => [] as Array<{ id: string; name?: string }>,
+        )
+      : [];
+    const reusableLeadForm = reusableLeadForms.find(
+      (form: { id: string; name?: string }) => form.id === storedLeadFormId,
+    ) || null;
+
+    if (reusableLeadForm) {
+      resolvedLeadFormId = reusableLeadForm.id;
+      externalIds.lead_form_id = reusableLeadForm.id;
+      metaResponses.lead_form = {
+        id: reusableLeadForm.id,
+        name: reusableLeadForm.name || storedLeadFormName || managedLeadFormName,
+        reused: true,
+      };
+      console.info("[meta publish] reusing existing lead form", {
+        campaignId,
+        leadFormId: reusableLeadForm.id,
+        leadFormName: reusableLeadForm.name || storedLeadFormName || managedLeadFormName,
+      });
+    } else {
+      const leadFormPayloadDebug = {
+        name: managedLeadFormName,
+        locale: "en_US",
+        allow_organic_lead: "true",
+        is_optimized_for_quality: "false",
+        block_display_for_non_targeted_viewer: "false",
+        questions: summary.creative.leadFormFields.map((type) => ({
+          type,
+          key: type.toLowerCase(),
+        })),
+        privacy_policy: {
+          url: context.launchState.advanced.privacyPolicyUrl,
+          link_text: "Privacy Policy",
+        },
+        ...(thankYouPage
+          ? {
+              thank_you_page: {
+                title: thankYouPage.title || "Thanks, we got your request.",
+                body: thankYouPage.body || "We'll follow up shortly with the next step.",
+                button_type:
+                  thankYouPage.buttonType === "CALL_BUSINESS"
+                    ? "CALL_BUSINESS"
+                    : thankYouPage.buttonType === "DOWNLOAD"
+                      ? thankYouPage.websiteUrl
+                        ? "DOWNLOAD"
+                        : "VIEW_ON_FACEBOOK"
+                      : thankYouPage.websiteUrl
+                        ? "VIEW_WEBSITE"
+                        : "VIEW_ON_FACEBOOK",
+                button_text: thankYouPage.buttonText || "Continue",
+                ...(thankYouPage.websiteUrl
+                  ? { website_url: thankYouPage.websiteUrl }
+                  : {}),
+                ...(thankYouPage.completionCountryCode && thankYouPage.buttonType === "CALL_BUSINESS"
+                  ? { country_code: thankYouPage.completionCountryCode }
+                  : {}),
+                ...(thankYouPage.completionPhone && thankYouPage.buttonType === "CALL_BUSINESS"
+                  ? { business_phone_number: thankYouPage.completionPhone }
+                  : {}),
+              },
+            }
+          : {}),
+      };
+
+      console.info("[meta publish] lead form create request", {
+        endpoint: `${pageId}/leadgen_forms`,
+        payload: leadFormPayloadDebug,
       });
 
-    if (!createdLeadForm.id) {
-      throw new Error("Meta lead form could not be created.");
+      let createdLeadForm;
+      try {
+        createdLeadForm = await createMetaLeadForm({
+          accessToken: pageAccessToken,
+          pageId,
+          name: managedLeadFormName,
+          privacyPolicyUrl: context.launchState.advanced.privacyPolicyUrl,
+          fields: summary.creative.leadFormFields,
+          thankYouPage,
+        });
+      } catch (error) {
+        const metaError = error as MetaRequestError;
+        const duplicateMessage = describeDuplicateLeadFormError(metaError);
+        if (duplicateMessage) {
+          const duplicateError = error instanceof Error ? error : new Error(String(error));
+          duplicateError.message = duplicateMessage;
+          throw annotateMetaPublishError(
+            duplicateError,
+            "lead_form_create",
+            `${pageId}/leadgen_forms`,
+            leadFormPayloadDebug,
+          );
+        }
+        throw annotateMetaPublishError(
+          error,
+          "lead_form_create",
+          `${pageId}/leadgen_forms`,
+          leadFormPayloadDebug,
+        );
+      }
+
+      if (!createdLeadForm.id) {
+        throw new Error("Meta lead form could not be created.");
+      }
+      resolvedLeadFormId = createdLeadForm.id;
+      externalIds.lead_form_id = createdLeadForm.id;
+      metaResponses.lead_form = createdLeadForm;
+      console.info("[meta publish] lead form created", {
+        campaignId,
+        leadFormId: createdLeadForm.id,
+        leadFormName: managedLeadFormName,
+        mode,
+      });
+
+      await admin
+        .from("campaigns")
+        .update({
+          external_ids_json: {
+            ...existingExternalIds,
+            lead_form_id: createdLeadForm.id,
+            lead_form_name: managedLeadFormName,
+            lead_form_fingerprint: leadFormFingerprint,
+          },
+          updated_at: now,
+        })
+        .eq("id", campaignId);
     }
-    resolvedLeadFormId = createdLeadForm.id;
-    externalIds.lead_form_id = createdLeadForm.id;
-    metaResponses.lead_form = createdLeadForm;
-    console.info("[meta publish] lead form created", {
-      campaignId,
-      leadFormId: createdLeadForm.id,
-      mode,
-    });
   }
 
   const campaignPayload: Record<string, string> = {

@@ -126,7 +126,9 @@ export async function POST(request: Request) {
       ? metaError.blameFieldSpecs[0].join(".")
       : null;
     const message =
-      blameField && /invalid parameter/i.test(metaError.message)
+      metaError.subcode === 1892019
+        ? "Meta rejected the lead form name because it already exists. The app now generates unique lead form names automatically, so retry the launch."
+        : blameField && /invalid parameter/i.test(metaError.message)
         ? `Meta rejected the publish payload at ${metaError.stage || "publish"} (${blameField}): ${metaError.message}`
         : error instanceof Error
           ? error.message
