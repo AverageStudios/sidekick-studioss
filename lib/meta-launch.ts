@@ -535,6 +535,16 @@ function describeDuplicateLeadFormError(metaError: MetaRequestError) {
   return null;
 }
 
+function buildCampaignCreatePayload(summary: MetaLaunchPreflight["normalizedPayloadSummary"]) {
+  return {
+    name: summary.campaign.name,
+    objective: summary.objective,
+    status: "PAUSED",
+    special_ad_categories: "[]",
+    is_adset_budget_sharing_enabled: "false",
+  };
+}
+
 function buildLeadFormCapabilityMessage({
   context,
   tokenScopes,
@@ -1555,12 +1565,7 @@ export async function publishMetaFromPreflight({
     }
   }
 
-  const campaignPayload: Record<string, string> = {
-    name: summary.campaign.name,
-    objective: summary.objective,
-    status: statusSeed,
-    special_ad_categories: "[]",
-  };
+  const campaignPayload: Record<string, string> = buildCampaignCreatePayload(summary);
 
   console.info("[meta publish] campaign create request", {
     endpoint: `act_${(context.resolvedAssets.adAccount?.id || "").replace(/^act_/, "")}/campaigns`,

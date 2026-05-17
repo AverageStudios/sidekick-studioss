@@ -125,9 +125,17 @@ export async function POST(request: Request) {
     const blameField = Array.isArray(metaError.blameFieldSpecs) && metaError.blameFieldSpecs.length
       ? metaError.blameFieldSpecs[0].join(".")
       : null;
+    const metaDetail =
+      metaError.userTitle && metaError.userMessage
+        ? `${metaError.userTitle}: ${metaError.userMessage}`
+        : metaError.userMessage || metaError.userTitle || metaError.message;
     const message =
       metaError.subcode === 1892019
         ? "Meta rejected the lead form name because it already exists. The app now generates unique lead form names automatically, so retry the launch."
+        : metaError.stage === "campaign_create" && metaError.subcode
+          ? `Meta rejected campaign creation (${metaError.subcode}): ${metaDetail}`
+          : metaError.stage === "campaign_create" && metaDetail
+            ? `Meta rejected campaign creation: ${metaDetail}`
         : blameField && /invalid parameter/i.test(metaError.message)
         ? `Meta rejected the publish payload at ${metaError.stage || "publish"} (${blameField}): ${metaError.message}`
         : error instanceof Error
