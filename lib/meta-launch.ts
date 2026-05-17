@@ -545,6 +545,28 @@ function buildCampaignCreatePayload(summary: MetaLaunchPreflight["normalizedPayl
   };
 }
 
+function buildAdSetCreatePayload({
+  summary,
+  campaignId,
+  status,
+}: {
+  summary: MetaLaunchPreflight["normalizedPayloadSummary"];
+  campaignId: string;
+  status: "PAUSED" | "ACTIVE";
+}) {
+  return {
+    name: summary.adSet.name,
+    campaign_id: campaignId,
+    billing_event: summary.adSet.billingEvent,
+    optimization_goal: summary.adSet.optimizationGoal,
+    daily_budget: String(summary.adSet.dailyBudgetCents),
+    targeting: JSON.stringify(summary.adSet.targeting),
+    status,
+    promoted_object: JSON.stringify(summary.adSet.promotedObject || {}),
+    bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+  };
+}
+
 function buildLeadFormCapabilityMessage({
   context,
   tokenScopes,
@@ -1593,16 +1615,11 @@ export async function publishMetaFromPreflight({
   externalIds.campaign_id = campaignResponse.id;
   metaResponses.campaign = campaignResponse;
 
-  const adSetPayload: Record<string, string> = {
-    name: summary.adSet.name,
-    campaign_id: campaignResponse.id,
-    billing_event: summary.adSet.billingEvent,
-    optimization_goal: summary.adSet.optimizationGoal,
-    daily_budget: String(summary.adSet.dailyBudgetCents),
-    targeting: JSON.stringify(summary.adSet.targeting),
+  const adSetPayload: Record<string, string> = buildAdSetCreatePayload({
+    summary,
+    campaignId: campaignResponse.id,
     status: statusSeed,
-    promoted_object: JSON.stringify(summary.adSet.promotedObject || {}),
-  };
+  });
 
   console.info("[meta publish] ad set create request", {
     endpoint: `act_${(context.resolvedAssets.adAccount?.id || "").replace(/^act_/, "")}/adsets`,

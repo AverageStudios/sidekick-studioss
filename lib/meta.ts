@@ -682,6 +682,12 @@ export async function createMetaAdSet({
     access_token: accessToken,
   });
 
+  console.info("[meta api] adset request", {
+    url: sanitizeMetaRequestUrl(url.toString()),
+    body: parseMetaRequestBody(body.toString()),
+    serializedBody: sanitizeMetaRequestBody(body.toString()),
+  });
+
   return fetchMetaJson<{ id?: string }>(url.toString(), {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
