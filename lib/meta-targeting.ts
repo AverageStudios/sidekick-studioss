@@ -2,19 +2,21 @@ import { CampaignLaunchLocation } from "@/types";
 import { CampaignLaunchView } from "@/lib/campaign-launch";
 
 type MetaGeoLocations = {
-  location_types?: Array<"home" | "recent" | "travel_in" | "recent_and_home">;
-  countries?: string[];
-  regions?: Array<{ key: string; radius?: number; distance_unit: "mile" | "kilometer" }>;
-  cities?: Array<{ key: string; radius?: number; distance_unit: "mile" | "kilometer" }>;
-  zips?: Array<{ key: string }>;
-  neighborhoods?: Array<{ key: string }>;
-  custom_locations?: Array<{
-    latitude?: number;
-    longitude?: number;
-    radius: number;
-    distance_unit: "mile" | "kilometer";
-    address_string?: string;
-  }>;
+  geo_locations?: {
+    location_types?: Array<"home" | "recent" | "travel_in" | "recent_and_home">;
+    countries?: string[];
+    regions?: Array<{ key: string; radius?: number; distance_unit: "mile" | "kilometer" }>;
+    cities?: Array<{ key: string; radius?: number; distance_unit: "mile" | "kilometer" }>;
+    zips?: Array<{ key: string }>;
+    neighborhoods?: Array<{ key: string }>;
+    custom_locations?: Array<{
+      latitude?: number;
+      longitude?: number;
+      radius: number;
+      distance_unit: "mile" | "kilometer";
+      address_string?: string;
+    }>;
+  };
 };
 
 /**
@@ -97,13 +99,15 @@ export function buildMetaGeoLocations(
     }));
 
   return {
-    location_types: locationTypes.length ? locationTypes : ["home"],
-    countries: countries.length ? countries : undefined,
-    regions: regions.length ? regions : undefined,
-    cities: cities.length ? cities : undefined,
-    zips: zips.length ? zips : undefined,
-    neighborhoods: neighborhoods.length ? neighborhoods : undefined,
-    custom_locations: customLocations.length ? customLocations : undefined,
+    geo_locations: {
+      location_types: locationTypes.length ? locationTypes : ["home"],
+      countries: countries.length ? countries : undefined,
+      regions: regions.length ? regions : undefined,
+      cities: cities.length ? cities : undefined,
+      zips: zips.length ? zips : undefined,
+      neighborhoods: neighborhoods.length ? neighborhoods : undefined,
+      custom_locations: customLocations.length ? customLocations : undefined,
+    },
   };
 }
 

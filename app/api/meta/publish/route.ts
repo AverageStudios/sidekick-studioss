@@ -136,6 +136,10 @@ export async function POST(request: Request) {
           ? `Meta rejected campaign creation (${metaError.subcode}): ${metaDetail}`
           : metaError.stage === "campaign_create" && metaDetail
             ? `Meta rejected campaign creation: ${metaDetail}`
+        : metaError.stage === "adset_create" && /location/i.test(metaError.message)
+          ? `Meta rejected ad set targeting: ${metaDetail}`
+          : metaError.stage === "adset_create" && metaDetail
+            ? `Meta rejected ad set creation: ${metaDetail}`
         : blameField && /invalid parameter/i.test(metaError.message)
         ? `Meta rejected the publish payload at ${metaError.stage || "publish"} (${blameField}): ${metaError.message}`
         : error instanceof Error
