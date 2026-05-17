@@ -139,6 +139,24 @@ type MetaLaunchContext = {
   integrationState: Awaited<ReturnType<typeof getWorkspaceMetaIntegrationState>>;
 };
 
+type MetaRequestError = Error & {
+  metaCode?: number;
+  metaSubcode?: number;
+  metaType?: string;
+  metaTraceId?: string;
+  metaUserTitle?: string;
+  metaUserMessage?: string;
+  metaErrorData?: Record<string, unknown>;
+  metaBlameFieldSpecs?: string[][];
+  metaRequestUrl?: string;
+  metaRequestBody?: string;
+  metaResponseBody?: string;
+  metaResponseJson?: unknown;
+  metaPublishStage?: string;
+  metaPublishEndpoint?: string;
+  metaPublishPayload?: Record<string, unknown>;
+};
+
 const leadFormManagementScopes = ["pages_manage_ads"] as const;
 const leadFormManagementTasks = ["ADVERTISE", "MANAGE"] as const;
 
@@ -409,6 +427,48 @@ function getSelectedPageTasks(context: MetaLaunchContext) {
 function formatMetaAssetLabel(asset: { id: string; name: string } | null, fallback: string) {
   if (!asset) return fallback;
   return `${asset.name} (${asset.id})`;
+}
+
+function stringifyMetaPayload(payload: Record<string, unknown>) {
+  return JSON.parse(JSON.stringify(payload)) as Record<string, unknown>;
+}
+
+export function summarizeMetaError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return { message: String(error) };
+  }
+  const metaError = error as MetaRequestError;
+  return {
+    message: metaError.message,
+    stage: metaError.metaPublishStage || null,
+    endpoint: metaError.metaPublishEndpoint || metaError.metaRequestUrl || null,
+    code: metaError.metaCode ?? null,
+    subcode: metaError.metaSubcode ?? null,
+    type: metaError.metaType || null,
+    traceId: metaError.metaTraceId || null,
+    userTitle: metaError.metaUserTitle || null,
+    userMessage: metaError.metaUserMessage || null,
+    blameFieldSpecs: metaError.metaBlameFieldSpecs || null,
+    requestUrl: metaError.metaRequestUrl || null,
+    requestBody: metaError.metaRequestBody || null,
+    responseBody: metaError.metaResponseBody || null,
+    responseJson: metaError.metaResponseJson || null,
+    errorData: metaError.metaErrorData || null,
+    payload: metaError.metaPublishPayload || null,
+  };
+}
+
+function annotateMetaPublishError(
+  error: unknown,
+  metaPublishStage: string,
+  metaPublishEndpoint: string,
+  metaPublishPayload: Record<string, unknown>,
+) {
+  const metaError = (error instanceof Error ? error : new Error(String(error))) as MetaRequestError;
+  metaError.metaPublishStage = metaPublishStage;
+  metaError.metaPublishEndpoint = metaPublishEndpoint;
+  metaError.metaPublishPayload = stringifyMetaPayload(metaPublishPayload);
+  return metaError;
 }
 
 function buildLeadFormCapabilityMessage({
@@ -1249,6 +1309,22 @@ export async function publishMetaFromPreflight({
   const launchWarnings = [...preflight.warnings];
   let resolvedLeadFormId = summary.creative.leadFormId;
 
+  console.info("[meta publish] normalized wizard state", {
+    campaignId,
+    workspaceId: context.workspaceId,
+    mode,
+    adType: context.launchState.adType,
+    objective: summary.objective,
+    selectedAssets: {
+      adAccount: context.resolvedAssets.adAccount,
+      page: context.resolvedAssets.page,
+      pixel: context.resolvedAssets.pixel,
+      leadForm: context.resolvedAssets.leadForm,
+      instagramActor: context.resolvedAssets.instagramActor,
+    },
+    payloadSummary: summary,
+  });
+
   if (adTypeRequiresLeadForm(context.launchState.adType) && summary.creative.leadFormMode === "managed_new") {
     const thankYouPage = context.launchState.thankYouPage.enabled
       ? {
@@ -1262,21 +1338,72 @@ export async function publishMetaFromPreflight({
         }
       : undefined;
 
+    const leadFormPayloadDebug = {
+      name: summary.creative.managedLeadFormName,
+      locale: "en_US",
+      allow_organic_lead: "true",
+      is_optimized_for_quality: "false",
+      block_display_for_non_targeted_viewer: "false",
+      standard_questions: summary.creative.leadFormFields.map((type) => ({ type })),
+      privacy_policy: {
+        url: context.launchState.advanced.privacyPolicyUrl,
+        link_text: "Privacy Policy",
+      },
+      ...(thankYouPage
+        ? {
+            thank_you_page: {
+              title: thankYouPage.title || "Thanks, we got your request.",
+              body: thankYouPage.body || "We'll follow up shortly with the next step.",
+              button_type:
+                thankYouPage.buttonType === "CALL_BUSINESS"
+                  ? "CALL_BUSINESS"
+                  : thankYouPage.buttonType === "DOWNLOAD"
+                    ? thankYouPage.websiteUrl
+                      ? "DOWNLOAD"
+                      : "VIEW_ON_FACEBOOK"
+                    : thankYouPage.websiteUrl
+                      ? "VIEW_WEBSITE"
+                      : "VIEW_ON_FACEBOOK",
+              button_text: thankYouPage.buttonText || "Continue",
+              ...(thankYouPage.websiteUrl
+                ? { website_url: thankYouPage.websiteUrl }
+                : {}),
+              ...(thankYouPage.completionCountryCode && thankYouPage.buttonType === "CALL_BUSINESS"
+                ? { country_code: thankYouPage.completionCountryCode }
+                : {}),
+              ...(thankYouPage.completionPhone && thankYouPage.buttonType === "CALL_BUSINESS"
+                ? { business_phone_number: thankYouPage.completionPhone }
+                : {}),
+            },
+          }
+        : {}),
+    };
+
+    console.info("[meta publish] lead form create request", {
+      endpoint: `${context.resolvedAssets.page?.id || context.launchState.integrationSelections.pageId || ""}/leadgen_forms`,
+      payload: leadFormPayloadDebug,
+    });
+
     const createdLeadForm = await createMetaLeadForm({
       accessToken: context.pageAccessToken || context.accessToken,
       pageId: context.resolvedAssets.page?.id || "",
       name: summary.creative.managedLeadFormName,
       privacyPolicyUrl: context.launchState.advanced.privacyPolicyUrl,
       fields: summary.creative.leadFormFields,
-      thankYouPage,
-    });
+        thankYouPage,
+      });
 
-      if (!createdLeadForm.id) {
+    if (!createdLeadForm.id) {
       throw new Error("Meta lead form could not be created.");
     }
     resolvedLeadFormId = createdLeadForm.id;
     externalIds.lead_form_id = createdLeadForm.id;
     metaResponses.lead_form = createdLeadForm;
+    console.info("[meta publish] lead form created", {
+      campaignId,
+      leadFormId: createdLeadForm.id,
+      mode,
+    });
   }
 
   const campaignPayload: Record<string, string> = {
@@ -1286,11 +1413,26 @@ export async function publishMetaFromPreflight({
     special_ad_categories: "[]",
   };
 
-  const campaignResponse = await createMetaCampaign({
-    accessToken: context.accessToken,
-    adAccountId: context.resolvedAssets.adAccount?.id || "",
+  console.info("[meta publish] campaign create request", {
+    endpoint: `act_${(context.resolvedAssets.adAccount?.id || "").replace(/^act_/, "")}/campaigns`,
     payload: campaignPayload,
   });
+
+  let campaignResponse;
+  try {
+    campaignResponse = await createMetaCampaign({
+      accessToken: context.accessToken,
+      adAccountId: context.resolvedAssets.adAccount?.id || "",
+      payload: campaignPayload,
+    });
+  } catch (error) {
+    throw annotateMetaPublishError(
+      error,
+      "campaign_create",
+      `act_${(context.resolvedAssets.adAccount?.id || "").replace(/^act_/, "")}/campaigns`,
+      campaignPayload,
+    );
+  }
   if (!campaignResponse.id) {
     throw new Error("Meta campaign creation failed.");
   }
@@ -1308,11 +1450,26 @@ export async function publishMetaFromPreflight({
     promoted_object: JSON.stringify(summary.adSet.promotedObject || {}),
   };
 
-  const adSetResponse = await createMetaAdSet({
-    accessToken: context.accessToken,
-    adAccountId: context.resolvedAssets.adAccount?.id || "",
+  console.info("[meta publish] ad set create request", {
+    endpoint: `act_${(context.resolvedAssets.adAccount?.id || "").replace(/^act_/, "")}/adsets`,
     payload: adSetPayload,
   });
+
+  let adSetResponse;
+  try {
+    adSetResponse = await createMetaAdSet({
+      accessToken: context.accessToken,
+      adAccountId: context.resolvedAssets.adAccount?.id || "",
+      payload: adSetPayload,
+    });
+  } catch (error) {
+    throw annotateMetaPublishError(
+      error,
+      "adset_create",
+      `act_${(context.resolvedAssets.adAccount?.id || "").replace(/^act_/, "")}/adsets`,
+      adSetPayload,
+    );
+  }
   if (!adSetResponse.id) {
     throw new Error("Meta ad set creation failed.");
   }
@@ -1351,11 +1508,26 @@ export async function publishMetaFromPreflight({
     object_story_spec: JSON.stringify(objectStorySpec),
   };
 
-  const creativeResponse = await createMetaAdCreative({
-    accessToken: context.accessToken,
-    adAccountId: context.resolvedAssets.adAccount?.id || "",
+  console.info("[meta publish] creative create request", {
+    endpoint: `act_${(context.resolvedAssets.adAccount?.id || "").replace(/^act_/, "")}/adcreatives`,
     payload: creativePayload,
   });
+
+  let creativeResponse;
+  try {
+    creativeResponse = await createMetaAdCreative({
+      accessToken: context.accessToken,
+      adAccountId: context.resolvedAssets.adAccount?.id || "",
+      payload: creativePayload,
+    });
+  } catch (error) {
+    throw annotateMetaPublishError(
+      error,
+      "creative_create",
+      `act_${(context.resolvedAssets.adAccount?.id || "").replace(/^act_/, "")}/adcreatives`,
+      creativePayload,
+    );
+  }
   if (!creativeResponse.id) {
     throw new Error("Meta ad creative creation failed.");
   }
@@ -1369,11 +1541,26 @@ export async function publishMetaFromPreflight({
     status: statusSeed,
   };
 
-  const adResponse = await createMetaAd({
-    accessToken: context.accessToken,
-    adAccountId: context.resolvedAssets.adAccount?.id || "",
+  console.info("[meta publish] ad create request", {
+    endpoint: `act_${(context.resolvedAssets.adAccount?.id || "").replace(/^act_/, "")}/ads`,
     payload: adPayload,
   });
+
+  let adResponse;
+  try {
+    adResponse = await createMetaAd({
+      accessToken: context.accessToken,
+      adAccountId: context.resolvedAssets.adAccount?.id || "",
+      payload: adPayload,
+    });
+  } catch (error) {
+    throw annotateMetaPublishError(
+      error,
+      "ad_create",
+      `act_${(context.resolvedAssets.adAccount?.id || "").replace(/^act_/, "")}/ads`,
+      adPayload,
+    );
+  }
   if (!adResponse.id) {
     throw new Error("Meta ad creation failed.");
   }

@@ -7,6 +7,8 @@ import {
   buildPublishRequestPayloadSummary,
   markMetaPublishJobResult,
   publishMetaFromPreflight,
+  summarizeMetaError,
+  type MetaLaunchPreflight,
   runMetaPreflightAndCreateJob,
 } from "@/lib/meta-launch";
 
@@ -40,8 +42,9 @@ export async function POST(request: Request) {
   }
 
   let jobId: string | null = null;
+  let preflight: MetaLaunchPreflight | null = null;
+  let campaignId = parsed.data.campaignId;
   try {
-    let campaignId = parsed.data.campaignId;
     if (parsed.data.templateSlug && parsed.data.state) {
       const ensured = await ensureCampaignDraft({
         admin,
@@ -59,7 +62,7 @@ export async function POST(request: Request) {
       userId: user.id,
       mode: parsed.data.mode,
     });
-    const { preflight } = preflightContext;
+    preflight = preflightContext.preflight;
     jobId = preflightContext.jobId;
 
     if (preflight.blockingIssues.length) {
@@ -118,16 +121,34 @@ export async function POST(request: Request) {
       publish: publishResult,
     });
   } catch (error) {
+    const metaError = summarizeMetaError(error);
+    const blameField = Array.isArray(metaError.blameFieldSpecs) && metaError.blameFieldSpecs.length
+      ? metaError.blameFieldSpecs[0].join(".")
+      : null;
     const message =
-      error instanceof Error ? error.message : "Publish failed.";
+      blameField && /invalid parameter/i.test(metaError.message)
+        ? `Meta rejected the publish payload at ${metaError.stage || "publish"} (${blameField}): ${metaError.message}`
+        : error instanceof Error
+          ? error.message
+          : "Publish failed.";
     if (jobId) {
       await markMetaPublishJobResult({
         admin,
         jobId,
         status: "failed",
+        metaRequest: preflight ? buildPublishRequestPayloadSummary(preflight) : undefined,
+        metaResponse: {
+          error: metaError,
+        },
         errorMessage: message,
       }).catch(() => null);
     }
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: message,
+        metaError,
+      },
+      { status: 400 },
+    );
   }
 }

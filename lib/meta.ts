@@ -97,7 +97,39 @@ type MetaApiErrorPayload = {
     code?: number;
     error_subcode?: number;
     fbtrace_id?: string;
+    error_user_title?: string;
+    error_user_msg?: string;
+    error_data?: Record<string, unknown>;
   };
+};
+
+type MetaApiRequestSnapshot = {
+  url: string;
+  body?: string;
+};
+
+type MetaApiErrorContext = MetaApiRequestSnapshot & {
+  status: number;
+  responseText?: string;
+  responseJson?: unknown;
+  errorPayload?: MetaApiErrorPayload["error"];
+  blameFieldSpecs?: string[][];
+};
+
+type MetaApiRequestError = Error & {
+  metaCode?: number;
+  metaSubcode?: number;
+  metaType?: string;
+  metaTraceId?: string;
+  metaUserTitle?: string;
+  metaUserMessage?: string;
+  metaErrorData?: Record<string, unknown>;
+  metaBlameFieldSpecs?: string[][];
+  metaRequestUrl?: string;
+  metaRequestBody?: string;
+  metaResponseBody?: string;
+  metaResponseJson?: unknown;
+  status?: number;
 };
 
 function readMetaEnv(name: string) {
@@ -105,6 +137,61 @@ function readMetaEnv(name: string) {
   if (!value) return undefined;
   const trimmed = value.trim();
   return trimmed.length ? trimmed : undefined;
+}
+
+function sanitizeMetaRequestUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.searchParams.has("access_token")) {
+      parsed.searchParams.set("access_token", "[redacted]");
+    }
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+function sanitizeMetaRequestBody(body?: BodyInit | null) {
+  if (typeof body !== "string") {
+    return typeof body === "undefined" ? undefined : String(body);
+  }
+
+  try {
+    const params = new URLSearchParams(body);
+    if (params.has("access_token")) {
+      params.set("access_token", "[redacted]");
+    }
+    return params.toString();
+  } catch {
+    return body;
+  }
+}
+
+function parseMetaRequestBody(body?: string) {
+  if (!body) return undefined;
+  try {
+    const params = new URLSearchParams(body);
+    const result: Record<string, string> = {};
+    for (const [key, value] of params.entries()) {
+      result[key] = value;
+    }
+    return result;
+  } catch {
+    return { body };
+  }
+}
+
+function extractBlameFieldSpecs(errorData?: Record<string, unknown>) {
+  const value = errorData?.blame_field_specs;
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((entry): entry is string[] => Array.isArray(entry) && entry.every((item) => typeof item === "string"));
+}
+
+function buildMetaErrorContext(url: string, init?: RequestInit): MetaApiRequestSnapshot {
+  return {
+    url: sanitizeMetaRequestUrl(url),
+    body: sanitizeMetaRequestBody(init?.body),
+  };
 }
 
 export function getMetaGraphApiVersion() {
@@ -180,6 +267,7 @@ export function getMetaOAuthUrl(
 }
 
 async function fetchMetaJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const requestSnapshot = buildMetaErrorContext(url, init);
   const response = await fetch(url, {
     ...init,
     cache: "no-store",
@@ -189,23 +277,61 @@ async function fetchMetaJson<T>(url: string, init?: RequestInit): Promise<T> {
     },
   });
 
-  const payload = (await response.json().catch(() => null)) as MetaApiErrorPayload | null;
+  const responseText = await response.text().catch(() => "");
+  let payload: MetaApiErrorPayload | null = null;
+  if (responseText) {
+    try {
+      payload = JSON.parse(responseText) as MetaApiErrorPayload;
+    } catch {
+      payload = null;
+    }
+  }
   if (!response.ok) {
     const errorPayload = payload?.error;
+    const errorData =
+      errorPayload?.error_data && typeof errorPayload.error_data === "object"
+        ? errorPayload.error_data
+        : undefined;
+    const blameFieldSpecs = extractBlameFieldSpecs(errorData);
     const message =
+      (errorPayload?.error_user_title ? String(errorPayload.error_user_title) : "") ||
+      (errorPayload?.error_user_msg ? String(errorPayload.error_user_msg) : "") ||
       (errorPayload?.message ? String(errorPayload.message) : "") ||
       `Meta request failed (${response.status}).`;
-    const error = new Error(message);
+    const error = new Error(message) as MetaApiRequestError;
     Object.assign(error, {
       metaCode: errorPayload?.code,
       metaSubcode: errorPayload?.error_subcode,
       metaType: errorPayload?.type,
       metaTraceId: errorPayload?.fbtrace_id,
+      metaUserTitle: errorPayload?.error_user_title,
+      metaUserMessage: errorPayload?.error_user_msg,
+      metaErrorData: errorData,
+      metaBlameFieldSpecs: blameFieldSpecs,
+      metaRequestUrl: requestSnapshot.url,
+      metaRequestBody: requestSnapshot.body,
+      metaResponseBody: responseText || undefined,
+      metaResponseJson: payload || undefined,
       status: response.status,
+    });
+    console.error("[meta api] request failed", {
+      url: requestSnapshot.url,
+      body: parseMetaRequestBody(requestSnapshot.body),
+      status: response.status,
+      responseText,
+      responseJson: payload,
+      code: errorPayload?.code,
+      subcode: errorPayload?.error_subcode,
+      type: errorPayload?.type,
+      traceId: errorPayload?.fbtrace_id,
+      userTitle: errorPayload?.error_user_title,
+      userMessage: errorPayload?.error_user_msg,
+      errorData,
+      blameFieldSpecs,
     });
     throw error;
   }
-  return payload as T;
+  return (payload as T) || ({} as T);
 }
 
 export async function exchangeMetaCodeForToken(code: string): Promise<MetaTokenResponse> {
@@ -448,11 +574,14 @@ export async function createMetaLeadForm({
         : (thankYouPage?.websiteUrl ? "VIEW_WEBSITE" : "VIEW_ON_FACEBOOK");
 
   const url = new URL(buildMetaGraphUrl(`${pageId}/leadgen_forms`));
-  const questions = fields.map((type) => ({ type }));
+  const standardQuestions = fields.map((type) => ({ type }));
   const body = new URLSearchParams();
   body.set("name", name);
   body.set("locale", "en_US");
-  body.set("questions", JSON.stringify(questions));
+  body.set("allow_organic_lead", "true");
+  body.set("is_optimized_for_quality", "false");
+  body.set("block_display_for_non_targeted_viewer", "false");
+  body.set("standard_questions", JSON.stringify(standardQuestions));
   body.set(
     "privacy_policy",
     JSON.stringify({

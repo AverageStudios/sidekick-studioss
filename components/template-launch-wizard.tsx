@@ -112,6 +112,28 @@ type LaunchPreflightResponse = {
   };
 };
 
+type MetaPublishErrorResponse = {
+  error?: string;
+  metaError?: {
+    message?: string;
+    stage?: string | null;
+    endpoint?: string | null;
+    code?: number | null;
+    subcode?: number | null;
+    type?: string | null;
+    traceId?: string | null;
+    userTitle?: string | null;
+    userMessage?: string | null;
+    blameFieldSpecs?: string[][] | null;
+    requestUrl?: string | null;
+    requestBody?: string | null;
+    responseBody?: string | null;
+    responseJson?: unknown;
+    errorData?: Record<string, unknown> | null;
+    payload?: Record<string, unknown> | null;
+  };
+};
+
 type LocationSuggestion = {
   id: string;
   label: string;
@@ -420,6 +442,7 @@ export function TemplateLaunchWizard({
   const [isPreflighting, setIsPreflighting] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishErrorDetails, setPublishErrorDetails] = useState<string | null>(null);
   const [publishSuccess, setPublishSuccess] = useState<string | null>(null);
   const [pendingLocation, setPendingLocation] = useState("");
   const deferredLocationQuery = useDeferredValue(pendingLocation);
@@ -568,6 +591,7 @@ export function TemplateLaunchWizard({
     setPreflight(null);
     setPreflightError(null);
     setPublishError(null);
+    setPublishErrorDetails(null);
     setPublishSuccess(null);
   }
 
@@ -851,6 +875,7 @@ export function TemplateLaunchWizard({
 
     setIsPublishing(true);
     setPublishError(null);
+    setPublishErrorDetails(null);
     setPublishSuccess(null);
 
     const response = await fetch("/api/meta/publish", {
@@ -867,7 +892,7 @@ export function TemplateLaunchWizard({
     });
 
     const payload = (await response.json().catch(() => null)) as
-      | { error?: string; preflight?: LaunchPreflightResponse }
+      | (MetaPublishErrorResponse & { preflight?: LaunchPreflightResponse })
       | null;
 
     setIsPublishing(false);
@@ -876,10 +901,16 @@ export function TemplateLaunchWizard({
         setPreflight(payload.preflight);
       }
       setPublishError(payload?.error || "Campaign launch failed.");
+      setPublishErrorDetails(
+        payload?.metaError
+          ? JSON.stringify(payload.metaError, null, 2)
+          : null,
+      );
       return;
     }
 
     setPublishSuccess(mode === "live" ? "Campaign launched to Meta." : "Campaign draft pushed to Meta.");
+    setPublishErrorDetails(null);
     router.refresh();
   }
 
@@ -1887,6 +1918,11 @@ export function TemplateLaunchWizard({
                 {publishError ? (
                   <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
                     {publishError}
+                    {publishErrorDetails ? (
+                      <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-2xl bg-white/70 p-3 text-xs leading-5 text-rose-800">
+                        {publishErrorDetails}
+                      </pre>
+                    ) : null}
                   </div>
                 ) : null}
                 {publishSuccess ? (
