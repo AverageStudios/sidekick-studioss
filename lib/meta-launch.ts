@@ -382,36 +382,66 @@ function resolveThankYouDestinationUrl(context: MetaLaunchContext) {
     return sanitizeDestinationUrl(context.launchState.thankYouPage.websiteUrl);
   }
 
-  if (context.resolvedAssets.page?.id) {
-    return `https://www.facebook.com/${context.resolvedAssets.page.id}`;
+  return "";
+}
+
+function isMetaOwnedUrl(value: string) {
+  const normalized = sanitizeDestinationUrl(value);
+  if (!normalized) return false;
+  try {
+    const hostname = new URL(normalized).hostname.toLowerCase();
+    return (
+      hostname === "facebook.com" ||
+      hostname.endsWith(".facebook.com") ||
+      hostname === "fb.com" ||
+      hostname.endsWith(".fb.com") ||
+      hostname === "m.me" ||
+      hostname.endsWith(".m.me") ||
+      hostname === "instagram.com" ||
+      hostname.endsWith(".instagram.com") ||
+      hostname === "messenger.com" ||
+      hostname.endsWith(".messenger.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function resolveLeadFormCreativeExternalUrl(context: MetaLaunchContext) {
+  const candidates = [
+    context.launchState.landingPageUrl,
+    context.launchState.thankYouPage.websiteUrl,
+    context.launchState.advanced.privacyPolicyUrl,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = sanitizeDestinationUrl(candidate);
+    if (!normalized) continue;
+    if (isMetaOwnedUrl(normalized)) continue;
+    return normalized;
   }
 
-  const fallbackPageId = context.launchState.integrationSelections.pageId;
-  if (fallbackPageId) {
-    return `https://www.facebook.com/${fallbackPageId}`;
-  }
-
-  return "https://www.facebook.com";
+  return "";
 }
 
 function resolveAdTypeDestinationUrl(context: MetaLaunchContext) {
   switch (context.launchState.adType) {
     case "landing_page":
-      return sanitizeDestinationUrl(context.launchState.landingPageUrl) || "https://facebook.com";
+      return sanitizeDestinationUrl(context.launchState.landingPageUrl);
     case "call_now":
       return context.launchState.phoneNumber?.trim()
         ? `tel:${resolveCallPhoneNumber(context)}`
-        : "https://facebook.com";
+        : "";
     case "messenger_leads":
     case "messenger_engagement":
       return context.resolvedAssets.page?.id
         ? `https://m.me/${context.resolvedAssets.page.id}`
         : context.launchState.integrationSelections.pageId
           ? `https://m.me/${context.launchState.integrationSelections.pageId}`
-          : "https://facebook.com";
+          : "";
     case "lead_form":
     default:
-      return resolveThankYouDestinationUrl(context);
+      return resolveLeadFormCreativeExternalUrl(context) || resolveThankYouDestinationUrl(context);
   }
 }
 
@@ -982,6 +1012,7 @@ export async function runMetaLaunchPreflight({
 
   const thankYouWebsiteUrl = sanitizeDestinationUrl(context.launchState.thankYouPage.websiteUrl);
   const resolvedThankYouUrl = resolveAdTypeDestinationUrl(context);
+  const resolvedLeadFormCreativeUrl = resolveLeadFormCreativeExternalUrl(context);
 
   if (context.launchState.adType === "landing_page") {
     const landingPageUrl = sanitizeDestinationUrl(context.launchState.landingPageUrl);
@@ -1059,6 +1090,26 @@ export async function runMetaLaunchPreflight({
   }
 
   if (adTypeRequiresLeadForm(context.launchState.adType)) {
+    if (!resolvedLeadFormCreativeUrl) {
+      issues.push({
+        code: "missing_lead_form_external_url",
+        message:
+          "Lead form creatives need an external advertiser URL. Add a landing page or advertiser-domain URL before publishing.",
+        type: "blocking",
+        scope: "both",
+        field: "creative.destinationUrl",
+      });
+    } else if (isMetaOwnedUrl(resolvedLeadFormCreativeUrl)) {
+      issues.push({
+        code: "invalid_lead_form_external_url",
+        message:
+          "Lead form creatives cannot use Facebook, Instagram, Messenger, or other Meta-owned URLs. Use an advertiser-owned website URL instead.",
+        type: "blocking",
+        scope: "both",
+        field: "creative.destinationUrl",
+      });
+    }
+
     if (context.resolvedAssets.page?.id) {
       const leadFormAccess = await inspectMetaLeadFormAccess({
         accessToken: context.pageAccessToken || context.accessToken,
@@ -1355,7 +1406,9 @@ export async function runMetaLaunchPreflight({
       headline: blueprint.adCopy.headlines[0] || context.campaign.headline,
       description: blueprint.adCopy.descriptions[0] || context.campaign.subheadline,
       ctaType: mapAdTypeToCta(context.launchState.adType),
-      destinationUrl: resolveAdTypeDestinationUrl(context) || resolvedThankYouUrl || "https://facebook.com",
+      destinationUrl: adTypeRequiresLeadForm(context.launchState.adType)
+        ? resolvedLeadFormCreativeUrl
+        : resolveAdTypeDestinationUrl(context) || resolvedThankYouUrl || "",
       imageUrl: creativeImageUrl,
       leadFormMode: context.launchState.leadForm.mode,
       leadFormId: context.launchState.leadForm.selectedFormId || null,
