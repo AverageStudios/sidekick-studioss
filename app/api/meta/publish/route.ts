@@ -111,6 +111,8 @@ export async function POST(request: Request) {
         .from("campaigns")
         .update({
           status: "published",
+          published_at: new Date().toISOString(),
+          archived_at: null,
         })
         .eq("id", campaignId);
     }

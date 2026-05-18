@@ -160,6 +160,8 @@ export async function ensureCampaignDraft({
       ad_copy_json: blueprint.adCopy,
       launch_state_json: launchState,
       status: "draft",
+      published_at: null,
+      archived_at: null,
     });
 
     const results = await Promise.all([
@@ -224,6 +226,8 @@ export async function ensureCampaignDraft({
     ad_copy_json: blueprint.adCopy,
     launch_state_json: launchState,
     status: "draft",
+    published_at: null,
+    archived_at: null,
   });
 
   const results = await Promise.all([

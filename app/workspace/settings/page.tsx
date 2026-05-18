@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { requireUser } from "@/lib/auth";
 import { getDashboardSnapshot } from "@/lib/data";
 import { cn } from "@/lib/utils";
+import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
 import { getCurrentWorkspaceContext, getCurrentWorkspaceMembers } from "@/lib/workspaces";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isMetaConfigured } from "@/lib/meta";
@@ -98,6 +99,7 @@ export default async function WorkspaceSettingsPage({
   const campaigns = dashboardSnapshot.campaigns || [];
   const publishedCampaigns = campaigns.filter((campaign) => campaign.status === "published");
   const draftCampaigns = campaigns.filter((campaign) => campaign.status === "draft");
+  const archivedCampaigns = campaigns.filter((campaign) => campaign.status === "archived");
   const { data: membershipRaw } =
     admin && workspaceId
       ? await admin
@@ -308,7 +310,7 @@ export default async function WorkspaceSettingsPage({
                   See every draft and published ad running inside this workspace.
                 </p>
 
-                <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Total campaigns</p>
                     <p className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">{campaigns.length}</p>
@@ -320,6 +322,10 @@ export default async function WorkspaceSettingsPage({
                   <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Drafts</p>
                     <p className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">{draftCampaigns.length}</p>
+                  </div>
+                  <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Archived</p>
+                    <p className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">{archivedCampaigns.length}</p>
                   </div>
                 </div>
 
@@ -344,8 +350,15 @@ export default async function WorkspaceSettingsPage({
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <p className="truncate text-sm font-semibold text-[var(--ink)]">{campaign.name}</p>
-                                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
-                                  Published
+                                <span
+                                  className={cn(
+                                    "rounded-full px-2.5 py-1 text-[11px] font-medium",
+                                    getCampaignLifecycleState(campaign) === "paused"
+                                      ? "bg-amber-50 text-amber-700"
+                                      : "bg-emerald-50 text-emerald-700",
+                                  )}
+                                >
+                                  {getCampaignLifecycleLabel(campaign)}
                                 </span>
                               </div>
                               <p className="mt-2 line-clamp-1 text-sm text-[var(--muted)]">
@@ -363,6 +376,52 @@ export default async function WorkspaceSettingsPage({
                       ) : (
                         <div className="rounded-2xl border border-[var(--line)] bg-[var(--soft-panel)] p-5 text-sm text-[var(--muted)]">
                           No published ads in this workspace yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <h3 className="text-base font-semibold text-[var(--ink)]">Archived campaigns</h3>
+                        <p className="mt-1 text-sm text-[var(--muted)]">
+                          Hidden from default views but still available for history and troubleshooting.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 space-y-3">
+                      {archivedCampaigns.length ? (
+                        archivedCampaigns.map((campaign) => (
+                          <div
+                            key={campaign.id}
+                            className="flex flex-col gap-4 rounded-2xl border border-[var(--line)] bg-white p-5 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="truncate text-sm font-semibold text-[var(--ink)]">{campaign.name}</p>
+                                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                                  Archived
+                                </span>
+                              </div>
+                              <p className="mt-2 line-clamp-1 text-sm text-[var(--muted)]">
+                                {campaign.headline || campaign.subheadline || "This campaign was archived from active views."}
+                              </p>
+                              <p className="mt-2 text-xs text-[var(--muted)]">
+                                {campaign.archived_at
+                                  ? `Archived ${new Date(campaign.archived_at).toLocaleDateString()}`
+                                  : `Updated ${new Date(campaign.updated_at).toLocaleDateString()}`}
+                              </p>
+                            </div>
+                            <Button asChild variant="outline">
+                              <Link href={`/campaigns/${campaign.id}`}>View archived campaign</Link>
+                            </Button>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-2xl border border-[var(--line)] bg-[var(--soft-panel)] p-5 text-sm text-[var(--muted)]">
+                          No archived campaigns in this workspace yet.
                         </div>
                       )}
                     </div>

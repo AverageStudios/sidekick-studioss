@@ -508,6 +508,8 @@ export type CampaignRecord = {
   launch_state_json?: CampaignLaunchState | null;
   external_publish_status?: string | null;
   external_ids_json?: Record<string, unknown> | null;
+  published_at?: string | null;
+  archived_at?: string | null;
   ad_copy_json: {
     primary: string;
     headlines: string[];
@@ -516,7 +518,7 @@ export type CampaignRecord = {
     budget: string;
     creativeGuidance: string[];
   };
-  status: "draft" | "published";
+  status: "draft" | "published" | "archived";
   created_at: string;
   updated_at: string;
 };

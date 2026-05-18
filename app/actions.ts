@@ -15,15 +15,17 @@ import { slugify } from "@/lib/utils";
 import { sendLeadConfirmationEmail, sendWorkspaceInvitationEmail } from "@/services/follow-up";
 import { uploadAsset } from "@/services/storage";
 import { storageBucketName } from "@/services/storage";
-import { createWorkspaceForUser, ensureWorkspaceContextForUser } from "@/lib/workspaces";
-import { isMetaConfigured } from "@/lib/meta";
+import { createWorkspaceForUser, ensureWorkspaceContextForUser, userHasWorkspaceAccess } from "@/lib/workspaces";
+import { isMetaConfigured, updateMetaObjectStatus } from "@/lib/meta";
 import { normalizeIndustryLabel } from "@/data/template-taxonomy";
-import { CampaignAdType } from "@/types";
+import { CampaignAdType, CampaignRecord } from "@/types";
 import {
   disconnectWorkspaceMetaConnection,
   saveWorkspaceMetaSelections,
   syncWorkspaceMetaAssets,
+  getWorkspaceMetaAccessToken,
 } from "@/lib/meta-integration";
+import { getCampaignLifecycleState, getCampaignMetaIdentifiers } from "@/lib/campaign-management";
 import {
   AdminTemplateActionState,
   AdminTemplateFieldName,
@@ -552,6 +554,186 @@ export async function signOutAction() {
   }
 
   redirect(`/login?success=${encodeURIComponent(authSuccessMessages.signedOut)}`);
+}
+
+type CampaignLifecycleControl = "pause" | "resume" | "archive";
+
+function appendQueryParam(path: string, key: string, value: string) {
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+}
+
+async function loadManagedCampaign(admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>, campaignId: string) {
+  const { data: campaign, error } = await admin
+    .from("campaigns")
+    .select("*")
+    .eq("id", campaignId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!campaign) {
+    throw new Error("Campaign could not be found.");
+  }
+
+  return campaign as CampaignRecord;
+}
+
+async function runCampaignLifecycleAction(
+  formData: FormData,
+  action: CampaignLifecycleControl,
+) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!isSupabaseServerConfigured()) {
+    redirect("/dashboard");
+  }
+
+  const campaignId = String(formData.get("campaignId") || "").trim();
+  const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
+
+  if (!campaignId) {
+    redirect(appendQueryParam(redirectTo, "error", "Campaign could not be found."));
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(appendQueryParam(redirectTo, "error", "Campaign controls are not available right now."));
+  }
+
+  let successMessage: string | null = null;
+
+  try {
+    const campaign = await loadManagedCampaign(admin, campaignId);
+    const hasAccess = campaign.workspace_id
+      ? await userHasWorkspaceAccess(user.id, campaign.workspace_id)
+      : campaign.user_id === user.id;
+
+    if (!hasAccess) {
+      throw new Error("You do not have access to this campaign.");
+    }
+
+    const lifecycleState = getCampaignLifecycleState(campaign);
+    const identifiers = getCampaignMetaIdentifiers(campaign);
+    const metaObjectIds = [identifiers.campaignId, identifiers.adSetId, identifiers.adId].filter(
+      (value): value is string => Boolean(value),
+    );
+    const targetMetaStatus: "ACTIVE" | "PAUSED" = action === "resume" ? "ACTIVE" : "PAUSED";
+    const now = new Date().toISOString();
+
+    if (action !== "archive" && lifecycleState === "draft") {
+      throw new Error("Only launched campaigns can be paused or resumed.");
+    }
+
+    if (lifecycleState === "archived" && action !== "archive") {
+      throw new Error("Archived campaigns cannot be resumed. Duplicate or republish the campaign to launch again.");
+    }
+
+    if (action !== "archive" && !metaObjectIds.length) {
+      throw new Error("No Meta campaign IDs were saved for this campaign, so it cannot be paused or resumed yet.");
+    }
+
+    const noopSuccessMessage =
+      action === "pause" && lifecycleState === "paused"
+        ? "Campaign is already paused."
+        : action === "resume" && lifecycleState === "active"
+          ? "Campaign is already active."
+          : action === "archive" && lifecycleState === "archived"
+            ? "Campaign is already archived."
+            : null;
+
+    if (noopSuccessMessage) {
+      successMessage = noopSuccessMessage;
+    } else {
+      const metaAccessToken =
+        metaObjectIds.length && campaign.workspace_id
+          ? (await getWorkspaceMetaAccessToken({
+              admin,
+              workspaceId: campaign.workspace_id,
+            }))?.accessToken || null
+          : null;
+
+      if (action !== "archive" && metaObjectIds.length && !metaAccessToken) {
+        throw new Error("Meta is not connected for this workspace.");
+      }
+
+      const remoteObjectIds = action === "archive" && !metaAccessToken ? [] : metaObjectIds;
+
+      for (const objectId of remoteObjectIds) {
+        await updateMetaObjectStatus({
+          accessToken: metaAccessToken || "",
+          objectId,
+          status: targetMetaStatus,
+        });
+      }
+
+      const campaignUpdate: Record<string, unknown> =
+        action === "archive"
+          ? {
+              status: "archived",
+              external_publish_status: "archived",
+              archived_at: now,
+              updated_at: now,
+            }
+          : {
+              status: "published",
+              external_publish_status: action === "pause" ? "paused" : "active",
+              updated_at: now,
+            };
+
+      await admin
+        .from("campaigns")
+        .update(campaignUpdate)
+        .eq("id", campaignId)
+        .eq("user_id", campaign.user_id);
+
+      successMessage =
+        action === "pause"
+          ? "Campaign paused."
+          : action === "resume"
+            ? "Campaign resumed."
+            : metaAccessToken && metaObjectIds.length
+              ? "Campaign archived."
+              : "Campaign archived locally because Meta was unavailable.";
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Campaign update failed.";
+    if (
+      message === "Campaign is already paused." ||
+      message === "Campaign is already active." ||
+      message === "Campaign is already archived."
+    ) {
+      successMessage = message;
+    } else {
+      redirect(appendQueryParam(redirectTo, "error", message));
+    }
+  }
+
+  if (successMessage) {
+    revalidatePath(`/campaigns/${campaignId}`);
+    revalidatePath("/workspace/settings");
+    revalidatePath("/templates");
+    revalidatePath("/performance");
+    revalidatePath("/dashboard");
+    redirect(appendQueryParam(redirectTo, "success", successMessage));
+  }
+}
+
+export async function pauseCampaignAction(formData: FormData) {
+  await runCampaignLifecycleAction(formData, "pause");
+}
+
+export async function resumeCampaignAction(formData: FormData) {
+  await runCampaignLifecycleAction(formData, "resume");
+}
+
+export async function archiveCampaignAction(formData: FormData) {
+  await runCampaignLifecycleAction(formData, "archive");
 }
 
 export async function switchWorkspaceAction(formData: FormData) {
@@ -1108,6 +1290,8 @@ export async function createCampaignAction(formData: FormData) {
       after_images_json: blueprint.funnelConfig.afterImageUrls,
       ad_copy_json: blueprint.adCopy,
       status: intent === "draft" ? "draft" : "published",
+      published_at: intent === "draft" ? null : new Date().toISOString(),
+      archived_at: null,
     })
     .select()
     .single();

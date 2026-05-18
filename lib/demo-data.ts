@@ -62,6 +62,8 @@ export const demoCampaign: CampaignRecord = {
   after_images_json: blueprint.funnelConfig.afterImageUrls,
   ad_copy_json: blueprint.adCopy,
   status: "published",
+  published_at: new Date().toISOString(),
+  archived_at: null,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };
