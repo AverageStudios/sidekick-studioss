@@ -90,7 +90,7 @@ type MetaNormalizedPayloadSummary = {
       | "OFFSITE_CONVERSIONS";
     targeting: Record<string, unknown>;
     promotedObject: Record<string, unknown>;
-    destinationType: "website" | "lead_form" | "engagement";
+    destinationType: "ON_AD" | "WEBSITE" | null;
   };
   creative: {
     name: string;
@@ -175,6 +175,16 @@ function adTypeRequiresPixel(adType: CampaignAdType) {
 
 function adTypeUsesWebsiteDestination(adType: CampaignAdType) {
   return adType === "landing_page";
+}
+
+function resolveAdSetDestinationType(adType: CampaignAdType): "ON_AD" | "WEBSITE" | null {
+  if (adTypeRequiresLeadForm(adType)) {
+    return "ON_AD";
+  }
+  if (adTypeUsesWebsiteDestination(adType)) {
+    return "WEBSITE";
+  }
+  return null;
 }
 
 function adTypeRequiresPhone(adType: CampaignAdType) {
@@ -564,6 +574,7 @@ function buildAdSetCreatePayload({
     status,
     promoted_object: JSON.stringify(summary.adSet.promotedObject || {}),
     bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+    ...(summary.adSet.destinationType ? { destination_type: summary.adSet.destinationType } : {}),
   };
 }
 
@@ -1336,11 +1347,7 @@ export async function runMetaLaunchPreflight({
       optimizationGoal: mapGoalToOptimizationGoal(context.launchState.campaignGoal),
       targeting,
       promotedObject,
-      destinationType: adTypeUsesWebsiteDestination(context.launchState.adType)
-        ? "website"
-        : adTypeRequiresLeadForm(context.launchState.adType)
-          ? "lead_form"
-          : "engagement",
+      destinationType: resolveAdSetDestinationType(context.launchState.adType),
     },
     creative: {
       name: `${context.launchState.advanced.campaignName || context.campaign.name} Creative`,
@@ -1369,6 +1376,14 @@ export async function runMetaLaunchPreflight({
   };
 
   const { blockingIssues, warnings } = buildIssuesForMode(mode, issues);
+  if (context.launchState.adType === "lead_form" && normalizedPayloadSummary.adSet.destinationType !== "ON_AD") {
+    blockingIssues.push({
+      code: "lead_form_destination_type_invalid",
+      message: "Lead form campaigns must use ON_AD destination so Meta can use the on-ad instant form flow.",
+      field: "adSet.destinationType",
+      scope: mode,
+    });
+  }
   return {
     mode,
     blockingIssues,
