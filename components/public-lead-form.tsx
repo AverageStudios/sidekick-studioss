@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { submitLeadAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,8 @@ export function PublicLeadForm({
   funnelId,
   userId,
   businessName,
+  privacyPolicyHref = "/privacy",
+  termsHref = "/terms",
   submitted,
 }: {
   funnelSlug: string;
@@ -16,6 +19,8 @@ export function PublicLeadForm({
   funnelId: string;
   userId: string;
   businessName: string;
+  privacyPolicyHref?: string;
+  termsHref?: string;
   submitted?: boolean;
 }) {
   if (submitted) {
@@ -46,6 +51,17 @@ export function PublicLeadForm({
       <div className="rounded-[22px] bg-[var(--soft-panel)] px-4 py-3 text-sm text-[var(--muted-strong)]">
         Usually best for: name, phone, email, service, and one optional note.
       </div>
+      <p className="text-xs leading-6 text-[var(--muted)]">
+        By submitting this form, you agree that we may use your information to respond to your request and follow up about your order or inquiry. Read our{" "}
+        <Link href={privacyPolicyHref} className="font-medium text-[var(--brand)] hover:underline">
+          Privacy Policy
+        </Link>
+        {" "}and{" "}
+        <Link href={termsHref} className="font-medium text-[var(--brand)] hover:underline">
+          Terms of Service
+        </Link>
+        .
+      </p>
       <Input name="name" placeholder="Your name" required />
       <Input name="phone" placeholder="Phone number" required />
       <Input name="email" type="email" placeholder="Email address" required />

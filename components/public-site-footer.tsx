@@ -29,6 +29,12 @@ export function PublicSiteFooter() {
           <Link href="/faq" className="font-medium transition hover:text-[var(--public-text)]">
             FAQ
           </Link>
+          <Link href="/privacy" className="font-medium transition hover:text-[var(--public-text)]">
+            Privacy Policy
+          </Link>
+          <Link href="/terms" className="font-medium transition hover:text-[var(--public-text)]">
+            Terms of Service
+          </Link>
           <Link href="/login" className="font-medium transition hover:text-[var(--public-text)]">
             Login
           </Link>
