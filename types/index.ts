@@ -508,6 +508,11 @@ export type CampaignRecord = {
   launch_state_json?: CampaignLaunchState | null;
   external_publish_status?: string | null;
   external_ids_json?: Record<string, unknown> | null;
+  meta_campaign_id?: string | null;
+  meta_adset_id?: string | null;
+  meta_ad_id?: string | null;
+  meta_lead_form_id?: string | null;
+  meta_creative_id?: string | null;
   published_at?: string | null;
   archived_at?: string | null;
   ad_copy_json: {

@@ -107,14 +107,39 @@ export async function POST(request: Request) {
     });
 
     if (parsed.data.mode === "live") {
-      await admin
+      const persistedIds = {
+        meta_campaign_id:
+          typeof publishResult.externalIds?.campaign_id === "string" ? publishResult.externalIds.campaign_id : null,
+        meta_adset_id:
+          typeof publishResult.externalIds?.adset_id === "string" ? publishResult.externalIds.adset_id : null,
+        meta_ad_id:
+          typeof publishResult.externalIds?.ad_id === "string" ? publishResult.externalIds.ad_id : null,
+        meta_lead_form_id:
+          typeof publishResult.externalIds?.lead_form_id === "string" ? publishResult.externalIds.lead_form_id : null,
+        meta_creative_id:
+          typeof publishResult.externalIds?.creative_id === "string" ? publishResult.externalIds.creative_id : null,
+      };
+      const { error: campaignUpdateError, data: campaignUpdateResult } = await admin
         .from("campaigns")
         .update({
           status: "published",
           published_at: new Date().toISOString(),
           archived_at: null,
+          ...persistedIds,
         })
-        .eq("id", campaignId);
+        .eq("id", campaignId)
+        .select("id, external_ids_json, meta_campaign_id, meta_adset_id, meta_ad_id, meta_lead_form_id")
+        .single();
+
+      if (campaignUpdateError) {
+        throw new Error(campaignUpdateError.message);
+      }
+
+      console.info("[meta publish] campaign record updated after publish", {
+        campaignId,
+        persistedIds,
+        updatedRecord: campaignUpdateResult,
+      });
     }
 
     return NextResponse.json({

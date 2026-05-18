@@ -581,6 +581,67 @@ async function loadManagedCampaign(admin: NonNullable<ReturnType<typeof createSu
   return campaign as CampaignRecord;
 }
 
+async function repairCampaignMetaIdentifiers(
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
+  campaign: CampaignRecord,
+) {
+  const existing = getCampaignMetaIdentifiers(campaign);
+  if (existing.campaignId && existing.adSetId && existing.adId) {
+    return { campaign, identifiers: existing };
+  }
+
+  const { data: latestJob } = await admin
+    .from("campaign_publish_jobs")
+    .select("external_ids_json, status, created_at")
+    .eq("campaign_id", campaign.id)
+    .eq("provider", "meta")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const jobExternalIds =
+    latestJob?.external_ids_json && typeof latestJob.external_ids_json === "object"
+      ? (latestJob.external_ids_json as Record<string, unknown>)
+      : {};
+
+  const repairedIdentifiers = {
+    campaignId: existing.campaignId || (typeof jobExternalIds.campaign_id === "string" ? jobExternalIds.campaign_id : null),
+    adSetId: existing.adSetId || (typeof jobExternalIds.adset_id === "string" ? jobExternalIds.adset_id : null),
+    adId: existing.adId || (typeof jobExternalIds.ad_id === "string" ? jobExternalIds.ad_id : null),
+    leadFormId: existing.leadFormId || (typeof jobExternalIds.lead_form_id === "string" ? jobExternalIds.lead_form_id : null),
+  };
+
+  const updatePayload: Record<string, unknown> = {};
+  if (repairedIdentifiers.campaignId) updatePayload.meta_campaign_id = repairedIdentifiers.campaignId;
+  if (repairedIdentifiers.adSetId) updatePayload.meta_adset_id = repairedIdentifiers.adSetId;
+  if (repairedIdentifiers.adId) updatePayload.meta_ad_id = repairedIdentifiers.adId;
+  if (repairedIdentifiers.leadFormId) updatePayload.meta_lead_form_id = repairedIdentifiers.leadFormId;
+
+  if (Object.keys(updatePayload).length) {
+    const mergedExternalIds = {
+      ...(campaign.external_ids_json && typeof campaign.external_ids_json === "object"
+        ? campaign.external_ids_json
+        : {}),
+      ...(repairedIdentifiers.campaignId ? { campaign_id: repairedIdentifiers.campaignId } : {}),
+      ...(repairedIdentifiers.adSetId ? { adset_id: repairedIdentifiers.adSetId } : {}),
+      ...(repairedIdentifiers.adId ? { ad_id: repairedIdentifiers.adId } : {}),
+      ...(repairedIdentifiers.leadFormId ? { lead_form_id: repairedIdentifiers.leadFormId } : {}),
+    };
+    updatePayload.external_ids_json = mergedExternalIds;
+    const { error } = await admin.from("campaigns").update(updatePayload).eq("id", campaign.id);
+    if (!error) {
+      const repairedCampaign: CampaignRecord = {
+        ...campaign,
+        ...updatePayload,
+        external_ids_json: mergedExternalIds as Record<string, unknown>,
+      } as CampaignRecord;
+      return { campaign: repairedCampaign, identifiers: repairedIdentifiers };
+    }
+  }
+
+  return { campaign, identifiers: repairedIdentifiers };
+}
+
 async function runCampaignLifecycleAction(
   formData: FormData,
   action: CampaignLifecycleControl,
@@ -610,6 +671,8 @@ async function runCampaignLifecycleAction(
 
   try {
     const campaign = await loadManagedCampaign(admin, campaignId);
+    const repaired = await repairCampaignMetaIdentifiers(admin, campaign);
+    const normalizedCampaign = repaired.campaign;
     const hasAccess = campaign.workspace_id
       ? await userHasWorkspaceAccess(user.id, campaign.workspace_id)
       : campaign.user_id === user.id;
@@ -618,8 +681,8 @@ async function runCampaignLifecycleAction(
       throw new Error("You do not have access to this campaign.");
     }
 
-    const lifecycleState = getCampaignLifecycleState(campaign);
-    const identifiers = getCampaignMetaIdentifiers(campaign);
+    const lifecycleState = getCampaignLifecycleState(normalizedCampaign);
+    const identifiers = repaired.identifiers;
     const metaObjectIds = [identifiers.campaignId, identifiers.adSetId, identifiers.adId].filter(
       (value): value is string => Boolean(value),
     );

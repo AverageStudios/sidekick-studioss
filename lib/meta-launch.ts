@@ -580,6 +580,16 @@ function buildManagedLeadFormFingerprint({
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }
 
+function buildPersistedCampaignMetaIds(externalIds: Record<string, string>) {
+  return {
+    meta_campaign_id: externalIds.campaign_id || null,
+    meta_adset_id: externalIds.adset_id || null,
+    meta_ad_id: externalIds.ad_id || null,
+    meta_lead_form_id: externalIds.lead_form_id || null,
+    meta_creative_id: externalIds.creative_id || null,
+  };
+}
+
 export function summarizeMetaError(error: unknown) {
   if (!(error instanceof Error)) {
     return { message: String(error) };
@@ -1892,14 +1902,41 @@ export async function publishMetaFromPreflight({
     finalStatus = "live_requested";
   }
 
-  await admin
+  const persistedMetaIds = buildPersistedCampaignMetaIds(externalIds);
+  const mergedExternalIds = {
+    ...(context.campaign.external_ids_json && typeof context.campaign.external_ids_json === "object"
+      ? (context.campaign.external_ids_json as Record<string, unknown>)
+      : {}),
+    ...externalIds,
+  };
+  const { error: campaignPersistError } = await admin
     .from("campaigns")
     .update({
       external_publish_status: finalStatus,
-      external_ids_json: externalIds,
+      external_ids_json: mergedExternalIds,
+      ...persistedMetaIds,
       updated_at: now,
     })
     .eq("id", campaignId);
+
+  if (campaignPersistError) {
+    console.error("[meta publish] failed to persist campaign meta ids", {
+      campaignId,
+      error: campaignPersistError.message,
+      externalIds,
+      mergedExternalIds,
+      persistedMetaIds,
+    });
+    throw new Error(`Campaign publish metadata could not be saved: ${campaignPersistError.message}`);
+  }
+
+  console.info("[meta publish] persisted campaign meta ids", {
+    campaignId,
+    externalIds,
+    mergedExternalIds,
+    persistedMetaIds,
+    publishStatus: finalStatus,
+  });
 
   return {
     externalIds,
