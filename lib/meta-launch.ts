@@ -407,16 +407,66 @@ function isMetaOwnedUrl(value: string) {
   }
 }
 
+function isLocalOrPrivateHostname(hostname: string) {
+  const host = hostname.toLowerCase();
+  return (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".local") ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  );
+}
+
+function isPublicAbsoluteUrl(value: string) {
+  const normalized = sanitizeDestinationUrl(value);
+  if (!normalized) return false;
+  try {
+    const url = new URL(normalized);
+    if (!/^https?:$/i.test(url.protocol)) {
+      return false;
+    }
+    return !isLocalOrPrivateHostname(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function resolvePublicAppBaseUrl() {
+  const configured = sanitizeDestinationUrl(env.appUrl || "");
+  if (configured && isPublicAbsoluteUrl(configured)) {
+    return configured.replace(/\/+$/, "");
+  }
+  return "https://sidekickstudioss.com";
+}
+
+function buildPublicAppUrl(pathname: string) {
+  return new URL(pathname, resolvePublicAppBaseUrl()).toString();
+}
+
+function resolveLeadFormPrivacyPolicyUrl(context: MetaLaunchContext) {
+  const configured = sanitizeDestinationUrl(context.launchState.advanced.privacyPolicyUrl);
+  if (configured && isPublicAbsoluteUrl(configured) && !isMetaOwnedUrl(configured)) {
+    return configured;
+  }
+  return buildPublicAppUrl("/privacy");
+}
+
 function resolveLeadFormCreativeExternalUrl(context: MetaLaunchContext) {
   const candidates = [
     context.launchState.landingPageUrl,
     context.launchState.thankYouPage.websiteUrl,
-    context.launchState.advanced.privacyPolicyUrl,
+    resolveLeadFormPrivacyPolicyUrl(context),
+    buildPublicAppUrl("/"),
   ];
 
   for (const candidate of candidates) {
     const normalized = sanitizeDestinationUrl(candidate);
     if (!normalized) continue;
+    if (!isPublicAbsoluteUrl(normalized)) continue;
     if (isMetaOwnedUrl(normalized)) continue;
     return normalized;
   }
@@ -1099,6 +1149,15 @@ export async function runMetaLaunchPreflight({
         scope: "both",
         field: "creative.destinationUrl",
       });
+    } else if (!isPublicAbsoluteUrl(resolvedLeadFormCreativeUrl)) {
+      issues.push({
+        code: "invalid_lead_form_external_url",
+        message:
+          "Lead form creatives must use a public absolute URL. Localhost, private-network, and relative URLs are not allowed.",
+        type: "blocking",
+        scope: "both",
+        field: "creative.destinationUrl",
+      });
     } else if (isMetaOwnedUrl(resolvedLeadFormCreativeUrl)) {
       issues.push({
         code: "invalid_lead_form_external_url",
@@ -1506,7 +1565,7 @@ export async function publishMetaFromPreflight({
     const managedLeadFormName = buildManagedLeadFormName(context);
     const leadFormFingerprint = buildManagedLeadFormFingerprint({
       pageId,
-      privacyPolicyUrl: context.launchState.advanced.privacyPolicyUrl,
+      privacyPolicyUrl: resolveLeadFormPrivacyPolicyUrl(context),
       fields: summary.creative.leadFormFields,
       thankYouPage,
     });
@@ -1558,7 +1617,7 @@ export async function publishMetaFromPreflight({
           key: type.toLowerCase(),
         })),
         privacy_policy: {
-          url: context.launchState.advanced.privacyPolicyUrl,
+          url: resolveLeadFormPrivacyPolicyUrl(context),
           link_text: "Privacy Policy",
         },
         ...(thankYouPage
@@ -1602,7 +1661,7 @@ export async function publishMetaFromPreflight({
           accessToken: pageAccessToken,
           pageId,
           name: managedLeadFormName,
-          privacyPolicyUrl: context.launchState.advanced.privacyPolicyUrl,
+          privacyPolicyUrl: resolveLeadFormPrivacyPolicyUrl(context),
           fields: summary.creative.leadFormFields,
           thankYouPage,
         });
