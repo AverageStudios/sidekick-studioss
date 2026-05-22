@@ -920,11 +920,13 @@ export function TemplateLaunchWizard({
         return (
           <SectionCard
             title="Select Industry"
-            description="Start with the business category so template filtering and campaign defaults stay consistent."
+            description="Pick the library the wizard should filter against."
+            className="p-5 sm:p-6"
           >
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {supportedIndustries.map((industry) => {
                 const active = launchState.selection.industry === industry;
+                const templateCount = templates.filter((template) => template.industry === industry).length;
                 return (
                   <button
                     key={industry}
@@ -946,16 +948,30 @@ export function TemplateLaunchWizard({
                       )
                     }
                     className={cn(
-                      "rounded-[24px] border px-4 py-4 text-left transition",
+                      "rounded-[24px] border px-4 py-4 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--brand)_50%,white)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]",
                       active
-                        ? "border-[var(--brand)] bg-[rgba(109,94,248,0.08)]"
-                        : "border-[var(--line)] bg-white hover:border-[rgba(109,94,248,0.3)]",
+                        ? "border-[color-mix(in_oklab,var(--brand)_32%,white)] bg-[var(--soft-brand)] shadow-[0_16px_32px_rgba(109,94,248,0.12)]"
+                        : "border-[var(--line)] bg-white/82 shadow-[var(--shadow-soft)] hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--brand)_18%,white)] hover:bg-white active:translate-y-px",
                     )}
                   >
-                    <p className="text-sm font-semibold text-[var(--ink)]">{industry}</p>
-                    <p className="mt-1 text-sm text-[var(--muted)]">
-                      Filter templates and campaign defaults for this industry.
-                    </p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-[var(--ink)]">{industry}</p>
+                        <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">
+                          Tailors templates, defaults, and launch guidance for this category.
+                        </p>
+                      </div>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]",
+                          active
+                            ? "bg-white text-[var(--brand-ink)]"
+                            : "bg-[var(--soft-panel)] text-[var(--muted-strong)]",
+                        )}
+                      >
+                        {templateCount} template{templateCount === 1 ? "" : "s"}
+                      </span>
+                    </div>
                   </button>
                 );
               })}
@@ -966,9 +982,10 @@ export function TemplateLaunchWizard({
         return (
           <SectionCard
             title="Select Template"
-            description="Choose the creative system the campaign will use. Placeholders are generated from the selected template."
+            description="Choose the campaign system and compare the options quickly."
+            className="p-5 sm:p-6"
           >
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-3">
               {filteredTemplates.map((template) => {
                 const active = launchState.selection.templateSlug === template.slug;
                 return (
@@ -977,26 +994,62 @@ export function TemplateLaunchWizard({
                     type="button"
                     onClick={() => applyTemplate(template)}
                     className={cn(
-                      "overflow-hidden rounded-[24px] border text-left transition",
+                      "overflow-hidden rounded-[24px] border text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--brand)_50%,white)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]",
                       active
-                        ? "border-[var(--brand)] shadow-[0_18px_40px_rgba(109,94,248,0.12)]"
-                        : "border-[var(--line)] hover:border-[rgba(109,94,248,0.3)]",
+                        ? "border-[color-mix(in_oklab,var(--brand)_32%,white)] bg-[var(--soft-brand)] shadow-[0_16px_32px_rgba(109,94,248,0.12)]"
+                        : "border-[var(--line)] bg-white/82 shadow-[var(--shadow-soft)] hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--brand)_18%,white)] hover:bg-white active:translate-y-px",
                     )}
                   >
-                    <div className="aspect-[1.3/1] overflow-hidden bg-[#f3f5f8]">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={template.previewImage}
-                        alt={template.name}
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                    <div className="p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-base font-semibold text-[var(--ink)]">{template.name}</p>
-                        <Badge className="border-[var(--line)] bg-white text-[var(--muted-strong)]">{template.offerType}</Badge>
+                    <div className="grid gap-0 lg:grid-cols-[220px_minmax(0,1fr)]">
+                      <div className="relative overflow-hidden bg-[#f3f5f8] lg:min-h-[12rem]">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={template.previewImage}
+                          alt={template.name}
+                          className="h-full w-full object-cover"
+                        />
+                        <div className="absolute left-3 top-3">
+                          <span className="rounded-full bg-white/92 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)] shadow-[0_8px_18px_rgba(15,23,42,0.08)]">
+                            Preview
+                          </span>
+                        </div>
                       </div>
-                      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{template.description}</p>
+
+                      <div className="flex min-w-0 flex-col justify-between p-4 sm:p-5">
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-base font-semibold text-[var(--ink)]">{template.name}</p>
+                              <p className="mt-1 text-sm leading-6 text-[var(--muted-strong)]">
+                                {template.description}
+                              </p>
+                            </div>
+                            <Badge className="border-[var(--line)] bg-white text-[var(--muted-strong)]">
+                              {template.offerType}
+                            </Badge>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <span className="rounded-full bg-[var(--soft-panel)] px-2.5 py-1 text-[11px] font-medium text-[var(--muted-strong)]">
+                              {template.industry}
+                            </span>
+                            <span className="rounded-full bg-[var(--soft-panel)] px-2.5 py-1 text-[11px] font-medium text-[var(--muted-strong)]">
+                              {getAdTypeLabel(template.defaultAdType || "lead_form")}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                          <div className="text-sm leading-6 text-[var(--muted)]">
+                            {template.promoDetails || "Ready-to-launch campaign structure with a matching creative preview."}
+                          </div>
+                          <div className="flex justify-start sm:justify-end">
+                            <span className="rounded-[12px] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--muted-strong)]">
+                              {active ? "Selected" : "Select"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </button>
                 );
