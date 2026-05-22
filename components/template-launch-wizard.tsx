@@ -243,6 +243,50 @@ function IssueList({
   );
 }
 
+function StepHero({
+  saveState,
+  saveError,
+}: {
+  saveState: SaveState;
+  saveError: string | null;
+}) {
+  return (
+    <div className="flex flex-col gap-4 rounded-[28px] border border-[var(--line)] bg-white px-6 py-5 shadow-[0_18px_50px_rgba(15,23,42,0.05)] lg:flex-row lg:items-end lg:justify-between">
+      <div className="max-w-3xl">
+        <Badge className="rounded-full bg-[rgba(109,94,248,0.1)] px-3 py-1 text-[var(--brand)]">Launch Wizard</Badge>
+        <h1 className="mt-3 text-[2rem] font-semibold tracking-[-0.06em] text-[var(--ink)] sm:text-[2.15rem]">
+          Launch your campaign
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+          Work through a clean next-and-back flow with progress shown above, so each step stays simple and easy to scan.
+        </p>
+      </div>
+
+      <div className="inline-flex items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-xs font-medium text-[var(--muted-strong)] shadow-[0_8px_20px_rgba(15,23,42,0.05)]">
+        <span
+          className={cn(
+            "h-2.5 w-2.5 rounded-full",
+            saveState === "saved"
+              ? "bg-emerald-500"
+              : saveState === "saving"
+                ? "bg-amber-400"
+                : saveState === "error"
+                  ? "bg-rose-500"
+                  : "bg-[var(--line)]",
+          )}
+        />
+        {saveState === "saving"
+          ? "Saving draft..."
+          : saveState === "saved"
+            ? "Draft saved"
+            : saveState === "error"
+              ? saveError || "Draft could not be saved."
+              : "Draft not saved yet"}
+      </div>
+    </div>
+  );
+}
+
 function StepRail({
   steps,
   currentStepId,
@@ -255,42 +299,39 @@ function StepRail({
   const currentIndex = steps.findIndex((step) => step.id === currentStepId);
 
   return (
-    <div className="rounded-[24px] border border-[var(--line)] bg-white p-4 shadow-[0_14px_36px_rgba(15,23,42,0.05)]">
-      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+    <div className="rounded-[28px] border border-[var(--line)] bg-white px-4 py-4 shadow-[0_14px_36px_rgba(15,23,42,0.05)]">
+      <div className="flex flex-wrap items-center justify-center gap-2">
         {steps.map((step, index) => {
           const active = step.id === currentStepId;
           const complete = index < currentIndex;
           return (
-            <button
-              key={step.id}
-              type="button"
-              onClick={() => onStepClick(step.id)}
-              className={cn(
-                "flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-all",
-                active
-                  ? "border-[var(--brand)] bg-[rgba(109,94,248,0.08)] shadow-[0_6px_18px_rgba(109,94,248,0.12)]"
-                  : "border-[var(--line)] bg-white hover:border-[rgba(109,94,248,0.35)] hover:bg-[rgba(15,23,42,0.02)]",
-              )}
-            >
-              <span
+            <div key={step.id} className="flex items-center">
+              <button
+                type="button"
+                onClick={() => onStepClick(step.id)}
                 className={cn(
-                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
-                  active
-                    ? "border-[var(--brand)] bg-[var(--brand)] text-white"
-                    : complete
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                      : "border-[var(--line)] bg-white text-[var(--muted)]",
+                  "group flex items-center gap-2 rounded-full px-3 py-2 transition-colors",
+                  active ? "text-[var(--brand)]" : complete ? "text-[var(--brand-ink)]" : "text-[var(--muted-strong)]",
                 )}
               >
-                {complete ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold text-[var(--ink)]">{step.label}</span>
-                <span className="mt-0.5 hidden text-xs leading-5 text-[var(--muted)] lg:block">
-                  {step.description}
+                <span
+                  className={cn(
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all",
+                    complete
+                      ? "bg-[var(--brand)] text-white group-hover:bg-[color-mix(in_oklab,var(--brand)_88%,black)]"
+                      : active
+                        ? "bg-gradient-to-br from-[var(--brand)] to-[var(--brand-ink)] text-white ring-2 ring-[rgba(109,94,248,0.18)]"
+                        : "bg-white text-[var(--muted-strong)] ring-1 ring-[var(--line)] group-hover:ring-[rgba(109,94,248,0.3)]",
+                  )}
+                >
+                  {complete ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
                 </span>
-              </span>
-            </button>
+                <span className={cn("text-sm", active ? "font-bold" : "font-medium")}>
+                  {step.label === "Choose platform" ? "Choose platform" : step.label}
+                </span>
+              </button>
+              {index < steps.length - 1 ? <div className="mx-1 h-px w-8 bg-[rgba(109,94,248,0.28)] sm:w-12" /> : null}
+            </div>
           );
         })}
       </div>
@@ -1988,30 +2029,8 @@ export function TemplateLaunchWizard({
   }
 
   return (
-    <div className="space-y-5">
-      <div className="rounded-[28px] border border-[var(--line)] bg-white px-6 py-5 shadow-[0_18px_50px_rgba(15,23,42,0.05)]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-2xl">
-            <Badge className="rounded-full bg-[rgba(109,94,248,0.1)] px-3 py-1 text-[var(--brand)]">Launch Wizard</Badge>
-            <h1 className="mt-3 text-2xl font-semibold tracking-[-0.06em] text-[var(--ink)] sm:text-[2.05rem]">
-              Launch your campaign
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              Pick an industry, choose a template, and move through a simple back-and-next flow.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <Button type="button" variant="outline" onClick={() => persistDraft()} disabled={!selectedTemplate || saveState === "saving"}>
-              {saveState === "saving" ? "Saving..." : "Save Draft"}
-            </Button>
-            <Button asChild variant={metaConnected ? "outline" : "primary"}>
-              <Link href={metaConnectHref}>{metaConnected ? "Reconnect Facebook" : "Connect Facebook"}</Link>
-            </Button>
-          </div>
-        </div>
-      </div>
-
+    <div className="space-y-6">
+      <StepHero saveState={saveState} saveError={saveError} />
       <StepRail
         steps={visibleSteps}
         currentStepId={launchState.stepId}
@@ -2021,9 +2040,9 @@ export function TemplateLaunchWizard({
             stepId,
           }))
         }
-      />
+        />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_26rem]">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
         <div className="space-y-5">
           {currentIssues.length > 0 ? <IssueList title="Current step issues" issues={currentIssues} /> : null}
 
@@ -2053,7 +2072,7 @@ export function TemplateLaunchWizard({
           </div>
         </div>
 
-        <div className="space-y-6 xl:sticky xl:top-6 self-start">
+        <div className="space-y-6 lg:sticky lg:top-6 self-start">
           <SectionCard
             title="Live Preview"
             description="The ad preview mirrors the same state that feeds save, preflight, and publish."
