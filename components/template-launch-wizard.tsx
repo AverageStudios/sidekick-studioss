@@ -8,16 +8,11 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  ExternalLink,
   FileText,
   Globe,
-  MapPin,
   MessageCircle,
   PhoneCall,
   Rocket,
-  Sparkles,
-  Target,
-  Wallet,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,7 +29,6 @@ import {
   getCampaignGoalForAdType,
   getNextWizardStep,
   getPreviousWizardStep,
-  getStepDefinition,
   getTemplatePlaceholderFields,
   getTemplateSetupValuesFromLaunchState,
   getVisibleWizardSteps,
@@ -535,7 +529,6 @@ export function TemplateLaunchWizard({
     () => getVisibleWizardSteps(launchState.selection.adType),
     [launchState.selection.adType],
   );
-  const currentStepDefinition = getStepDefinition(launchState.stepId);
   const currentStepIndex = visibleSteps.findIndex((step) => step.id === launchState.stepId);
   const filteredTemplates = useMemo(
     () =>
@@ -1994,19 +1987,15 @@ export function TemplateLaunchWizard({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-[32px] border border-[var(--line)] bg-[linear-gradient(135deg,#fbfbff_0%,#f6f8fc_100%)] p-6 shadow-[0_24px_70px_rgba(15,23,42,0.06)]">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+      <div className="rounded-[32px] border border-[var(--line)] bg-white p-6 shadow-[0_24px_70px_rgba(15,23,42,0.05)]">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
-            <div className="flex flex-wrap items-center gap-3">
-              <Badge className="rounded-full bg-[rgba(109,94,248,0.1)] px-3 py-1 text-[var(--brand)]">Launch Wizard</Badge>
-              <Badge className="border-[var(--line)] bg-white text-[var(--muted-strong)]">{getAdTypeLabel(launchState.selection.adType)}</Badge>
-            </div>
-            <h1 className="mt-4 text-[2.2rem] font-semibold tracking-[-0.06em] text-[var(--ink)]">
-              Build a clean Meta campaign flow
+            <Badge className="rounded-full bg-[rgba(109,94,248,0.1)] px-3 py-1 text-[var(--brand)]">Launch Wizard</Badge>
+            <h1 className="mt-4 text-[2.05rem] font-semibold tracking-[-0.06em] text-[var(--ink)]">
+              Launch your campaign
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--muted)]">
-              The wizard now uses explicit ad-type-based steps, canonical launch state, generated placeholders, and a clean
-              review-to-launch path.
+            <p className="mt-2 max-w-2xl text-sm leading-7 text-[var(--muted)]">
+              Choose an industry, pick a template, and move through the setup with fewer distractions.
             </p>
           </div>
 
@@ -2019,29 +2008,10 @@ export function TemplateLaunchWizard({
             </Button>
           </div>
         </div>
-
-        <div className="mt-5 flex flex-wrap gap-3 text-sm text-[var(--muted-strong)]">
-          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-white px-3 py-1.5">
-            <Target className="h-4 w-4 text-[var(--brand)]" />
-            {launchState.selection.industry || "No industry selected"}
-          </span>
-          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-white px-3 py-1.5">
-            <Sparkles className="h-4 w-4 text-[var(--brand)]" />
-            {selectedTemplate?.name || "No template selected"}
-          </span>
-          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-white px-3 py-1.5">
-            <Wallet className="h-4 w-4 text-[var(--brand)]" />
-            ${launchState.campaign.dailyBudget || "0"}/day
-          </span>
-          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-white px-3 py-1.5">
-            <MapPin className="h-4 w-4 text-[var(--brand)]" />
-            {launchState.targeting.locations.length ? `${launchState.targeting.locations.length} locations` : "No location yet"}
-          </span>
-        </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[18rem_minmax(0,1fr)_28rem]">
-        <div className="space-y-4">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem]">
+        <div className="space-y-6">
           <StepRail
             steps={visibleSteps}
             currentStepId={launchState.stepId}
@@ -2053,23 +2023,6 @@ export function TemplateLaunchWizard({
             }
           />
           <IssueList title="Current step issues" issues={currentIssues} />
-        </div>
-
-        <div className="space-y-6">
-          <div className="rounded-[28px] border border-[var(--line)] bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Current Step</p>
-            <div className="mt-3 flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-[1.45rem] font-semibold tracking-[-0.04em] text-[var(--ink)]">
-                  {currentStepDefinition.label}
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{currentStepDefinition.description}</p>
-              </div>
-              <Badge className="border-[var(--line)] bg-white text-[var(--muted-strong)]">
-                Step {currentStepIndex + 1} of {visibleSteps.length}
-              </Badge>
-            </div>
-          </div>
 
           {renderStepContent()}
 
@@ -2100,7 +2053,7 @@ export function TemplateLaunchWizard({
         <div className="space-y-6">
           <SectionCard
             title="Live Preview"
-            description="The ad preview is rendered from the same canonical launch state that feeds save, preflight, and publish."
+            description="The ad preview mirrors the same state that feeds save, preflight, and publish."
           >
             <FacebookAdPreview
               template={selectedTemplate}
@@ -2113,60 +2066,6 @@ export function TemplateLaunchWizard({
               imageUrl={selectedTemplate?.previewImage || null}
               compact
             />
-          </SectionCard>
-
-          <SectionCard title="Wizard Architecture" description="Quick signal that the state and flow are coherent.">
-            <div className="space-y-3 text-sm text-[var(--muted-strong)]">
-              <div className="flex items-center justify-between gap-4">
-                <span>State model</span>
-                <span className="font-medium text-[var(--ink)]">v{launchState.version}</span>
-              </div>
-              <div className="flex items-center justify-between gap-4">
-                <span>Selected template</span>
-                <span className="font-medium text-[var(--ink)]">{selectedTemplate?.slug || "None"}</span>
-              </div>
-              <div className="flex items-center justify-between gap-4">
-                <span>Ad type flow</span>
-                <span className="font-medium text-[var(--ink)]">{visibleSteps.length} steps</span>
-              </div>
-              <div className="flex items-center justify-between gap-4">
-                <span>Generated placeholders</span>
-                <span className="font-medium text-[var(--ink)]">{placeholderFields.length}</span>
-              </div>
-              <div className="flex items-center justify-between gap-4">
-                <span>Meta connection</span>
-                <span className="font-medium text-[var(--ink)]">{metaConnected ? "Connected" : "Needs Facebook"}</span>
-              </div>
-            </div>
-            <div className="mt-5 rounded-2xl border border-[var(--line)] bg-[rgba(15,23,42,0.02)] px-4 py-4">
-              <p className="text-sm font-semibold text-[var(--ink)]">Meta assets in play</p>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                Ad account:{" "}
-                <span className="font-medium text-[var(--ink)]">
-                  {metaIntegration?.assets.adAccounts.find((item) => item.asset_id === launchState.integrationSelections.adAccountId)?.name || "Not selected"}
-                </span>
-              </p>
-              <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                Facebook Page:{" "}
-                <span className="font-medium text-[var(--ink)]">
-                  {pagePreviewIdentity.pageName}
-                </span>
-              </p>
-              {launchState.selection.adType === "landing_page" ? (
-                <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                  Tracking Pixel:{" "}
-                  <span className="font-medium text-[var(--ink)]">
-                    {metaIntegration?.assets.pixels.find((item) => item.asset_id === launchState.integrationSelections.pixelId)?.name || "Not selected"}
-                  </span>
-                </p>
-              ) : null}
-            </div>
-            <div className="mt-5">
-              <Link href="/workspace/settings?section=integrations" className="inline-flex items-center gap-2 text-sm font-medium text-[var(--brand)]">
-                Manage workspace Meta connection
-                <ExternalLink className="h-4 w-4" />
-              </Link>
-            </div>
           </SectionCard>
         </div>
       </div>
