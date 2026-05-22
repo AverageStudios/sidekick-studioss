@@ -5,10 +5,16 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
-import { archiveCampaignAction, pauseCampaignAction, resumeCampaignAction } from "@/app/actions";
+import { archiveCampaignAction, pauseCampaignAction, resumeCampaignAction, syncCampaignStatusAction } from "@/app/actions";
 import { requireUser } from "@/lib/auth";
 import { getCampaignBundle } from "@/lib/data";
-import { getCampaignLifecycleLabel, getCampaignLifecycleState, getCampaignMetaIdentifiers } from "@/lib/campaign-management";
+import {
+  getCampaignLastSyncedAt,
+  getCampaignLifecycleLabel,
+  getCampaignLifecycleState,
+  getCampaignMetaIdentifiers,
+  getCampaignSyncState,
+} from "@/lib/campaign-management";
 import { cn } from "@/lib/utils";
 
 export default async function CampaignPage({
@@ -33,8 +39,10 @@ export default async function CampaignPage({
   const hasMetaIds = Boolean(metaIds.campaignId || metaIds.adSetId || metaIds.adId || metaIds.leadFormId);
   const canPause = lifecycleState === "active";
   const canResume = lifecycleState === "paused";
-  const canArchive = lifecycleState === "active" || lifecycleState === "paused";
+  const canArchive = lifecycleState === "active" || lifecycleState === "paused" || lifecycleState === "unknown";
   const openInMetaHref = "https://business.facebook.com/adsmanager";
+  const lastSyncedAt = getCampaignLastSyncedAt(bundle.campaign);
+  const syncState = getCampaignSyncState(bundle.campaign);
 
   const description =
     lifecycleState === "draft"
@@ -43,7 +51,9 @@ export default async function CampaignPage({
         ? "This launched campaign is currently paused. Resume it when you want Meta to spend again."
         : lifecycleState === "archived"
           ? "This campaign is archived locally for history and troubleshooting. It stays out of the active views."
-          : "Your launched campaign is active. Use the controls below to pause, archive, or inspect the launch metadata.";
+          : lifecycleState === "unknown"
+            ? "This launched campaign needs a fresh Meta status sync before the app can confidently label it active or paused."
+            : "Your launched campaign is active. Use the controls below to pause, archive, or inspect the launch metadata.";
 
   return (
     <AppShell currentPath="/dashboard">
@@ -162,11 +172,40 @@ export default async function CampaignPage({
                 {bundle.campaign.external_publish_status || "Not started"}
               </p>
               <p>
+                <span className="font-medium text-[var(--ink)]">Meta effective status:</span>{" "}
+                {bundle.campaign.meta_effective_status || "Unknown"}
+              </p>
+              <p>
+                <span className="font-medium text-[var(--ink)]">Last synced:</span>{" "}
+                {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : "Not synced yet"}
+              </p>
+              <p>
+                <span className="font-medium text-[var(--ink)]">Sync state:</span>{" "}
+                {syncState === "synced"
+                  ? "Synced"
+                  : syncState === "stale"
+                    ? "Stale"
+                    : syncState === "error"
+                      ? "Sync error"
+                      : syncState === "unknown"
+                        ? "Unknown"
+                        : "Not live"}
+              </p>
+              <p>
                 <span className="font-medium text-[var(--ink)]">Workspace:</span> {bundle.campaign.workspace_id || "No workspace"}
               </p>
             </div>
 
             <div className="mt-6 flex flex-wrap gap-2">
+              {bundle.campaign.status === "published" ? (
+                <form action={syncCampaignStatusAction}>
+                  <input type="hidden" name="campaignId" value={bundle.campaign.id} />
+                  <input type="hidden" name="redirectTo" value={redirectTo} />
+                  <Button type="submit" variant="outline">
+                    Refresh Meta status
+                  </Button>
+                </form>
+              ) : null}
               {canPause ? (
                 <form action={pauseCampaignAction}>
                   <input type="hidden" name="campaignId" value={bundle.campaign.id} />

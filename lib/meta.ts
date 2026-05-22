@@ -55,6 +55,14 @@ export type MetaLeadForm = {
   created_time?: string;
 };
 
+export type MetaCampaignStatus = {
+  id: string;
+  name?: string;
+  status?: string;
+  configured_status?: string;
+  effective_status?: string;
+};
+
 export type MetaLeadFormAccessResult = {
   ok: boolean;
   pageId: string;
@@ -439,6 +447,13 @@ export async function fetchMetaLeadForms(accessToken: string, pageId: string) {
   url.searchParams.set("access_token", accessToken);
   const payload = await fetchMetaJson<{ data?: MetaLeadForm[] }>(url.toString());
   return payload.data || [];
+}
+
+export async function fetchMetaCampaignStatus(accessToken: string, campaignId: string) {
+  const url = new URL(buildMetaGraphUrl(campaignId));
+  url.searchParams.set("fields", "id,name,status,configured_status,effective_status");
+  url.searchParams.set("access_token", accessToken);
+  return fetchMetaJson<MetaCampaignStatus>(url.toString());
 }
 
 function extractMissingMetaPermissions(message: string) {

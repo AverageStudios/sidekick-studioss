@@ -513,6 +513,10 @@ export type CampaignRecord = {
   meta_ad_id?: string | null;
   meta_lead_form_id?: string | null;
   meta_creative_id?: string | null;
+  meta_effective_status?: string | null;
+  meta_configured_status?: string | null;
+  meta_status_synced_at?: string | null;
+  management_sync_state?: "synced" | "stale" | "error" | "unknown" | null;
   published_at?: string | null;
   archived_at?: string | null;
   ad_copy_json: {

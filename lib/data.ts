@@ -3,10 +3,11 @@ import { getTemplateById, hydrateTemplateRecord } from "@/data/templates";
 import { demoBundle, demoCampaign, demoFunnel, demoLeads } from "@/lib/demo-data";
 import { isDemoModeEnabled, isSupabaseServerConfigured } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { hydrateAndSyncCampaignRecords, repairCampaignMetaIdentifiers, syncCampaignStatusFromMeta } from "@/lib/campaign-management";
 import { listPublishedTemplates, getPublishedTemplateBySlug } from "@/lib/template-repository";
 import { ensureWorkspaceContextByUserId, getActiveWorkspaceIdForUser, userHasWorkspaceAccess } from "@/lib/workspaces";
 import { getWorkspaceMetaIntegrationState } from "@/lib/meta-integration";
-import { BusinessProfile, CampaignBundle, LeadRecord, TemplateRecord } from "@/types";
+import { BusinessProfile, CampaignBundle, CampaignRecord, LeadRecord, TemplateRecord } from "@/types";
 
 async function getTemplateRecordById(id: string) {
   if (!isSupabaseServerConfigured()) {
@@ -97,6 +98,11 @@ export const getDashboardSnapshot = cache(async (userId: string) => {
   ]);
 
   const leads = (leadsResult.data || []) as LeadRecord[];
+  const campaigns = await hydrateAndSyncCampaignRecords({
+    admin: supabase,
+    campaigns: (campaignsResult.data || []) as CampaignRecord[],
+    syncLiveStatuses: true,
+  });
 
   return {
     liveFunnels: (funnelsResult.data || []).filter((funnel) => funnel.is_published).length,
@@ -104,7 +110,7 @@ export const getDashboardSnapshot = cache(async (userId: string) => {
     contactedLeads: leads.filter((lead) => lead.status === "contacted").length,
     bookedLeads: leads.filter((lead) => lead.status === "booked").length,
     recentLeads: leads,
-    campaigns: campaignsResult.data || [],
+    campaigns,
     funnels: funnelsResult.data || [],
   };
 });
@@ -144,25 +150,36 @@ export const getCampaignBundle = cache(async (userId: string, id: string) => {
           launch_state_json: latestSnapshot.data.snapshot_json,
         }
       : campaign;
+  const repairedCampaign = await repairCampaignMetaIdentifiers(
+    supabase,
+    hydratedCampaign as CampaignRecord,
+  );
+  const managedCampaign =
+    repairedCampaign.campaign.status === "published"
+      ? await syncCampaignStatusFromMeta({
+          admin: supabase,
+          campaign: repairedCampaign.campaign,
+        }).catch(() => repairedCampaign.campaign)
+      : repairedCampaign.campaign;
 
   const funnel = await supabase.from("funnels").select("*").eq("campaign_id", campaign.id).single();
-  const profile = campaign.workspace_id
+  const profile = managedCampaign.workspace_id
     ? (
         await supabase
           .from("business_profiles")
           .select("*")
-          .eq("workspace_id", campaign.workspace_id)
+          .eq("workspace_id", managedCampaign.workspace_id)
           .maybeSingle()
       ).data
     : await getBusinessProfile(userId);
 
-  const templateRecord = await getTemplateRecordById(campaign.template_id);
-  const template = templateRecord ? hydrateTemplateRecord(templateRecord) : getTemplateById(campaign.template_id);
-  const resolvedTemplate = template || getTemplateById(campaign.template_id);
+  const templateRecord = await getTemplateRecordById(managedCampaign.template_id);
+  const template = templateRecord ? hydrateTemplateRecord(templateRecord) : getTemplateById(managedCampaign.template_id);
+  const resolvedTemplate = template || getTemplateById(managedCampaign.template_id);
   if (!resolvedTemplate) return null;
 
   return {
-    campaign: hydratedCampaign,
+    campaign: managedCampaign,
     funnel: funnel.data,
     template: resolvedTemplate,
     businessProfile: profile as BusinessProfile | null,

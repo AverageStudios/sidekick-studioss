@@ -25,7 +25,12 @@ import {
   syncWorkspaceMetaAssets,
   getWorkspaceMetaAccessToken,
 } from "@/lib/meta-integration";
-import { getCampaignLifecycleState, getCampaignMetaIdentifiers } from "@/lib/campaign-management";
+import {
+  archiveCampaignWithMetaSync,
+  getCampaignLifecycleState,
+  repairCampaignMetaIdentifiers,
+  syncCampaignStatusFromMeta,
+} from "@/lib/campaign-management";
 import {
   AdminTemplateActionState,
   AdminTemplateFieldName,
@@ -581,67 +586,6 @@ async function loadManagedCampaign(admin: NonNullable<ReturnType<typeof createSu
   return campaign as CampaignRecord;
 }
 
-async function repairCampaignMetaIdentifiers(
-  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
-  campaign: CampaignRecord,
-) {
-  const existing = getCampaignMetaIdentifiers(campaign);
-  if (existing.campaignId && existing.adSetId && existing.adId) {
-    return { campaign, identifiers: existing };
-  }
-
-  const { data: latestJob } = await admin
-    .from("campaign_publish_jobs")
-    .select("external_ids_json, status, created_at")
-    .eq("campaign_id", campaign.id)
-    .eq("provider", "meta")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const jobExternalIds =
-    latestJob?.external_ids_json && typeof latestJob.external_ids_json === "object"
-      ? (latestJob.external_ids_json as Record<string, unknown>)
-      : {};
-
-  const repairedIdentifiers = {
-    campaignId: existing.campaignId || (typeof jobExternalIds.campaign_id === "string" ? jobExternalIds.campaign_id : null),
-    adSetId: existing.adSetId || (typeof jobExternalIds.adset_id === "string" ? jobExternalIds.adset_id : null),
-    adId: existing.adId || (typeof jobExternalIds.ad_id === "string" ? jobExternalIds.ad_id : null),
-    leadFormId: existing.leadFormId || (typeof jobExternalIds.lead_form_id === "string" ? jobExternalIds.lead_form_id : null),
-  };
-
-  const updatePayload: Record<string, unknown> = {};
-  if (repairedIdentifiers.campaignId) updatePayload.meta_campaign_id = repairedIdentifiers.campaignId;
-  if (repairedIdentifiers.adSetId) updatePayload.meta_adset_id = repairedIdentifiers.adSetId;
-  if (repairedIdentifiers.adId) updatePayload.meta_ad_id = repairedIdentifiers.adId;
-  if (repairedIdentifiers.leadFormId) updatePayload.meta_lead_form_id = repairedIdentifiers.leadFormId;
-
-  if (Object.keys(updatePayload).length) {
-    const mergedExternalIds = {
-      ...(campaign.external_ids_json && typeof campaign.external_ids_json === "object"
-        ? campaign.external_ids_json
-        : {}),
-      ...(repairedIdentifiers.campaignId ? { campaign_id: repairedIdentifiers.campaignId } : {}),
-      ...(repairedIdentifiers.adSetId ? { adset_id: repairedIdentifiers.adSetId } : {}),
-      ...(repairedIdentifiers.adId ? { ad_id: repairedIdentifiers.adId } : {}),
-      ...(repairedIdentifiers.leadFormId ? { lead_form_id: repairedIdentifiers.leadFormId } : {}),
-    };
-    updatePayload.external_ids_json = mergedExternalIds;
-    const { error } = await admin.from("campaigns").update(updatePayload).eq("id", campaign.id);
-    if (!error) {
-      const repairedCampaign: CampaignRecord = {
-        ...campaign,
-        ...updatePayload,
-        external_ids_json: mergedExternalIds as Record<string, unknown>,
-      } as CampaignRecord;
-      return { campaign: repairedCampaign, identifiers: repairedIdentifiers };
-    }
-  }
-
-  return { campaign, identifiers: repairedIdentifiers };
-}
-
 async function runCampaignLifecycleAction(
   formData: FormData,
   action: CampaignLifecycleControl,
@@ -735,25 +679,31 @@ async function runCampaignLifecycleAction(
         });
       }
 
-      const campaignUpdate: Record<string, unknown> =
-        action === "archive"
-          ? {
-              status: "archived",
-              external_publish_status: "archived",
-              archived_at: now,
-              updated_at: now,
-            }
-          : {
-              status: "published",
-              external_publish_status: action === "pause" ? "paused" : "active",
-              updated_at: now,
-            };
-
-      await admin
-        .from("campaigns")
-        .update(campaignUpdate)
-        .eq("id", campaignId)
-        .eq("user_id", campaign.user_id);
+      if (action === "archive") {
+        await archiveCampaignWithMetaSync({
+          admin,
+          campaign: {
+            ...normalizedCampaign,
+            archived_at: now,
+          } as CampaignRecord,
+        });
+      } else {
+        const syncedCampaign = await syncCampaignStatusFromMeta({
+          admin,
+          campaign: normalizedCampaign,
+        });
+        const syncedLifecycle = getCampaignLifecycleState(syncedCampaign);
+        if (action === "pause" && syncedLifecycle !== "paused") {
+          throw new Error(
+            `Meta did not confirm the campaign is paused. Current Meta status is ${syncedCampaign.meta_effective_status || syncedCampaign.external_publish_status || "unknown"}.`,
+          );
+        }
+        if (action === "resume" && syncedLifecycle !== "active") {
+          throw new Error(
+            `Meta did not confirm the campaign is active. Current Meta status is ${syncedCampaign.meta_effective_status || syncedCampaign.external_publish_status || "unknown"}.`,
+          );
+        }
+      }
 
       successMessage =
         action === "pause"
@@ -797,6 +747,55 @@ export async function resumeCampaignAction(formData: FormData) {
 
 export async function archiveCampaignAction(formData: FormData) {
   await runCampaignLifecycleAction(formData, "archive");
+}
+
+export async function syncCampaignStatusAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!isSupabaseServerConfigured()) {
+    redirect("/dashboard");
+  }
+
+  const campaignId = String(formData.get("campaignId") || "").trim();
+  const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
+
+  if (!campaignId) {
+    redirect(appendQueryParam(redirectTo, "error", "Campaign could not be found."));
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(appendQueryParam(redirectTo, "error", "Campaign status sync is not available right now."));
+  }
+
+  try {
+    const campaign = await loadManagedCampaign(admin, campaignId);
+    const hasAccess = campaign.workspace_id
+      ? await userHasWorkspaceAccess(user.id, campaign.workspace_id)
+      : campaign.user_id === user.id;
+
+    if (!hasAccess) {
+      throw new Error("You do not have access to this campaign.");
+    }
+
+    await syncCampaignStatusFromMeta({
+      admin,
+      campaign,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Campaign status sync failed.";
+    redirect(appendQueryParam(redirectTo, "error", message));
+  }
+
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath("/workspace/settings");
+  revalidatePath("/templates");
+  revalidatePath("/performance");
+  revalidatePath("/dashboard");
+  redirect(appendQueryParam(redirectTo, "success", "Campaign status synced from Meta."));
 }
 
 export async function switchWorkspaceAction(formData: FormData) {
