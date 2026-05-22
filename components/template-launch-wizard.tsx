@@ -255,8 +255,8 @@ function StepRail({
   const currentIndex = steps.findIndex((step) => step.id === currentStepId);
 
   return (
-    <div className="rounded-[28px] border border-[var(--line)] bg-white p-4 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-      <div className="space-y-2">
+    <div className="rounded-[24px] border border-[var(--line)] bg-white p-4 shadow-[0_14px_36px_rgba(15,23,42,0.05)]">
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
         {steps.map((step, index) => {
           const active = step.id === currentStepId;
           const complete = index < currentIndex;
@@ -266,15 +266,15 @@ function StepRail({
               type="button"
               onClick={() => onStepClick(step.id)}
               className={cn(
-                "flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left transition-colors",
+                "flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-all",
                 active
-                  ? "bg-[rgba(109,94,248,0.08)]"
-                  : "hover:bg-[rgba(15,23,42,0.03)]",
+                  ? "border-[var(--brand)] bg-[rgba(109,94,248,0.08)] shadow-[0_6px_18px_rgba(109,94,248,0.12)]"
+                  : "border-[var(--line)] bg-white hover:border-[rgba(109,94,248,0.35)] hover:bg-[rgba(15,23,42,0.02)]",
               )}
             >
               <span
                 className={cn(
-                  "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
                   active
                     ? "border-[var(--brand)] bg-[var(--brand)] text-white"
                     : complete
@@ -286,7 +286,9 @@ function StepRail({
               </span>
               <span className="min-w-0">
                 <span className="block text-sm font-semibold text-[var(--ink)]">{step.label}</span>
-                <span className="mt-0.5 block text-xs leading-5 text-[var(--muted)]">{step.description}</span>
+                <span className="mt-0.5 hidden text-xs leading-5 text-[var(--muted)] lg:block">
+                  {step.description}
+                </span>
               </span>
             </button>
           );
@@ -1986,16 +1988,16 @@ export function TemplateLaunchWizard({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-[32px] border border-[var(--line)] bg-white p-6 shadow-[0_24px_70px_rgba(15,23,42,0.05)]">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
+    <div className="space-y-5">
+      <div className="rounded-[28px] border border-[var(--line)] bg-white px-6 py-5 shadow-[0_18px_50px_rgba(15,23,42,0.05)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl">
             <Badge className="rounded-full bg-[rgba(109,94,248,0.1)] px-3 py-1 text-[var(--brand)]">Launch Wizard</Badge>
-            <h1 className="mt-4 text-[2.05rem] font-semibold tracking-[-0.06em] text-[var(--ink)]">
+            <h1 className="mt-3 text-2xl font-semibold tracking-[-0.06em] text-[var(--ink)] sm:text-[2.05rem]">
               Launch your campaign
             </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-7 text-[var(--muted)]">
-              Choose an industry, pick a template, and move through the setup with fewer distractions.
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+              Pick an industry, choose a template, and move through a simple back-and-next flow.
             </p>
           </div>
 
@@ -2010,23 +2012,24 @@ export function TemplateLaunchWizard({
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem]">
-        <div className="space-y-6">
-          <StepRail
-            steps={visibleSteps}
-            currentStepId={launchState.stepId}
-            onStepClick={(stepId) =>
-              updateLaunchState((current) => ({
-                ...current,
-                stepId,
-              }))
-            }
-          />
-          <IssueList title="Current step issues" issues={currentIssues} />
+      <StepRail
+        steps={visibleSteps}
+        currentStepId={launchState.stepId}
+        onStepClick={(stepId) =>
+          updateLaunchState((current) => ({
+            ...current,
+            stepId,
+          }))
+        }
+      />
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_26rem]">
+        <div className="space-y-5">
+          {currentIssues.length > 0 ? <IssueList title="Current step issues" issues={currentIssues} /> : null}
 
           {renderStepContent()}
 
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-4 rounded-[24px] border border-[var(--line)] bg-white px-5 py-4 shadow-[0_12px_32px_rgba(15,23,42,0.04)]">
             <Button
               type="button"
               variant="outline"
@@ -2050,7 +2053,7 @@ export function TemplateLaunchWizard({
           </div>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-6 xl:sticky xl:top-6 self-start">
           <SectionCard
             title="Live Preview"
             description="The ad preview mirrors the same state that feeds save, preflight, and publish."
