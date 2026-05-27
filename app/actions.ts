@@ -49,6 +49,12 @@ const signUpSchema = authSchema.extend({
 });
 
 const optionalText = z.string().trim().optional().default("");
+const headlineText = z
+  .string()
+  .trim()
+  .max(25, "Headline must be 25 characters or fewer.")
+  .optional()
+  .default("");
 const optionalUrl = z.union([z.literal(""), z.string().url("Enter a valid preview image URL.")]).transform((value) => value || "");
 
 const templateAdminSchema = z.object({
@@ -84,7 +90,7 @@ const templateAdminSchema = z.object({
   supportedAdTypes: z.array(z.enum(["lead_form", "landing_page", "call_now", "messenger_leads", "messenger_engagement"])).default(["lead_form"]),
   defaultAdType: z.enum(["lead_form", "landing_page", "call_now", "messenger_leads", "messenger_engagement"]).default("lead_form"),
   promoDetails: optionalText,
-  headline: optionalText,
+  headline: headlineText,
   subheadline: optionalText,
   ctaDefault: optionalText,
   offerLabel: optionalText,
@@ -183,7 +189,7 @@ function buildTemplateAdminValues(formData: FormData) {
         : ["lead_form"],
     defaultAdType: String(formData.get("defaultAdType") || "lead_form"),
     promoDetails: String(formData.get("promoDetails") || ""),
-    headline: String(formData.get("headline") || name),
+    headline: String(formData.get("headline") || name).trim().slice(0, 25),
     subheadline: String(formData.get("subheadline") || ""),
     ctaDefault: String(formData.get("ctaDefault") || "Get Started"),
     offerLabel: String(formData.get("offerLabel") || ""),
@@ -1272,7 +1278,7 @@ export async function createCampaignAction(formData: FormData) {
     offerPrice: String(formData.get("offerPrice") || ""),
     regularPrice: String(formData.get("regularPrice") || ""),
     ctaText: String(formData.get("ctaText") || template.ctaDefault),
-    headline: String(formData.get("headline") || ""),
+    headline: String(formData.get("headline") || "").trim().slice(0, 25),
     subheadline: String(formData.get("subheadline") || ""),
     businessDescription: String(formData.get("businessDescription") || ""),
     testimonialText: String(formData.get("testimonialText") || ""),

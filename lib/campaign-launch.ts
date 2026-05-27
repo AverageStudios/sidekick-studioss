@@ -4,14 +4,13 @@ import {
   CampaignGoal,
   CampaignLaunchLocation,
   CampaignLaunchState,
+  CampaignLeadFormCustomQuestion,
   CampaignLeadFormField,
   CampaignLeadFormMode,
-  CampaignLocationScope,
   CampaignLocationTargetingType,
   CampaignThankYouButtonAction,
   CampaignThankYouDestinationMode,
   CampaignWizardStepId,
-  TemplatePlaceholderField,
   TemplateSeed,
   TemplateSetupValues,
 } from "@/types";
@@ -60,6 +59,7 @@ export type CampaignLaunchView = {
     selectedFormName: string;
     managedFormName: string;
     fields: CampaignLeadFormField[];
+    customQuestions: CampaignLeadFormCustomQuestion[];
   };
   integrationSelections: CampaignLaunchState["integrationSelections"];
   previewTab?: CampaignLaunchState["previewTab"];
@@ -82,8 +82,18 @@ export type CampaignStepDefinition = {
   description: string;
 };
 
+export type CampaignWizardSectionId = "template" | "details" | "setup" | "review";
+
+export type CampaignWizardSectionDefinition = {
+  id: CampaignWizardSectionId;
+  label: string;
+  description: string;
+  stepIds: CampaignWizardStepId[];
+};
+
 const defaultStep: CampaignWizardStepId = "industry";
 const defaultRadius = "10";
+const defaultLeadFormFields: CampaignLeadFormField[] = ["FULL_NAME", "EMAIL", "PHONE"];
 
 const stepDefinitions: Record<CampaignWizardStepId, CampaignStepDefinition> = {
   industry: {
@@ -101,95 +111,39 @@ const stepDefinitions: Record<CampaignWizardStepId, CampaignStepDefinition> = {
     label: "Ad Type",
     description: "Choose how this campaign should drive responses.",
   },
-  budget: {
-    id: "budget",
-    label: "Budget",
-    description: "Set the daily campaign budget.",
+  "campaign-basics": {
+    id: "campaign-basics",
+    label: "Campaign Basics",
+    description: "Set the campaign name, Meta page, ad account, and daily budget.",
   },
   location: {
     id: "location",
     label: "Target Location",
     description: "Define where Meta should deliver the campaign.",
   },
-  "tracking-pixel": {
-    id: "tracking-pixel",
-    label: "Tracking Pixel",
-    description: "Select the Meta Pixel used for landing page tracking.",
+  "destination-setup": {
+    id: "destination-setup",
+    label: "Destination Setup",
+    description: "Configure the destination details that match the selected ad type.",
   },
   placeholders: {
     id: "placeholders",
     label: "Fill Placeholders",
     description: "Replace every template variable with campaign-specific content.",
   },
-  "landing-page": {
-    id: "landing-page",
-    label: "Landing Page",
-    description: "Choose the destination URL for website traffic.",
-  },
-  "phone-number": {
-    id: "phone-number",
-    label: "Phone Number",
-    description: "Set the phone number used for call-first campaigns.",
-  },
-  "messenger-setup": {
-    id: "messenger-setup",
-    label: "Messenger Setup",
-    description: "Write the opening Messenger prompts and conversation starter.",
-  },
-  "thank-you": {
-    id: "thank-you",
-    label: "Thank You",
-    description: "Control the optional post-submit thank-you experience for lead forms.",
-  },
-  overview: {
-    id: "overview",
-    label: "Overview / Review & Edit",
-    description: "Review the campaign, assets, and editable content before launch.",
-  },
-  launch: {
-    id: "launch",
-    label: "Launch",
-    description: "Run readiness checks and publish to Meta.",
+  "review-launch": {
+    id: "review-launch",
+    label: "Review & Launch",
+    description: "Review the campaign, run readiness checks, and publish to Meta.",
   },
 };
 
 const adTypeStepFlow: Record<CampaignAdType, CampaignWizardStepId[]> = {
-  lead_form: ["industry", "template", "ad-type", "budget", "location", "placeholders", "thank-you", "overview", "launch"],
-  landing_page: [
-    "industry",
-    "template",
-    "ad-type",
-    "budget",
-    "location",
-    "tracking-pixel",
-    "placeholders",
-    "landing-page",
-    "overview",
-    "launch",
-  ],
-  call_now: ["industry", "template", "ad-type", "budget", "location", "placeholders", "phone-number", "overview", "launch"],
-  messenger_leads: [
-    "industry",
-    "template",
-    "ad-type",
-    "budget",
-    "location",
-    "placeholders",
-    "messenger-setup",
-    "overview",
-    "launch",
-  ],
-  messenger_engagement: [
-    "industry",
-    "template",
-    "ad-type",
-    "budget",
-    "location",
-    "placeholders",
-    "messenger-setup",
-    "overview",
-    "launch",
-  ],
+  lead_form: ["industry", "template", "ad-type", "campaign-basics", "location", "destination-setup", "placeholders", "review-launch"],
+  landing_page: ["industry", "template", "ad-type", "campaign-basics", "location", "destination-setup", "placeholders", "review-launch"],
+  call_now: ["industry", "template", "ad-type", "campaign-basics", "location", "destination-setup", "placeholders", "review-launch"],
+  messenger_leads: ["industry", "template", "ad-type", "campaign-basics", "location", "destination-setup", "placeholders", "review-launch"],
+  messenger_engagement: ["industry", "template", "ad-type", "campaign-basics", "location", "destination-setup", "placeholders", "review-launch"],
 };
 
 export const campaignGoalOptions: Array<{
@@ -302,17 +256,82 @@ export function getAdTypeLabel(adType: CampaignAdType) {
     case "call_now":
       return "Call Now";
     case "messenger_leads":
-      return "Messenger (Leads)";
     case "messenger_engagement":
-      return "Messenger (Engagement)";
+      return "Messenger";
     default:
       return "Lead Form";
   }
 }
 
+export function getMetaCompatibleCtaLabel(adType: CampaignAdType) {
+  switch (adType) {
+    case "landing_page":
+      return "Learn More";
+    case "call_now":
+      return "Call Now";
+    case "messenger_leads":
+    case "messenger_engagement":
+      return "Send Message";
+    case "lead_form":
+    default:
+      return "Sign Up";
+  }
+}
+
+export function normalizeLeadFormQuestionKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40);
+}
+
+function normalizeLeadFormCustomQuestions(
+  questions?: CampaignLeadFormCustomQuestion[] | null,
+): CampaignLeadFormCustomQuestion[] {
+  if (!Array.isArray(questions)) return [];
+  return questions
+    .filter((question) => question && typeof question === "object")
+    .map((question, index) => {
+      const label = typeof question.label === "string" ? question.label : "";
+      const keySource = typeof question.key === "string" && question.key.trim() ? question.key : label;
+      const normalizedKey = normalizeLeadFormQuestionKey(keySource) || `question_${index + 1}`;
+      const type = question.type === "MULTIPLE_CHOICE" ? "MULTIPLE_CHOICE" : "SHORT_ANSWER";
+      const options = Array.isArray(question.options)
+        ? question.options
+            .filter((option) => option && typeof option === "object")
+            .map((option, optionIndex) => ({
+              id: option.id || `option-${index + 1}-${optionIndex + 1}`,
+              value: typeof option.value === "string" ? option.value : "",
+            }))
+        : [];
+
+      return {
+        id: question.id || `question-${index + 1}`,
+        key: normalizedKey,
+        label,
+        type,
+        options,
+      };
+    });
+}
+
+const legacyStepAliases: Partial<Record<string, CampaignWizardStepId>> = {
+  budget: "campaign-basics",
+  "tracking-pixel": "destination-setup",
+  "landing-page": "destination-setup",
+  "phone-number": "destination-setup",
+  "messenger-setup": "destination-setup",
+  "thank-you": "destination-setup",
+  overview: "review-launch",
+  launch: "review-launch",
+};
+
 function normalizeStepId(value?: string | null, adType?: CampaignAdType): CampaignWizardStepId {
-  if (value && value in stepDefinitions) {
-    const stepId = value as CampaignWizardStepId;
+  const aliasedValue = value ? legacyStepAliases[value] || value : value;
+  if (aliasedValue && aliasedValue in stepDefinitions) {
+    const stepId = aliasedValue as CampaignWizardStepId;
     if (!adType) return stepId;
     const visibleSteps = adTypeStepFlow[adType];
     return visibleSteps.includes(stepId) ? stepId : visibleSteps[0];
@@ -449,7 +468,8 @@ function createDefaultState({
         fields:
           partial?.adTypeConfig?.leadForm?.fields?.length
             ? partial.adTypeConfig.leadForm.fields
-            : (["FULL_NAME", "EMAIL", "PHONE"] as CampaignLeadFormField[]),
+            : defaultLeadFormFields,
+        customQuestions: normalizeLeadFormCustomQuestions(partial?.adTypeConfig?.leadForm?.customQuestions),
         privacyPolicyUrl: partial?.adTypeConfig?.leadForm?.privacyPolicyUrl || "",
         thankYou: {
           enabled: partial?.adTypeConfig?.leadForm?.thankYou?.enabled ?? true,
@@ -517,7 +537,7 @@ function createDefaultState({
       subheadline: partial?.review?.subheadline || "",
       businessDescription: partial?.review?.businessDescription || businessProfile?.description || "",
       testimonialText: partial?.review?.testimonialText || "",
-      ctaText: partial?.review?.ctaText || businessProfile?.default_cta || resolvedTemplate?.ctaDefault || "Learn more",
+      ctaText: partial?.review?.ctaText || getMetaCompatibleCtaLabel(resolvedAdType),
     },
     previewTab: partial?.previewTab || "ad",
   };
@@ -665,6 +685,11 @@ function migrateLegacyState(
         fields: Array.isArray(legacyLeadForm.fields) && legacyLeadForm.fields.length
           ? (legacyLeadForm.fields as CampaignLeadFormField[])
           : defaultState.adTypeConfig.leadForm.fields,
+        customQuestions: normalizeLeadFormCustomQuestions(
+          Array.isArray(legacyLeadForm.customQuestions)
+            ? (legacyLeadForm.customQuestions as CampaignLeadFormCustomQuestion[])
+            : null,
+        ),
         privacyPolicyUrl:
           (typeof legacyAdvanced.privacyPolicyUrl === "string" ? legacyAdvanced.privacyPolicyUrl : "") ||
           defaultState.adTypeConfig.leadForm.privacyPolicyUrl,
@@ -810,6 +835,7 @@ export function normalizeCampaignLaunchState(
           leadForm: {
             ...state.adTypeConfig.leadForm,
             fields: [...state.adTypeConfig.leadForm.fields],
+            customQuestions: normalizeLeadFormCustomQuestions(state.adTypeConfig.leadForm.customQuestions),
             thankYou: { ...state.adTypeConfig.leadForm.thankYou },
           },
           landingPage: { ...state.adTypeConfig.landingPage },
@@ -837,6 +863,50 @@ export function getVisibleWizardSteps(adType: CampaignAdType) {
 
 export function getStepDefinition(stepId: CampaignWizardStepId) {
   return stepDefinitions[stepId];
+}
+
+export function getWizardSections(adType: CampaignAdType): CampaignWizardSectionDefinition[] {
+  return [
+    {
+      id: "template",
+      label: "Pick Industry, Template & Ad Type",
+      description: "Choose the industry, template, and ad type to shape the rest of the flow.",
+      stepIds: ["industry", "template", "ad-type"],
+    },
+    {
+      id: "details",
+      label: "Campaign Basics & Targeting",
+      description: "Set the campaign basics and choose the target location.",
+      stepIds: ["campaign-basics", "location"],
+    },
+    {
+      id: "setup",
+      label: adType === "lead_form" ? "Form & Creative Setup" : "Destination & Creative Setup",
+      description: "Configure the destination details and fill the template placeholders.",
+      stepIds: ["destination-setup", "placeholders"],
+    },
+    {
+      id: "review",
+      label: "Review & Launch",
+      description: "Review the full setup, run readiness checks, and publish to Meta.",
+      stepIds: ["review-launch"],
+    },
+  ];
+}
+
+export function getWizardSectionForStep(adType: CampaignAdType, stepId: CampaignWizardStepId) {
+  const sections = getWizardSections(adType);
+  const index = sections.findIndex((section) => section.stepIds.includes(stepId));
+  return {
+    index: index >= 0 ? index : 0,
+    section: sections[index >= 0 ? index : 0],
+    sections,
+  };
+}
+
+export function getWizardSectionStartStep(adType: CampaignAdType, sectionId: CampaignWizardSectionId) {
+  const section = getWizardSections(adType).find((item) => item.id === sectionId);
+  return section?.stepIds[0] || adTypeStepFlow[adType][0];
 }
 
 export function getNextWizardStep(
@@ -894,6 +964,7 @@ export function createLaunchStateView(state: CampaignLaunchState): CampaignLaunc
       selectedFormName: state.adTypeConfig.leadForm.selectedFormName,
       managedFormName: state.adTypeConfig.leadForm.managedFormName,
       fields: state.adTypeConfig.leadForm.fields,
+      customQuestions: state.adTypeConfig.leadForm.customQuestions,
     },
     integrationSelections: state.integrationSelections,
     previewTab: state.previewTab,
@@ -943,7 +1014,7 @@ export function getTemplateSetupValuesFromLaunchState(
     email: businessProfile?.email || "",
     offerPrice,
     regularPrice,
-    ctaText: state.review.ctaText || template.ctaDefault,
+    ctaText: getMetaCompatibleCtaLabel(state.selection.adType),
     headline: state.review.headline,
     subheadline: state.review.subheadline,
     businessDescription: state.review.businessDescription || businessProfile?.description || "",
@@ -972,7 +1043,6 @@ function validateUrlField(value: string, field: string, emptyMessage: string, in
     return [{ code: `${field}_missing`, message: emptyMessage, field }];
   }
   try {
-    // eslint-disable-next-line no-new
     new URL(normalized);
     return [];
   } catch {
@@ -1013,6 +1083,54 @@ export function resolvePlaceholderValue(
     return key.toLowerCase() === normalizedId && typeof value === "string" && value.trim();
   });
   return typeof directSetupMatch?.[1] === "string" ? directSetupMatch[1].trim() : "";
+}
+
+function validateLeadFormCustomQuestions(
+  questions: CampaignLeadFormCustomQuestion[],
+  standardFields: CampaignLeadFormField[],
+): LaunchStepIssue[] {
+  const issues: LaunchStepIssue[] = [];
+  const usedKeys = new Set<string>(standardFields.map((field) => field.toLowerCase()));
+
+  questions.forEach((question, index) => {
+    const normalizedKey = normalizeLeadFormQuestionKey(question.key || question.label);
+    if (!question.label.trim()) {
+      issues.push({
+        code: `lead_form_custom_question_label_missing_${question.id}`,
+        message: `Custom question ${index + 1} needs a question label.`,
+        field: `adTypeConfig.leadForm.customQuestions.${index}.label`,
+      });
+    }
+
+    if (!normalizedKey) {
+      issues.push({
+        code: `lead_form_custom_question_key_missing_${question.id}`,
+        message: `Custom question ${index + 1} needs a valid internal key.`,
+        field: `adTypeConfig.leadForm.customQuestions.${index}.key`,
+      });
+    } else if (usedKeys.has(normalizedKey)) {
+      issues.push({
+        code: `lead_form_custom_question_key_duplicate_${question.id}`,
+        message: `Custom question keys must be unique. "${normalizedKey}" is used more than once.`,
+        field: `adTypeConfig.leadForm.customQuestions.${index}.key`,
+      });
+    } else {
+      usedKeys.add(normalizedKey);
+    }
+
+    if (question.type === "MULTIPLE_CHOICE") {
+      const filledOptions = question.options.map((option) => option.value.trim()).filter(Boolean);
+      if (!filledOptions.length) {
+        issues.push({
+          code: `lead_form_custom_question_options_missing_${question.id}`,
+          message: `Multiple choice question "${question.label || `Question ${index + 1}`}" needs at least one option.`,
+          field: `adTypeConfig.leadForm.customQuestions.${index}.options`,
+        });
+      }
+    }
+  });
+
+  return issues;
 }
 
 export function validateWizardStep({
@@ -1057,7 +1175,28 @@ export function validateWizardStep({
         });
       }
       break;
-    case "budget":
+    case "campaign-basics":
+      if (!state.campaign.name.trim()) {
+        issues.push({
+          code: "campaign_name_missing",
+          message: "Enter a campaign name before continuing.",
+          field: "campaign.name",
+        });
+      }
+      if (!state.integrationSelections.adAccountId) {
+        issues.push({
+          code: "ad_account_missing",
+          message: "Select a Meta ad account before continuing.",
+          field: "integrationSelections.adAccountId",
+        });
+      }
+      if (!state.integrationSelections.pageId) {
+        issues.push({
+          code: "page_missing",
+          message: "Select a Facebook Page before continuing.",
+          field: "integrationSelections.pageId",
+        });
+      }
       if (!parseDailyBudgetAmount(state.campaign.dailyBudget)) {
         issues.push({
           code: "budget_invalid",
@@ -1074,13 +1213,112 @@ export function validateWizardStep({
           field: "targeting.locations",
         });
       }
+      if (state.targeting.ageMin && state.targeting.ageMax) {
+        const ageMin = Number.parseInt(state.targeting.ageMin, 10);
+        const ageMax = Number.parseInt(state.targeting.ageMax, 10);
+        if (
+          Number.isFinite(ageMin) &&
+          Number.isFinite(ageMax) &&
+          ageMin > ageMax
+        ) {
+          issues.push({
+            code: "age_range_invalid",
+            message: "Minimum age must be less than or equal to maximum age.",
+            field: "targeting.ageMin",
+          });
+        }
+      }
       break;
-    case "tracking-pixel":
-      if (state.selection.adType === "landing_page" && !state.integrationSelections.pixelId && !state.adTypeConfig.landingPage.pixelId) {
+    case "destination-setup":
+      if (state.selection.adType === "lead_form") {
+        if (state.adTypeConfig.leadForm.mode === "existing") {
+          if (!state.adTypeConfig.leadForm.selectedFormId) {
+            issues.push({
+              code: "lead_form_existing_missing",
+              message: "Select an existing Meta lead form or switch to a managed form.",
+              field: "adTypeConfig.leadForm.selectedFormId",
+            });
+          }
+        } else {
+          if (!state.adTypeConfig.leadForm.managedFormName.trim()) {
+            issues.push({
+              code: "lead_form_name_missing",
+              message: "Provide a managed lead form name before continuing.",
+              field: "adTypeConfig.leadForm.managedFormName",
+            });
+          }
+          issues.push(
+            ...validateUrlField(
+              state.adTypeConfig.leadForm.privacyPolicyUrl,
+              "adTypeConfig.leadForm.privacyPolicyUrl",
+              "Privacy policy URL is required for managed lead forms.",
+              "Privacy policy URL is invalid.",
+            ),
+          );
+          const leadFields = state.adTypeConfig.leadForm.fields || [];
+          const customQuestions = normalizeLeadFormCustomQuestions(state.adTypeConfig.leadForm.customQuestions);
+          if (!leadFields.length && !customQuestions.length) {
+            issues.push({
+              code: "lead_form_questions_missing",
+              message: "Add at least one standard field or custom question before continuing.",
+              field: "adTypeConfig.leadForm.customQuestions",
+            });
+          }
+          issues.push(...validateLeadFormCustomQuestions(customQuestions, leadFields));
+        }
+
+        const thankYou = state.adTypeConfig.leadForm.thankYou;
+        if (
+          thankYou.enabled &&
+          (thankYou.buttonAction === "OPEN_WEBSITE" || thankYou.buttonAction === "DOWNLOAD") &&
+          thankYou.websiteUrl.trim()
+        ) {
+          issues.push(
+            ...validateUrlField(
+              thankYou.websiteUrl,
+              "adTypeConfig.leadForm.thankYou.websiteUrl",
+              "Destination URL is required for this thank-you action.",
+              "Destination URL is invalid.",
+            ),
+          );
+        }
+        if (thankYou.enabled && thankYou.buttonAction === "CALL_BUSINESS" && !thankYou.completionPhone.trim()) {
+          issues.push({
+            code: "thank_you_phone_missing",
+            message: "Call Business thank-you actions need a phone number.",
+            field: "adTypeConfig.leadForm.thankYou.completionPhone",
+          });
+        }
+      }
+
+      if (state.selection.adType === "landing_page") {
+        issues.push(
+          ...validateUrlField(
+            state.adTypeConfig.landingPage.url,
+            "adTypeConfig.landingPage.url",
+            "Landing page campaigns need a destination URL.",
+            "Landing page URL is invalid.",
+          ),
+        );
+      }
+
+      if (state.selection.adType === "call_now" && !state.adTypeConfig.callNow.phoneNumber.trim()) {
         issues.push({
-          code: "pixel_missing",
-          message: "Select a tracking pixel for landing page campaigns.",
-          field: "integrationSelections.pixelId",
+          code: "phone_missing",
+          message: "Provide a phone number for Call Now campaigns.",
+          field: "adTypeConfig.callNow.phoneNumber",
+        });
+      }
+
+      if (
+        (state.selection.adType === "messenger_leads" || state.selection.adType === "messenger_engagement") &&
+        !state.adTypeConfig.messenger.welcomeMessage.trim() &&
+        !state.adTypeConfig.messenger.replyPrompt.trim()
+      ) {
+        issues.push({
+          code: "messenger_setup_missing",
+          message: "Add a welcome message or reply prompt for Messenger campaigns.",
+          field: "adTypeConfig.messenger",
         });
       }
       break;
@@ -1098,107 +1336,7 @@ export function validateWizardStep({
         }
       }
       break;
-    case "landing-page":
-      if (state.selection.adType === "landing_page") {
-        issues.push(
-          ...validateUrlField(
-            state.adTypeConfig.landingPage.url,
-            "adTypeConfig.landingPage.url",
-            "Landing page campaigns need a destination URL.",
-            "Landing page URL is invalid.",
-          ),
-        );
-      }
-      break;
-    case "phone-number":
-      if (state.selection.adType === "call_now" && !state.adTypeConfig.callNow.phoneNumber.trim()) {
-        issues.push({
-          code: "phone_missing",
-          message: "Provide a phone number for Call Now campaigns.",
-          field: "adTypeConfig.callNow.phoneNumber",
-        });
-      }
-      break;
-    case "messenger-setup":
-      if (
-        (state.selection.adType === "messenger_leads" || state.selection.adType === "messenger_engagement") &&
-        !state.adTypeConfig.messenger.welcomeMessage.trim() &&
-        !state.adTypeConfig.messenger.replyPrompt.trim()
-      ) {
-        issues.push({
-          code: "messenger_setup_missing",
-          message: "Add a welcome message or reply prompt for Messenger campaigns.",
-          field: "adTypeConfig.messenger",
-        });
-      }
-      break;
-    case "thank-you":
-      if (state.selection.adType === "lead_form" && state.adTypeConfig.leadForm.thankYou.enabled) {
-        const thankYou = state.adTypeConfig.leadForm.thankYou;
-        if (
-          (thankYou.buttonAction === "OPEN_WEBSITE" || thankYou.buttonAction === "DOWNLOAD") &&
-          thankYou.websiteUrl.trim()
-        ) {
-          issues.push(
-            ...validateUrlField(
-              thankYou.websiteUrl,
-              "adTypeConfig.leadForm.thankYou.websiteUrl",
-              "Destination URL is required for this thank-you action.",
-              "Destination URL is invalid.",
-            ),
-          );
-        }
-        if (thankYou.buttonAction === "CALL_BUSINESS" && !thankYou.completionPhone.trim()) {
-          issues.push({
-            code: "thank_you_phone_missing",
-            message: "Call Business thank-you actions need a phone number.",
-            field: "adTypeConfig.leadForm.thankYou.completionPhone",
-          });
-        }
-      }
-      break;
-    case "overview":
-      if (!state.integrationSelections.adAccountId) {
-        issues.push({
-          code: "ad_account_missing",
-          message: "Select a Meta ad account before launch.",
-          field: "integrationSelections.adAccountId",
-        });
-      }
-      if (!state.integrationSelections.pageId) {
-        issues.push({
-          code: "page_missing",
-          message: "Select a Facebook Page before launch.",
-          field: "integrationSelections.pageId",
-        });
-      }
-      if (state.selection.adType === "lead_form" && state.adTypeConfig.leadForm.mode === "managed_new") {
-        if (!state.adTypeConfig.leadForm.managedFormName.trim()) {
-          issues.push({
-            code: "lead_form_name_missing",
-            message: "Provide a managed lead form name before launch.",
-            field: "adTypeConfig.leadForm.managedFormName",
-          });
-        }
-        if (!state.adTypeConfig.leadForm.privacyPolicyUrl.trim()) {
-          issues.push({
-            code: "privacy_policy_missing",
-            message: "Privacy policy URL is required for SideKick-managed lead forms.",
-            field: "adTypeConfig.leadForm.privacyPolicyUrl",
-          });
-        } else {
-          issues.push(
-            ...validateUrlField(
-              state.adTypeConfig.leadForm.privacyPolicyUrl,
-              "adTypeConfig.leadForm.privacyPolicyUrl",
-              "Privacy policy URL is required for SideKick-managed lead forms.",
-              "Privacy policy URL is invalid.",
-            ),
-          );
-        }
-      }
-      break;
-    case "launch":
+    case "review-launch":
     default:
       break;
   }
@@ -1220,7 +1358,7 @@ export function evaluateLaunchReadiness({
 }) {
   const stepIds = getVisibleWizardSteps(state.selection.adType)
     .map((step) => step.id)
-    .filter((stepId) => stepId !== "launch");
+    .filter((stepId) => stepId !== "review-launch");
   const issues = stepIds.flatMap((stepId) =>
     validateWizardStep({ stepId, state, template, businessProfile }).issues,
   );

@@ -1,4 +1,7 @@
-import { ChevronLeft, ChevronRight, Globe, Image as ImageIcon, MessageCircle, MoreHorizontal, PlayCircle, Share2, ThumbsUp } from "lucide-react";
+"use client";
+
+import { useEffect, useState } from "react";
+import { Globe, MessageCircle, MoreHorizontal, PlayCircle, Share2, ThumbsUp, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TemplateSeed } from "@/types";
 
@@ -15,9 +18,13 @@ type FacebookAdPreviewProps = {
   className?: string;
   showMetaHeader?: boolean;
   showMetaBar?: boolean;
+  showReactionsBar?: boolean;
+  showActionsRow?: boolean;
   compact?: boolean;
   interactiveControls?: boolean;
 };
+
+const HEADLINE_MAX_LENGTH = 25;
 
 const previewLayoutContract = {
   pageNameFallback: "Your Page Name",
@@ -27,7 +34,7 @@ const previewLayoutContract = {
   ctaFallback: "Learn more",
   compactPrimaryLines: "line-clamp-3",
   regularPrimaryLines: "line-clamp-5",
-  compactHeadlineLines: "line-clamp-2",
+  compactHeadlineLines: "line-clamp-1",
   regularHeadlineLines: "line-clamp-2",
   compactDescriptionLines: "line-clamp-2",
   regularDescriptionLines: "line-clamp-3",
@@ -50,6 +57,26 @@ function normalizePreviewText(value?: string | null, fallback?: string) {
 function normalizeSingleLine(value?: string | null, fallback?: string) {
   const normalized = normalizePreviewText(value, fallback).replace(/\s+/g, " ").trim();
   return normalized || fallback || "";
+}
+
+function capPreviewLength(value: string, maxLength: number) {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return value.slice(0, maxLength).trimEnd();
+}
+
+function normalizeHeadlineText(value?: string | null, fallback?: string) {
+  return capPreviewLength(normalizePreviewText(value, fallback), HEADLINE_MAX_LENGTH);
+}
+
+function getHeadlineFontSize(value: string, compact: boolean) {
+  const effectiveLength = Math.min(value.length, HEADLINE_MAX_LENGTH);
+  const baseSize = compact ? 0.97 : 1.06;
+  const minSize = compact ? 0.84 : 0.94;
+  const shrink = Math.max(0, effectiveLength - 10) * (compact ? 0.008 : 0.006);
+  return `${Math.max(minSize, baseSize - shrink)}rem`;
 }
 
 function getPageBadge(pageName: string) {
@@ -82,6 +109,30 @@ function resolveMedia(template?: TemplateSeed | null, imageUrl?: string | null, 
   return templateImage ? { kind: "image" as const, url: templateImage } : null;
 }
 
+function resolveCarouselImages(template?: TemplateSeed | null, imageUrl?: string | null) {
+  const images = [
+    imageUrl,
+    ...(template?.creativeAssets?.imageUrls || []),
+    template?.previewImage || null,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .filter((value, index, array) => array.indexOf(value) === index);
+
+  return images.slice(0, 3);
+}
+
+function resolveDisplayLink(template?: TemplateSeed | null) {
+  const rawValue = template?.displayLink || process.env.NEXT_PUBLIC_APP_URL || "";
+  const normalized = rawValue
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .replace(/\/.*$/, "")
+    .trim();
+
+  return normalized || "sidekickstudioss.com";
+}
+
 export function FacebookAdPreview({
   template,
   pageName,
@@ -95,10 +146,13 @@ export function FacebookAdPreview({
   className,
   showMetaHeader = true,
   showMetaBar = true,
+  showReactionsBar = true,
+  showActionsRow = true,
   compact = false,
   interactiveControls = true,
 }: FacebookAdPreviewProps) {
   const resolvedMedia = resolveMedia(template, imageUrl, videoUrl);
+  const resolvedCarouselImages = resolveCarouselImages(template, imageUrl);
   const resolvedPageName = normalizeSingleLine(
     pageName || template?.name,
     previewLayoutContract.pageNameFallback,
@@ -108,7 +162,7 @@ export function FacebookAdPreview({
     primaryText || template?.adCopy.primary || template?.description,
     previewLayoutContract.primaryTextFallback,
   );
-  const resolvedHeadline = normalizePreviewText(
+  const resolvedHeadline = normalizeHeadlineText(
     headline || template?.adCopy.headlines?.[0] || template?.name,
     previewLayoutContract.headlineFallback,
   );
@@ -116,186 +170,192 @@ export function FacebookAdPreview({
     description || template?.promoDetails,
   );
   const resolvedCta = normalizeSingleLine(ctaLabel || template?.ctaDefault, previewLayoutContract.ctaFallback);
+  const resolvedDisplayLink = resolveDisplayLink(template);
   const metrics = compact ? { likes: 29, comments: 4, shares: 2 } : { likes: 129, comments: 12, shares: 8 };
+  const [avatarFailed, setAvatarFailed] = useState(false);
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [pageAvatarUrl, resolvedPageName]);
 
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-[28px] border border-[rgba(17,18,22,0.08)] bg-[#f5f6f8] p-4 sm:p-6",
+        "flex h-full flex-col overflow-hidden rounded-[28px] bg-transparent p-0",
         className,
       )}
     >
-      {showMetaBar ? (
-        <div className="mb-5 flex items-center justify-between gap-3 px-1.5 sm:px-2">
-          <p className="text-[1.3rem] font-semibold uppercase tracking-[-0.03em] text-[rgba(17,18,22,0.56)] sm:text-[1.45rem]">
-            AD PREVIEW
-          </p>
-          <div className="flex flex-wrap justify-end gap-2">
-            <span className="rounded-full border border-[rgba(24,119,242,0.12)] bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1877f2]">
-              Meta
-            </span>
-            {template ? (
-              <span className="rounded-full border border-[var(--line)] bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted-strong)]">
-                {template.offerType || "Lead Gen"}
-              </span>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
       {showMetaHeader ? (
-        <div className="overflow-hidden border border-[rgba(17,18,22,0.08)] bg-white shadow-[0_12px_28px_rgba(17,24,39,0.06)]">
-          <div className="flex items-start justify-between gap-3 border-b border-[rgba(17,18,22,0.08)] px-4 py-4">
+        <div className="overflow-hidden rounded-[14px] border border-[rgba(17,18,22,0.08)] bg-white shadow-[0_12px_28px_rgba(17,24,39,0.06)]">
+          <div className={cn("flex items-start justify-between gap-3 px-4", compact ? "py-3" : "py-4")}>
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[radial-gradient(circle_at_30%_30%,#7650d8_0%,#4c258c_55%,#2f124f_100%)] text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
-                {pageAvatarUrl ? (
+              <div className={cn(
+                "flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[radial-gradient(circle_at_30%_30%,#7650d8_0%,#4c258c_55%,#2f124f_100%)] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]",
+                compact ? "h-10 w-10 text-[0.72rem]" : "h-12 w-12 text-sm",
+              )}>
+                {pageAvatarUrl && !avatarFailed ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={pageAvatarUrl} alt={resolvedPageName} className="h-full w-full object-cover" />
+                  <img
+                    src={pageAvatarUrl}
+                    alt={resolvedPageName}
+                    className="h-full w-full object-cover"
+                    onError={() => setAvatarFailed(true)}
+                  />
                 ) : (
                   resolvedPageBadge
                 )}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-[1.08rem] font-semibold tracking-[-0.03em] text-[var(--ink)]">
+                <p className={cn("truncate font-semibold tracking-[-0.03em] text-[var(--ink)]", compact ? "text-[0.98rem]" : "text-[1.08rem]")}>
                   {resolvedPageName}
                 </p>
-                <div className="mt-0.5 flex items-center gap-2 text-[0.98rem] text-[var(--muted-strong)]">
+                <div className={cn("mt-0.5 flex items-center gap-2 text-[var(--muted-strong)]", compact ? "text-[0.85rem]" : "text-[0.98rem]")}>
                   <span>Sponsored</span>
                   <span>•</span>
-                  <Globe className="h-4 w-4 text-[var(--muted)]" />
+                  <Globe className={cn("text-[var(--muted)]", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
                 </div>
               </div>
             </div>
-            {interactiveControls ? (
+            <div className="flex items-start gap-1 text-[var(--muted-strong)]">
               <button
                 type="button"
-                className="mt-1 rounded-full p-1.5 text-[var(--muted-strong)] transition hover:bg-[#f0f2f5]"
-                aria-label="More options"
+                className="mt-0.5 rounded-full p-1.5 transition hover:bg-[#f0f2f5]"
+                aria-label="Close preview"
+                tabIndex={interactiveControls ? 0 : -1}
               >
-                <MoreHorizontal className="h-5 w-5" />
+                <X className="h-5 w-5" />
               </button>
-            ) : (
-              <div className="mt-1 rounded-full p-1.5 text-[var(--muted-strong)]" aria-hidden="true">
-                <MoreHorizontal className="h-5 w-5" />
-              </div>
-            )}
+              {interactiveControls ? (
+                <button
+                  type="button"
+                  className="mt-0.5 rounded-full p-1.5 transition hover:bg-[#f0f2f5]"
+                  aria-label="More options"
+                >
+                  <MoreHorizontal className="h-5 w-5" />
+                </button>
+              ) : (
+                <div className="mt-0.5 rounded-full p-1.5" aria-hidden="true">
+                  <MoreHorizontal className="h-5 w-5" />
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="border-b border-[rgba(17,18,22,0.08)] bg-white px-4 pb-4 pt-3">
+          <div className={cn("bg-white px-4", compact ? "pb-2.5 pt-1.5" : "pb-4 pt-2")}>
             <p
               className={cn(
-                "whitespace-pre-line break-words [overflow-wrap:anywhere] text-[1.04rem] leading-[1.6] text-[var(--ink)]",
+                "whitespace-pre-line break-words [overflow-wrap:anywhere] text-[var(--ink)]",
+                compact ? "text-[0.88rem] leading-[1.35]" : "text-[1.04rem] leading-[1.6]",
                 compact
-                  ? `${previewLayoutContract.compactPrimaryLines} min-h-[4.8rem]`
+                  ? `${previewLayoutContract.compactPrimaryLines} min-h-[3.2rem]`
                   : `${previewLayoutContract.regularPrimaryLines} min-h-[8rem]`,
               )}
             >
               {resolvedPrimaryText}
             </p>
-            <div className="mt-2 flex justify-end">
-              <span className="shrink-0 text-[0.98rem] font-semibold text-[#1677ff]">see more</span>
+            <div className={cn("flex justify-end", compact ? "mt-0.5" : "mt-2")}>
+              <span className={cn("shrink-0 font-semibold text-[#1677ff]", compact ? "text-[0.76rem]" : "text-[0.98rem]")}>see more</span>
             </div>
           </div>
         </div>
       ) : null}
 
-      <div className="relative overflow-hidden border-b border-[rgba(17,18,22,0.08)] bg-[#eef1f6]">
+      <div className="relative overflow-hidden border border-[rgba(17,18,22,0.08)] bg-[#eef1f6]">
         {resolvedMedia ? (
           resolvedMedia.kind === "video" ? (
-            <video className={cn("w-full object-cover", compact ? "aspect-[1.02/1]" : "aspect-[1/1]")} controls playsInline muted>
+            <video className={cn("w-full object-cover", compact ? "aspect-[0.92/1]" : "aspect-[1/1]")} controls playsInline muted>
               <source src={resolvedMedia.url} />
               Your browser does not support the video tag.
             </video>
+          ) : resolvedCarouselImages.length > 1 ? (
+            <div className={cn("overflow-hidden", compact ? "aspect-[0.92/1]" : "aspect-[1/1]")}>
+              <div className="flex h-full gap-2 px-2.5 py-2">
+                {resolvedCarouselImages.map((url, index) => (
+                  <div
+                    key={`${url}-${index}`}
+                    className={cn(
+                      "relative h-full shrink-0 overflow-hidden rounded-[11px] bg-white shadow-[0_8px_18px_rgba(17,24,39,0.08)]",
+                      index === 0 ? "w-[72%]" : "w-[28%]",
+                    )}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={url}
+                      alt={template ? `${template.name} preview ${index + 1}` : `Template preview ${index + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={resolvedMedia.url}
               alt={template ? `${template.name} preview` : "Template preview"}
-              className={cn("w-full object-cover", compact ? "aspect-[1.02/1]" : "aspect-[1/1]")}
+              className={cn("w-full object-cover", compact ? "aspect-[0.92/1]" : "aspect-[1/1]")}
             />
           )
         ) : (
-          <div className={cn("flex items-center justify-center bg-[linear-gradient(145deg,#266cf1_0%,#2f87ff_42%,#f2f6fb_100%)] text-white", compact ? "aspect-[1.02/1]" : "aspect-[1/1]")}>
+          <div className={cn("flex items-center justify-center bg-[linear-gradient(145deg,#266cf1_0%,#2f87ff_42%,#f2f6fb_100%)] text-white", compact ? "aspect-[0.92/1]" : "aspect-[1/1]")}>
             <div className="text-center">
-              <p className="text-3xl font-black tracking-[-0.06em] sm:text-4xl">Template preview</p>
-              <p className="mt-2 text-sm text-white/80">Upload image or video assets to populate this ad.</p>
+              <p className={cn("font-black tracking-[-0.06em]", compact ? "text-2xl sm:text-3xl" : "text-3xl sm:text-4xl")}>Template preview</p>
+              <p className={cn("mt-2 text-white/80", compact ? "text-xs" : "text-sm")}>Upload image or video assets to populate this ad.</p>
             </div>
           </div>
         )}
 
-        {interactiveControls ? (
-          <>
-            <button
-              type="button"
-              className="absolute left-4 top-1/2 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-white/72 text-[var(--ink)] shadow-[0_10px_18px_rgba(17,24,39,0.12)] backdrop-blur"
-              aria-label="Previous creative"
-            >
-              <ChevronLeft className="h-7 w-7" />
-            </button>
-            <button
-              type="button"
-              className="absolute right-4 top-1/2 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-white/72 text-[var(--ink)] shadow-[0_10px_18px_rgba(17,24,39,0.12)] backdrop-blur"
-              aria-label="Next creative"
-            >
-              <ChevronRight className="h-7 w-7" />
-            </button>
-          </>
-        ) : (
-          <>
-            <div
-              className="absolute left-4 top-1/2 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-white/72 text-[var(--ink)] shadow-[0_10px_18px_rgba(17,24,39,0.12)] backdrop-blur"
-              aria-hidden="true"
-            >
-              <ChevronLeft className="h-7 w-7" />
-            </div>
-            <div
-              className="absolute right-4 top-1/2 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-white/72 text-[var(--ink)] shadow-[0_10px_18px_rgba(17,24,39,0.12)] backdrop-blur"
-              aria-hidden="true"
-            >
-              <ChevronRight className="h-7 w-7" />
-            </div>
-          </>
-        )}
-
-        <div className="absolute left-6 top-5 flex gap-2">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <span
-              key={index}
-              className={cn(
-                "h-2 rounded-full",
-                index === 0 ? "w-10 bg-[#1677ff]" : "w-2.5 bg-white/72",
-              )}
-            />
-          ))}
-        </div>
+        {resolvedCarouselImages.length > 1 ? (
+          <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
+            {resolvedCarouselImages.map((_, index) => (
+              <span
+                key={index}
+                className={cn(
+                  "h-1.5 rounded-full transition-all",
+                  index === 0 ? "w-7 bg-white" : "w-2.5 bg-white/60",
+                )}
+              />
+            ))}
+          </div>
+        ) : null}
 
         {resolvedMedia?.kind === "video" ? (
           <div className="absolute bottom-4 right-4 rounded-full bg-black/35 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
             <PlayCircle className="inline h-3.5 w-3.5" /> Video
           </div>
-        ) : resolvedMedia?.kind === "image" ? (
-          <div className="absolute right-4 top-4 rounded-full bg-white/70 p-2.5 text-[var(--muted-strong)] shadow-[0_8px_18px_rgba(17,24,39,0.12)] backdrop-blur">
-            <ImageIcon className="h-4 w-4" />
-          </div>
         ) : null}
       </div>
 
-      <div className="border-b border-[rgba(17,18,22,0.08)] bg-[#f0f2f5] px-4 py-3">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5">
-          <div className="min-w-0">
+      <div
+        className={cn(
+          "border-b border-[rgba(17,18,22,0.08)] bg-[#f0f2f5] px-4 py-4",
+          "box-border w-full self-stretch",
+          compact ? "min-h-[5.1rem] flex-1 rounded-b-[28px]" : "min-h-[5.1rem]",
+        )}
+      >
+        <div className={cn("grid h-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-stretch", compact ? "gap-3" : "gap-3.5")}>
+          <div className="flex min-w-0 flex-col justify-center overflow-hidden">
+            <p className="truncate text-[0.78rem] font-medium leading-[1.05] text-[var(--muted-strong)] sm:text-[0.84rem]">
+              {resolvedDisplayLink}
+            </p>
             <p
               className={cn(
-                "mt-0.5 break-words [overflow-wrap:anywhere] text-[0.96rem] font-semibold leading-[1.2] tracking-[-0.04em] text-[var(--ink)] sm:text-[1rem]",
-                compact ? previewLayoutContract.compactHeadlineLines : previewLayoutContract.regularHeadlineLines,
+                "mt-0.25 min-w-0 overflow-hidden break-words [overflow-wrap:anywhere] font-semibold tracking-[-0.05em] text-[var(--ink)]",
+                compact ? previewLayoutContract.compactHeadlineLines : "line-clamp-2",
               )}
+              style={{
+                fontSize: getHeadlineFontSize(resolvedHeadline, compact),
+                lineHeight: compact ? 1.03 : 1.08,
+              }}
             >
               {resolvedHeadline}
             </p>
-            {resolvedDescription ? (
+            {resolvedDescription && !compact ? (
               <p
                 className={cn(
-                  "mt-0.5 break-words [overflow-wrap:anywhere] text-[0.88rem] leading-[1.32] text-[var(--muted-strong)] sm:text-[0.92rem]",
-                  compact ? previewLayoutContract.compactDescriptionLines : previewLayoutContract.regularDescriptionLines,
+                  "mt-0.5 break-words [overflow-wrap:anywhere] leading-[1.32] text-[var(--muted-strong)]",
+                  "text-[0.88rem] sm:text-[0.92rem]",
+                  previewLayoutContract.regularDescriptionLines,
                 )}
               >
                 {resolvedDescription}
@@ -304,42 +364,51 @@ export function FacebookAdPreview({
           </div>
           <button
             type="button"
-            className="inline-flex h-auto w-fit min-w-0 max-w-none shrink-0 self-center whitespace-nowrap rounded-[10px] bg-[#dbe1e9] px-2.5 py-2 text-center text-[0.72rem] font-semibold leading-none text-[var(--ink)] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]"
+            className={cn(
+              "justify-self-end self-center inline-flex min-w-0 shrink-0 items-center justify-center overflow-hidden whitespace-nowrap rounded-[9px] bg-[#dbe1e9] px-3 text-center font-semibold leading-none text-[var(--ink)] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]",
+              compact
+                ? "h-[2.05rem] w-fit max-w-[8rem] text-[0.56rem] tracking-[-0.02em] sm:text-[0.6rem]"
+                : "h-[2.75rem] w-[7.1rem] text-[0.9rem] sm:text-[0.94rem]",
+            )}
             title={resolvedCta}
           >
-            {resolvedCta}
+            <span className={cn("block min-w-0 overflow-hidden text-center", compact ? "whitespace-nowrap truncate" : "w-full")}>{resolvedCta}</span>
           </button>
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-4 border-b border-[rgba(17,18,22,0.08)] bg-white px-4 py-3 text-[0.88rem] text-[var(--muted-strong)] sm:text-[0.95rem]">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="flex -space-x-1.5">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1877f2] text-[11px] text-white">👍</span>
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#f03d5f] text-[11px] text-white">❤</span>
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#f7b125] text-[11px] text-white">😮</span>
+      {showReactionsBar ? (
+        <div className="flex items-center justify-between gap-4 border-b border-[rgba(17,18,22,0.08)] bg-white px-4 py-3 text-[0.88rem] text-[var(--muted-strong)] sm:text-[0.95rem]">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex -space-x-1.5">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1877f2] text-[11px] text-white">👍</span>
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#f03d5f] text-[11px] text-white">❤</span>
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#f7b125] text-[11px] text-white">😮</span>
+            </div>
+            <span className="truncate">{formatCount(metrics.likes)}</span>
           </div>
-          <span className="truncate">{formatCount(metrics.likes)}</span>
+          <div className="min-w-0 text-right">
+            <span className="block truncate">{formatCount(metrics.comments)} Comments {formatCount(metrics.shares)} Shares</span>
+          </div>
         </div>
-        <div className="min-w-0 text-right">
-          <span className="block truncate">{formatCount(metrics.comments)} Comments {formatCount(metrics.shares)} Shares</span>
-        </div>
-      </div>
+      ) : null}
 
-      <div className="grid grid-cols-3 gap-1.5 bg-white px-2.5 py-2 text-[0.92rem] font-medium text-[var(--ink)] sm:gap-2 sm:px-3 sm:py-2.5 sm:text-[1rem]">
-        <div className="flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[var(--muted-strong)] transition hover:bg-[#f0f2f5] sm:gap-2 sm:px-3">
-          <ThumbsUp className="h-4 w-4" />
-          <span className="truncate">Like</span>
+      {showActionsRow ? (
+        <div className="grid grid-cols-3 gap-1.5 bg-white px-2.5 py-2 text-[0.92rem] font-medium text-[var(--ink)] sm:gap-2 sm:px-3 sm:py-2.5 sm:text-[1rem]">
+          <div className="flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[var(--muted-strong)] transition hover:bg-[#f0f2f5] sm:gap-2 sm:px-3">
+            <ThumbsUp className="h-4 w-4" />
+            <span className="truncate">Like</span>
+          </div>
+          <div className="flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[var(--muted-strong)] transition hover:bg-[#f0f2f5] sm:gap-2 sm:px-3">
+            <MessageCircle className="h-4 w-4" />
+            <span className="truncate">Comment</span>
+          </div>
+          <div className="flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[var(--muted-strong)] transition hover:bg-[#f0f2f5] sm:gap-2 sm:px-3">
+            <Share2 className="h-4 w-4" />
+            <span className="truncate">Share</span>
+          </div>
         </div>
-        <div className="flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[var(--muted-strong)] transition hover:bg-[#f0f2f5] sm:gap-2 sm:px-3">
-          <MessageCircle className="h-4 w-4" />
-          <span className="truncate">Comment</span>
-        </div>
-        <div className="flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[var(--muted-strong)] transition hover:bg-[#f0f2f5] sm:gap-2 sm:px-3">
-          <Share2 className="h-4 w-4" />
-          <span className="truncate">Share</span>
-        </div>
-      </div>
+      ) : null}
     </div>
   );
 }

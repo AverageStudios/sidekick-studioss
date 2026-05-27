@@ -1,4 +1,8 @@
 import { env } from "@/lib/env";
+import {
+  CampaignLeadFormCustomQuestion,
+  CampaignLeadFormField,
+} from "@/types";
 
 const defaultMetaScopes = [
   "ads_management",
@@ -114,14 +118,6 @@ type MetaApiErrorPayload = {
 type MetaApiRequestSnapshot = {
   url: string;
   body?: string;
-};
-
-type MetaApiErrorContext = MetaApiRequestSnapshot & {
-  status: number;
-  responseText?: string;
-  responseJson?: unknown;
-  errorPayload?: MetaApiErrorPayload["error"];
-  blameFieldSpecs?: string[][];
 };
 
 type MetaApiRequestError = Error & {
@@ -564,13 +560,15 @@ export async function createMetaLeadForm({
   name,
   privacyPolicyUrl,
   fields,
+  customQuestions,
   thankYouPage,
 }: {
   accessToken: string;
   pageId: string;
   name: string;
   privacyPolicyUrl: string;
-  fields: Array<"FULL_NAME" | "EMAIL" | "PHONE">;
+  fields: CampaignLeadFormField[];
+  customQuestions?: CampaignLeadFormCustomQuestion[];
   thankYouPage?: {
     title?: string;
     body?: string;
@@ -589,10 +587,33 @@ export async function createMetaLeadForm({
         : (thankYouPage?.websiteUrl ? "VIEW_WEBSITE" : "VIEW_ON_FACEBOOK");
 
   const url = new URL(buildMetaGraphUrl(`${pageId}/leadgen_forms`));
-  const questions = fields.map((type) => ({
+  const standardQuestions = fields.map((type) => ({
     type,
     key: type.toLowerCase(),
   }));
+  const customQuestionPayloads = (customQuestions || []).map((question) => {
+    const base = {
+      key: question.key,
+      label: question.label,
+    };
+    if (question.type === "MULTIPLE_CHOICE") {
+      return {
+        ...base,
+        type: "MULTIPLE_CHOICE",
+        options: question.options
+          .map((option, index) => ({
+            key: `${question.key}_${index + 1}`,
+            value: option.value,
+          }))
+          .filter((option) => option.value.trim()),
+      };
+    }
+    return {
+      ...base,
+      type: "CUSTOM",
+    };
+  });
+  const questions = [...standardQuestions, ...customQuestionPayloads];
   const body = new URLSearchParams();
   body.set("name", name);
   body.set("locale", "en_US");

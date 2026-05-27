@@ -11,6 +11,7 @@ import {
   getTemplateSetupValuesFromLaunchState,
   CampaignLaunchView,
   normalizeCampaignLaunchState,
+  normalizeLeadFormQuestionKey,
   parseDailyBudgetToCents,
   resolvePlaceholderValue,
 } from "@/lib/campaign-launch";
@@ -104,6 +105,7 @@ type MetaNormalizedPayloadSummary = {
     leadFormId: string | null;
     managedLeadFormName: string;
     leadFormFields: Array<CampaignLaunchView["leadForm"]["fields"][number]>;
+    leadFormCustomQuestions: CampaignLaunchView["leadForm"]["customQuestions"];
   };
   ad: {
     name: string;
@@ -217,13 +219,6 @@ function mapGoalToOptimizationGoal(goal: CampaignGoal) {
   if (goal === "OUTCOME_APP_PROMOTION") return "APP_INSTALLS" as const;
   if (goal === "OUTCOME_SALES") return "OFFSITE_CONVERSIONS" as const;
   return "LEAD_GENERATION" as const;
-}
-
-function mapGoalToCta(goal: CampaignGoal) {
-  if (goal === "OUTCOME_SALES") return "SHOP_NOW";
-  if (goal === "OUTCOME_APP_PROMOTION") return "DOWNLOAD";
-  if (goal === "OUTCOME_LEADS") return "SIGN_UP";
-  return "LEARN_MORE";
 }
 
 function goalUsesWebsiteDestination(goal: CampaignGoal) {
@@ -546,11 +541,13 @@ function buildManagedLeadFormFingerprint({
   pageId,
   privacyPolicyUrl,
   fields,
+  customQuestions,
   thankYouPage,
 }: {
   pageId: string;
   privacyPolicyUrl: string;
   fields: Array<CampaignLaunchView["leadForm"]["fields"][number]>;
+  customQuestions: CampaignLaunchView["leadForm"]["customQuestions"];
   thankYouPage?: {
     title?: string;
     body?: string;
@@ -565,6 +562,12 @@ function buildManagedLeadFormFingerprint({
     pageId,
     privacyPolicyUrl,
     fields,
+    customQuestions: customQuestions.map((question) => ({
+      key: normalizeLeadFormQuestionKey(question.key),
+      label: question.label.trim(),
+      type: question.type,
+      options: question.options.map((option) => option.value.trim()).filter(Boolean),
+    })),
     thankYouPage: thankYouPage
       ? {
           title: thankYouPage.title || "",
@@ -578,6 +581,62 @@ function buildManagedLeadFormFingerprint({
       : null,
   };
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
+function validateManagedLeadFormCustomQuestions(
+  questions: CampaignLaunchView["leadForm"]["customQuestions"],
+  standardFields: CampaignLaunchView["leadForm"]["fields"],
+) {
+  const issues: InternalIssue[] = [];
+  const seenKeys = new Set<string>(standardFields.map((field) => field.toLowerCase()));
+
+  questions.forEach((question, index) => {
+    const normalizedKey = normalizeLeadFormQuestionKey(question.key || question.label);
+    if (!question.label.trim()) {
+      issues.push({
+        code: `missing_custom_question_label_${question.id}`,
+        message: `Custom question ${index + 1} needs a question label.`,
+        type: "blocking",
+        scope: "both",
+        field: `leadForm.customQuestions.${index}.label`,
+      });
+    }
+
+    if (!normalizedKey) {
+      issues.push({
+        code: `invalid_custom_question_key_${question.id}`,
+        message: `Custom question ${index + 1} needs a valid internal key.`,
+        type: "blocking",
+        scope: "both",
+        field: `leadForm.customQuestions.${index}.key`,
+      });
+    } else if (seenKeys.has(normalizedKey)) {
+      issues.push({
+        code: `duplicate_custom_question_key_${question.id}`,
+        message: `Custom question keys must be unique. "${normalizedKey}" is duplicated.`,
+        type: "blocking",
+        scope: "both",
+        field: `leadForm.customQuestions.${index}.key`,
+      });
+    } else {
+      seenKeys.add(normalizedKey);
+    }
+
+    if (question.type === "MULTIPLE_CHOICE") {
+      const options = question.options.map((option) => option.value.trim()).filter(Boolean);
+      if (!options.length) {
+        issues.push({
+          code: `missing_custom_question_options_${question.id}`,
+          message: `Multiple choice question "${question.label || `Question ${index + 1}`}" needs at least one option.`,
+          type: "blocking",
+          scope: "both",
+          field: `leadForm.customQuestions.${index}.options`,
+        });
+      }
+    }
+  });
+
+  return issues;
 }
 
 function buildPersistedCampaignMetaIds(externalIds: Record<string, string>) {
@@ -1086,8 +1145,6 @@ export async function runMetaLaunchPreflight({
       });
     } else {
       try {
-        // Validate URL shape.
-        // eslint-disable-next-line no-new
         new URL(landingPageUrl);
       } catch {
         issues.push({
@@ -1121,8 +1178,6 @@ export async function runMetaLaunchPreflight({
     ) {
       if (thankYouWebsiteUrl) {
         try {
-          // Validate URL shape.
-          // eslint-disable-next-line no-new
           new URL(thankYouWebsiteUrl);
         } catch {
           issues.push({
@@ -1236,8 +1291,6 @@ export async function runMetaLaunchPreflight({
           context.launchState.advanced.privacyPolicyUrl,
         );
         try {
-          // Validate privacy policy URL shape before lead form creation.
-          // eslint-disable-next-line no-new
           new URL(normalizedPrivacyUrl);
         } catch {
           issues.push({
@@ -1251,26 +1304,17 @@ export async function runMetaLaunchPreflight({
       }
 
       const selectedLeadFields = context.launchState.leadForm.fields || [];
-      if (!selectedLeadFields.length) {
+      const customQuestions = context.launchState.leadForm.customQuestions || [];
+      if (!selectedLeadFields.length && !customQuestions.length) {
         issues.push({
-          code: "missing_lead_form_fields",
-          message: "Select at least one lead form field for managed lead form mode.",
+          code: "missing_lead_form_questions",
+          message: "Add at least one standard field or custom question for managed lead form mode.",
           type: "blocking",
           scope: "both",
-          field: "leadForm.fields",
-        });
-      } else if (
-        !selectedLeadFields.includes("EMAIL") &&
-        !selectedLeadFields.includes("PHONE")
-      ) {
-        issues.push({
-          code: "lead_form_contact_field_required",
-          message: "Managed lead forms need at least Email or Phone to capture a contact method.",
-          type: "blocking",
-          scope: "both",
-          field: "leadForm.fields",
+          field: "leadForm.customQuestions",
         });
       }
+      issues.push(...validateManagedLeadFormCustomQuestions(customQuestions, selectedLeadFields));
     }
   }
 
@@ -1289,20 +1333,10 @@ export async function runMetaLaunchPreflight({
     }
   }
 
-  if (adTypeRequiresPixel(context.launchState.adType) && !context.resolvedAssets.pixel) {
-    issues.push({
-      code: "missing_pixel_required",
-      message: "A selected pixel is required for this campaign goal.",
-      type: "blocking",
-      scope: "both",
-      field: "pixelId",
-    });
-  }
-
   if (context.launchState.adType === "landing_page" && !context.resolvedAssets.pixel) {
     issues.push({
       code: "pixel_recommended",
-      message: "No pixel is selected. Landing page campaigns can still draft, but optimization quality may be limited.",
+      message: "No pixel is selected. Landing page campaigns can still publish, but optimization quality may be limited.",
       type: "warning",
       scope: "both",
       field: "pixelId",
@@ -1489,6 +1523,7 @@ export async function runMetaLaunchPreflight({
         context.launchState.leadForm.fields.length > 0
           ? context.launchState.leadForm.fields
           : ["FULL_NAME", "EMAIL", "PHONE"],
+      leadFormCustomQuestions: context.launchState.leadForm.customQuestions || [],
     },
     ad: {
       name: `${context.launchState.advanced.campaignName || context.campaign.name} Ad`,
@@ -1577,6 +1612,7 @@ export async function publishMetaFromPreflight({
       pageId,
       privacyPolicyUrl: resolveLeadFormPrivacyPolicyUrl(context),
       fields: summary.creative.leadFormFields,
+      customQuestions: summary.creative.leadFormCustomQuestions,
       thankYouPage,
     });
     const existingExternalIds =
@@ -1622,10 +1658,27 @@ export async function publishMetaFromPreflight({
         allow_organic_lead: "true",
         is_optimized_for_quality: "false",
         block_display_for_non_targeted_viewer: "false",
-        questions: summary.creative.leadFormFields.map((type) => ({
-          type,
-          key: type.toLowerCase(),
-        })),
+        questions: [
+          ...summary.creative.leadFormFields.map((type) => ({
+            type,
+            key: type.toLowerCase(),
+          })),
+          ...summary.creative.leadFormCustomQuestions.map((question) => ({
+            type: question.type === "MULTIPLE_CHOICE" ? "MULTIPLE_CHOICE" : "CUSTOM",
+            key: normalizeLeadFormQuestionKey(question.key || question.label),
+            label: question.label,
+            ...(question.type === "MULTIPLE_CHOICE"
+              ? {
+                  options: question.options
+                    .map((option, index) => ({
+                      key: `${normalizeLeadFormQuestionKey(question.key || question.label)}_${index + 1}`,
+                      value: option.value,
+                    }))
+                    .filter((option) => option.value.trim()),
+                }
+              : {}),
+          })),
+        ],
         privacy_policy: {
           url: resolveLeadFormPrivacyPolicyUrl(context),
           link_text: "Privacy Policy",
@@ -1673,6 +1726,7 @@ export async function publishMetaFromPreflight({
           name: managedLeadFormName,
           privacyPolicyUrl: resolveLeadFormPrivacyPolicyUrl(context),
           fields: summary.creative.leadFormFields,
+          customQuestions: summary.creative.leadFormCustomQuestions,
           thankYouPage,
         });
       } catch (error) {

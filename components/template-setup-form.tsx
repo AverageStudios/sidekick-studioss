@@ -56,7 +56,7 @@ export function TemplateSetupForm({
           <Input name="offerPrice" placeholder="Offer price" defaultValue="179" />
           <Input name="regularPrice" placeholder="Regular price" defaultValue="249" />
           <Input name="ctaText" placeholder="CTA text" defaultValue={profile?.default_cta || template.ctaDefault} />
-          <Input name="headline" placeholder="Headline override (optional)" />
+          <Input name="headline" maxLength={25} placeholder="Headline override (optional)" />
         </div>
         <div className="mt-4">
           <Input name="subheadline" placeholder="Subheadline override (optional)" />

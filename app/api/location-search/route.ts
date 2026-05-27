@@ -104,11 +104,111 @@ function classifyGeocoderType(type?: string): MetaLocationClassification {
 }
 
 function buildCacheKey(query: string) {
-  return query.trim().toLowerCase();
+  return normalizeSearchText(query);
 }
 
 function normalizeGeocoderLabel(result: GeocoderSearchResult, fallbackQuery: string) {
   return result.display_name || result.address?.road || result.address?.house_number || fallbackQuery;
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s,.-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function isPlainCityQuery(query: string) {
+  return /^[a-zA-Z .'-]+$/.test(query.trim()) && !query.includes(",");
+}
+
+function buildMetaLabel(result: MetaGeoLocationSearchResult, scope: CampaignLocationScope) {
+  const name = result.name?.trim();
+  const region = result.region?.trim();
+  const countryName = result.country_name?.trim();
+  const parts: string[] = [];
+
+  if (name) parts.push(name);
+
+  if (scope === "city" || scope === "neighborhood" || scope === "address") {
+    if (region && region.toLowerCase() !== name?.toLowerCase()) {
+      parts.push(region);
+    }
+    if (countryName && !parts.some((part) => part.toLowerCase() === countryName.toLowerCase())) {
+      parts.push(countryName);
+    }
+  } else if (scope === "state" && countryName) {
+    parts.push(countryName);
+  }
+
+  return parts.filter(Boolean).join(", ") || result.name || "Location";
+}
+
+function buildGeocoderLabel(result: GeocoderSearchResult, fallbackQuery: string) {
+  const address = result.address || {};
+  const locality =
+    address.city ||
+    address.town ||
+    address.village ||
+    address.municipality ||
+    address.hamlet ||
+    address.suburb ||
+    address.neighbourhood ||
+    address.neighborhood;
+  const region = address.state || address.region || address.county;
+  const country = address.country;
+  const parts = [locality, region, country].filter(
+    (part, index, array): part is string =>
+      typeof part === "string" &&
+      part.trim().length > 0 &&
+      array.findIndex((candidate) => candidate === part) === index,
+  );
+  return parts.join(", ") || normalizeGeocoderLabel(result, fallbackQuery);
+}
+
+function scoreMetaResult(result: MetaGeoLocationSearchResult, query: string) {
+  const normalizedQuery = normalizeSearchText(query);
+  const scope = mapScope(result);
+  const label = buildMetaLabel(result, scope);
+  const normalizedLabel = normalizeSearchText(label);
+  const normalizedName = normalizeSearchText(result.name || "");
+  const classification = classifyMetaLocationType(result);
+  let score = 0;
+
+  if (normalizedName === normalizedQuery) score += 200;
+  if (normalizedLabel === normalizedQuery) score += 180;
+  if (normalizedName.startsWith(normalizedQuery)) score += 140;
+  if (normalizedLabel.startsWith(normalizedQuery)) score += 120;
+  if (normalizedName.includes(normalizedQuery)) score += 70;
+  if (normalizedLabel.includes(normalizedQuery)) score += 50;
+  if (classification === "city") score += 40;
+  if (classification === "region") score += 20;
+  if (classification === "zip") score += 16;
+  if (classification === "country") score += 10;
+  if (result.country_code?.toUpperCase() === "US") score += 12;
+  if (isPlainCityQuery(query) && classification === "city") score += 35;
+
+  return score;
+}
+
+function scoreGeocoderResult(result: GeocoderSearchResult, query: string) {
+  const normalizedQuery = normalizeSearchText(query);
+  const label = buildGeocoderLabel(result, query);
+  const normalizedLabel = normalizeSearchText(label);
+  const classification = classifyGeocoderType(result.type);
+  let score = 0;
+
+  if (normalizedLabel === normalizedQuery) score += 160;
+  if (normalizedLabel.startsWith(normalizedQuery)) score += 110;
+  if (normalizedLabel.includes(normalizedQuery)) score += 45;
+  if (classification === "city") score += 25;
+  if (classification === "address") score += 20;
+  if ((result.address?.country_code || "").toUpperCase() === "US") score += 10;
+
+  return score;
 }
 
 async function fetchGeocoderAddressSearch(query: string) {
@@ -177,12 +277,20 @@ export async function GET(request: NextRequest) {
 
   try {
     const addressQuery = looksLikeAddressQuery(query);
-    const [broadPayload, addressPayload, geocoderPayload] = await Promise.all([
+    const cityBiasedQuery = isPlainCityQuery(query);
+    const [cityPayload, broadPayload, addressPayload, geocoderPayload] = await Promise.all([
+      fetchMetaGeoLocationSearch({
+        accessToken: tokenContext.accessToken,
+        query,
+        locationTypes: cityBiasedQuery ? ["city", "region", "country"] : ["city", "region", "country", "zip", "neighborhood"],
+        countryCode: cityBiasedQuery ? "US" : undefined,
+        limit: cityBiasedQuery ? 8 : 10,
+      }).catch(() => []),
       fetchMetaGeoLocationSearch({
         accessToken: tokenContext.accessToken,
         query,
         locationTypes: ["country", "region", "city", "zip", "neighborhood"],
-        limit: 12,
+        limit: 10,
       }).catch(() => []),
       addressQuery
         ? fetchMetaGeoLocationSearch({
@@ -191,13 +299,13 @@ export async function GET(request: NextRequest) {
             locationTypes: ["address"],
             searchParam: "q",
             placeFallback: true,
-            limit: 12,
+            limit: 6,
           }).catch(() => [])
         : Promise.resolve([]),
       addressQuery ? fetchGeocoderAddressSearch(query).catch(() => []) : Promise.resolve([]),
     ]);
 
-    const payload = [...broadPayload, ...addressPayload];
+    const payload = [...cityPayload, ...broadPayload, ...addressPayload];
     const deduped = new Map<string, MetaGeoLocationSearchResult>();
     payload.forEach((item) => {
       const key = `${item.type || "unknown"}:${item.key || item.name || query}`;
@@ -210,14 +318,16 @@ export async function GET(request: NextRequest) {
 
     const suggestions: LocationSuggestion[] = [];
 
-    finalPayload.forEach((item) => {
+    finalPayload
+      .sort((left, right) => scoreMetaResult(right, query) - scoreMetaResult(left, query))
+      .forEach((item) => {
       const scope = mapScope(item);
       const classification = classifyMetaLocationType(item);
       const lat = parseCoordinate(item.latitude);
       const lon = parseCoordinate(item.longitude);
       suggestions.push({
         id: item.key ? `${scope}:${item.key}` : `${scope}:${item.name || query}`,
-        label: item.name || query,
+        label: buildMetaLabel(item, scope),
         scope,
         source: "meta",
         lat,
@@ -246,12 +356,14 @@ export async function GET(request: NextRequest) {
       });
     });
 
-    geocoderPayload.forEach((item) => {
+    geocoderPayload
+      .sort((left, right) => scoreGeocoderResult(right, query) - scoreGeocoderResult(left, query))
+      .forEach((item) => {
       const classification = classifyGeocoderType(item.type);
       const scope = classification === "country" ? "country" : classification === "region" ? "state" : classification === "zip" ? "zip" : classification === "neighborhood" ? "neighborhood" : classification === "city" ? "city" : "address";
       const lat = parseCoordinate(item.lat);
       const lon = parseCoordinate(item.lon);
-      const label = normalizeGeocoderLabel(item, query);
+      const label = buildGeocoderLabel(item, query);
       const id = `geocoder:${item.osm_type || "place"}:${item.osm_id || item.place_id || label}`;
       suggestions.push({
         id,
@@ -280,7 +392,7 @@ export async function GET(request: NextRequest) {
       });
     });
 
-    const normalized = query.toLowerCase();
+    const normalized = normalizeSearchText(query);
     if (normalized === "world" || normalized === "worldwide" || normalized.includes("global")) {
       suggestions.unshift({
         id: "worldwide",
@@ -297,11 +409,16 @@ export async function GET(request: NextRequest) {
     const normalizedSuggestions = suggestions
       .filter((suggestion, index, list) => list.findIndex((entry) => entry.id === suggestion.id) === index)
       .sort((a, b) => {
+        const queryA = normalizeSearchText(a.label);
+        const queryB = normalizeSearchText(b.label);
+        if (queryA === normalized && queryB !== normalized) return -1;
+        if (queryB === normalized && queryA !== normalized) return 1;
         if (a.source === b.source) return 0;
         if (a.source === "meta") return -1;
         if (b.source === "meta") return 1;
         return 0;
-      });
+      })
+      .slice(0, 8);
 
     searchCache.set(cacheKey, {
       expiresAt: Date.now() + searchCacheTtlMs,

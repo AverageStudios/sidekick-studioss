@@ -70,16 +70,11 @@ export type CampaignWizardStepId =
   | "industry"
   | "template"
   | "ad-type"
-  | "budget"
+  | "campaign-basics"
   | "location"
-  | "tracking-pixel"
+  | "destination-setup"
   | "placeholders"
-  | "thank-you"
-  | "landing-page"
-  | "phone-number"
-  | "messenger-setup"
-  | "overview"
-  | "launch";
+  | "review-launch";
 export type CampaignGoal =
   | "OUTCOME_AWARENESS"
   | "OUTCOME_TRAFFIC"
@@ -91,7 +86,26 @@ export type CampaignLeadFormMode = "existing" | "managed_new";
 export type CampaignPublishMode = "draft" | "live";
 export type CampaignThankYouDestinationMode = "facebook" | "website";
 export type CampaignThankYouButtonAction = "OPEN_WEBSITE" | "DOWNLOAD" | "CALL_BUSINESS";
-export type CampaignLeadFormField = "FULL_NAME" | "EMAIL" | "PHONE";
+export type CampaignLeadFormField =
+  | "FULL_NAME"
+  | "FIRST_NAME"
+  | "LAST_NAME"
+  | "EMAIL"
+  | "PHONE"
+  | "COMPANY_NAME"
+  | "JOB_TITLE";
+export type CampaignLeadFormCustomQuestionType = "SHORT_ANSWER" | "MULTIPLE_CHOICE";
+export type CampaignLeadFormCustomQuestionOption = {
+  id: string;
+  value: string;
+};
+export type CampaignLeadFormCustomQuestion = {
+  id: string;
+  key: string;
+  label: string;
+  type: CampaignLeadFormCustomQuestionType;
+  options: CampaignLeadFormCustomQuestionOption[];
+};
 
 export type TemplatePlaceholderField = {
   id: string;
@@ -151,6 +165,7 @@ export type CampaignLaunchState = {
       selectedFormName: string;
       managedFormName: string;
       fields: CampaignLeadFormField[];
+      customQuestions: CampaignLeadFormCustomQuestion[];
       privacyPolicyUrl: string;
       thankYou: {
         enabled: boolean;

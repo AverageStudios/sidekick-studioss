@@ -23,10 +23,12 @@ const navItems = [
 export async function AppShell({
   currentPath,
   extraNavItems = [],
+  fullBleed = false,
   children,
 }: {
   currentPath: string;
   extraNavItems?: Array<{ href: string; label: string; icon?: React.ComponentType<{ className?: string }> | undefined }>;
+  fullBleed?: boolean;
   children: React.ReactNode;
 }) {
   const supabaseFallbackMessage = getSupabaseFallbackMessage();
@@ -265,7 +267,12 @@ export async function AppShell({
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-[76rem] flex-col gap-10 px-4 py-10 pb-28 sm:px-6 sm:py-12 sm:pb-12 lg:px-8 lg:py-14">
+      <main
+        className={cn(
+          "mx-auto flex w-full flex-col gap-10 px-4 py-10 pb-28 sm:px-6 sm:py-12 sm:pb-12 lg:px-8 lg:py-14",
+          fullBleed ? "max-w-none px-0 py-0 pb-0 sm:px-0 sm:py-0 sm:pb-0 lg:px-0 lg:py-0 lg:pb-0" : "max-w-[76rem]",
+        )}
+      >
         {supabaseFallbackMessage ? <ConfigNotice title="Demo mode" message={supabaseFallbackMessage} /> : null}
         {children}
       </main>

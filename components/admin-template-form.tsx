@@ -1525,13 +1525,14 @@ export function AdminTemplateForm({
                     <FieldLabel required invalid={Boolean(stepValidation.fieldErrors.headline)}>Headline</FieldLabel>
                     <Input
                       name="headline"
-                      value={values.headline}
-                      onChange={(event) => update("headline", event.target.value)}
+                      value={values.headline.slice(0, 25)}
+                      maxLength={25}
+                      onChange={(event) => update("headline", event.target.value.slice(0, 25))}
                       placeholder="Enter an attention-grabbing headline"
                       aria-invalid={Boolean(stepValidation.fieldErrors.headline)}
                     />
                     <FieldError message={stepValidation.fieldErrors.headline} />
-                    <p className="mt-2 text-sm text-[var(--muted-strong)]">Recommended: 30 characters for best display</p>
+                    <p className="mt-2 text-sm text-[var(--muted-strong)]">25 characters max for best display</p>
                   </div>
 
                   <div>
@@ -3060,7 +3061,7 @@ export function AdminTemplateForm({
                   <FacebookAdPreview
                     pageName={values.name || "Your Page Name"}
                     primaryText={values.adPrimary || values.description}
-                    headline={values.headline || values.name || "Template headline"}
+                    headline={(values.headline || values.name || "Template headline").slice(0, 25)}
                     description={values.promoDetails}
                     ctaLabel={values.ctaDefault}
                     imageUrl={values.previewImageUrl || values.mediaImageUrls[0] || null}

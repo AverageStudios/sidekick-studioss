@@ -32,7 +32,7 @@ export default async function NewTemplateCampaignPage({
   })();
 
   return (
-    <AppShell currentPath="/templates">
+    <AppShell currentPath="/templates" fullBleed>
       <TemplateLaunchWizard
         templates={templates}
         businessProfile={businessProfile}
@@ -40,6 +40,7 @@ export default async function NewTemplateCampaignPage({
         initialTemplateSlug={template || null}
         metaIntegration={metaIntegration}
         connectNextUrl={connectNextUrl}
+        immersive
       />
     </AppShell>
   );
