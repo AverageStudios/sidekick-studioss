@@ -186,7 +186,7 @@ function DashboardConnectState() {
 
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Button asChild size="lg" className="sm:min-w-48">
-                  <Link href="/api/meta/connect?scopeSet=leads&next=/dashboard">
+                  <Link href="/api/meta/connect?next=/dashboard">
                     Connect Meta
                     <ArrowRight className="h-4 w-4" />
                   </Link>

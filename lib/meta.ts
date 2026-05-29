@@ -15,6 +15,12 @@ const defaultMetaScopes = [
 const leadFormManagementMetaScopes = ["pages_manage_ads"] as const;
 const leadRetrievalMetaScopes = ["leads_retrieval"] as const;
 const pageWebhookManagementMetaScopes = ["pages_manage_metadata"] as const;
+const allowedMetaScopes = new Set<string>([
+  ...defaultMetaScopes,
+  ...leadFormManagementMetaScopes,
+  ...leadRetrievalMetaScopes,
+  ...pageWebhookManagementMetaScopes,
+]);
 
 export type MetaAdAccount = {
   id: string;
@@ -267,6 +273,29 @@ function dedupeScopes(scopes: string[]) {
   return Array.from(new Set(scopes.map((scope) => scope.trim()).filter(Boolean)));
 }
 
+function filterMetaScopesByOptions(
+  scopes: string[],
+  options?: {
+    includeLeadFormManagement?: boolean;
+    includeLeadRetrieval?: boolean;
+    includePageWebhookManagement?: boolean;
+  },
+) {
+  return dedupeScopes(scopes).filter((scope) => {
+    if (!allowedMetaScopes.has(scope)) return false;
+    if (scope === "pages_manage_ads") {
+      return Boolean(options?.includeLeadFormManagement);
+    }
+    if (scope === "leads_retrieval") {
+      return Boolean(options?.includeLeadRetrieval);
+    }
+    if (scope === "pages_manage_metadata") {
+      return Boolean(options?.includePageWebhookManagement);
+    }
+    return true;
+  });
+}
+
 export function getMetaScopes(options?: {
   includeLeadFormManagement?: boolean;
   includeLeadRetrieval?: boolean;
@@ -274,12 +303,12 @@ export function getMetaScopes(options?: {
 }) {
   const raw = readMetaEnv("META_SCOPES") || env.metaScopes;
   const fallback = [...defaultMetaScopes];
-  const extraScopes = [
-    ...(options?.includeLeadFormManagement ? [...leadFormManagementMetaScopes] : []),
-    ...(options?.includeLeadRetrieval ? [...leadRetrievalMetaScopes] : []),
-    ...(options?.includePageWebhookManagement ? [...pageWebhookManagementMetaScopes] : []),
-  ];
   if (!raw) {
+    const extraScopes = [
+      ...(options?.includeLeadFormManagement ? [...leadFormManagementMetaScopes] : []),
+      ...(options?.includeLeadRetrieval ? [...leadRetrievalMetaScopes] : []),
+      ...(options?.includePageWebhookManagement ? [...pageWebhookManagementMetaScopes] : []),
+    ];
     return extraScopes.length ? dedupeScopes([...fallback, ...extraScopes]) : fallback;
   }
 
@@ -289,7 +318,7 @@ export function getMetaScopes(options?: {
     .filter(Boolean);
 
   const scopes = parsed.length ? parsed : fallback;
-  return extraScopes.length ? dedupeScopes([...scopes, ...extraScopes]) : dedupeScopes(scopes);
+  return filterMetaScopesByOptions(scopes.length ? scopes : fallback, options);
 }
 
 function buildMetaGraphUrl(path: string) {
