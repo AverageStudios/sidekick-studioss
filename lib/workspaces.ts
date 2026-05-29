@@ -6,6 +6,9 @@ import { isDemoModeEnabled, isSupabaseServerConfigured } from "@/lib/env";
 import { getCurrentUser } from "@/lib/auth";
 import { BusinessProfile, ProfileRecord, WorkspaceContext, WorkspaceMember, WorkspaceRecord, WorkspaceSummary } from "@/types";
 
+const WORKSPACE_PROFILE_META_PREFIX = "<!--sidekick-workspace-meta:";
+const WORKSPACE_PROFILE_META_SUFFIX = "-->";
+
 function capitalize(value: string) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 }
@@ -87,18 +90,301 @@ function getWorkspaceInitial(name?: string | null) {
   return trimmed ? trimmed.charAt(0).toUpperCase() : "W";
 }
 
-function buildWorkspaceName(firstName?: string | null, existingCount = 0) {
-  const base = firstName ? `${firstName}'s Workspace` : "My Workspace";
-  return existingCount > 0 ? `${base} ${existingCount + 1}` : base;
+function buildWorkspaceName(displayName?: string | null, existingCount = 0) {
+  const normalizedDisplayName = normalizeWorkspaceLabel(displayName);
+  const base = normalizedDisplayName ? `${normalizedDisplayName} Workspace` : "My Workspace";
+  return existingCount > 0 ? `${base} (${existingCount + 1})` : base;
 }
 
-export function getWorkspaceDisplayName(name?: string | null, firstName?: string | null) {
-  return isGenericWorkspaceName(name) ? buildWorkspaceName(firstName) : (name || buildWorkspaceName(firstName));
+function buildWorkspaceFallbackName(userDisplayName?: string | null) {
+  const trimmed = (userDisplayName || "").trim();
+  if (!trimmed) return "New Workspace";
+  return `${trimmed} Workspace`;
+}
+
+function normalizeWorkspaceLabel(value?: string | null) {
+  return (value || "").trim().replace(/\s+/g, " ").slice(0, 80);
+}
+
+function makeUniqueWorkspaceName(baseName: string, existingNames: string[]) {
+  const normalizedBase = normalizeWorkspaceLabel(baseName) || "New Workspace";
+  const taken = new Set(existingNames.map((name) => name.trim().toLowerCase()).filter(Boolean));
+  if (!taken.has(normalizedBase.toLowerCase())) {
+    return normalizedBase;
+  }
+
+  let counter = 2;
+  while (taken.has(`${normalizedBase} (${counter})`.toLowerCase())) {
+    counter += 1;
+  }
+
+  return `${normalizedBase} (${counter})`;
+}
+
+export function getWorkspaceDisplayName(name?: string | null, displayName?: string | null) {
+  return isGenericWorkspaceName(name) ? buildWorkspaceName(displayName) : (name || buildWorkspaceName(displayName));
 }
 
 function isGenericWorkspaceName(value?: string | null) {
   const normalized = (value || "").trim().toLowerCase();
   return normalized === "" || normalized === "my workspace";
+}
+
+function isMissingColumnError(error: { message?: string | null } | null | undefined, tableName: string, columnName: string) {
+  const message = error?.message || "";
+  return (
+    message.includes(`column ${tableName}.${columnName} does not exist`) ||
+    message.includes(`Could not find the '${columnName}' column of '${tableName}' in the schema cache`) ||
+    (message.includes(tableName) && message.includes(columnName) && message.includes("schema cache"))
+  );
+}
+
+function splitBusinessProfileDescription(value?: string | null) {
+  const description = value || "";
+  const start = description.indexOf(WORKSPACE_PROFILE_META_PREFIX);
+
+  if (start === -1) {
+    return {
+      description: description.trim(),
+      metadata: {} as { website?: string; industry?: string; privacy_policy_url?: string },
+    };
+  }
+
+  const end = description.indexOf(WORKSPACE_PROFILE_META_SUFFIX, start);
+  if (end === -1) {
+    return {
+      description: description.trim(),
+      metadata: {} as { website?: string; industry?: string; privacy_policy_url?: string },
+    };
+  }
+
+  const visibleDescription = `${description.slice(0, start)}${description.slice(end + WORKSPACE_PROFILE_META_SUFFIX.length)}`.trim();
+  const rawPayload = description.slice(start + WORKSPACE_PROFILE_META_PREFIX.length, end);
+
+  try {
+    const parsed = JSON.parse(rawPayload) as { website?: string; industry?: string; privacy_policy_url?: string };
+    return {
+      description: visibleDescription,
+      metadata: parsed || {},
+    };
+  } catch {
+    return {
+      description: visibleDescription,
+      metadata: {} as { website?: string; industry?: string; privacy_policy_url?: string },
+    };
+  }
+}
+
+function mergeBusinessProfileDescription(
+  description: string | null | undefined,
+  metadata: {
+    website?: string | null;
+    industry?: string | null;
+    privacy_policy_url?: string | null;
+  },
+) {
+  const stripped = splitBusinessProfileDescription(description).description;
+  const normalizedMetadata = {
+    website: normalizeWorkspaceLabel(metadata.website) || "",
+    industry: normalizeWorkspaceLabel(metadata.industry) || "",
+    privacy_policy_url: normalizeWorkspaceLabel(metadata.privacy_policy_url) || "",
+  };
+  return `${stripped}${stripped ? "\n\n" : ""}${WORKSPACE_PROFILE_META_PREFIX}${JSON.stringify(normalizedMetadata)}${WORKSPACE_PROFILE_META_SUFFIX}`;
+}
+
+function normalizeBusinessProfileRecord(
+  record:
+    | (Partial<BusinessProfile> & {
+        id?: string | null;
+        user_id?: string | null;
+        workspace_id?: string | null;
+        business_name?: string | null;
+        location?: string | null;
+        phone?: string | null;
+        email?: string | null;
+        description?: string | null;
+        logo_url?: string | null;
+        brand_color?: string | null;
+        default_cta?: string | null;
+      })
+    | null
+    | undefined,
+): BusinessProfile | null {
+  if (!record?.workspace_id) return null;
+
+  const parsedDescription = splitBusinessProfileDescription(record.description);
+
+  return {
+    id: record.id || `workspace-profile-${record.workspace_id}`,
+    user_id: record.user_id || "",
+    workspace_id: record.workspace_id,
+    business_name: record.business_name || "",
+    website: record.website ?? parsedDescription.metadata.website ?? null,
+    industry: record.industry ?? parsedDescription.metadata.industry ?? null,
+    privacy_policy_url: record.privacy_policy_url ?? parsedDescription.metadata.privacy_policy_url ?? null,
+    location: record.location || "",
+    phone: record.phone || "",
+    email: record.email || "",
+    description: parsedDescription.description,
+    logo_url: record.logo_url || null,
+    brand_color: record.brand_color || null,
+    default_cta: record.default_cta || null,
+  };
+}
+
+async function fetchWorkspaceBusinessProfiles(
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
+  workspaceIds: string[],
+) {
+  if (!workspaceIds.length) return new Map<string, BusinessProfile>();
+
+  const fullResult = await admin
+    .from("business_profiles")
+    .select("id, user_id, workspace_id, business_name, website, industry, privacy_policy_url, location, phone, email, description, logo_url, brand_color, default_cta")
+    .in("workspace_id", workspaceIds);
+
+  const result =
+    fullResult.error &&
+    (isMissingColumnError(fullResult.error, "business_profiles", "website") ||
+      isMissingColumnError(fullResult.error, "business_profiles", "industry") ||
+      isMissingColumnError(fullResult.error, "business_profiles", "privacy_policy_url"))
+      ? await admin
+          .from("business_profiles")
+          .select("id, user_id, workspace_id, business_name, location, phone, email, description, logo_url, brand_color, default_cta")
+          .in("workspace_id", workspaceIds)
+      : fullResult;
+
+  if (result.error) {
+    throw new Error(`Database error loading business profiles: ${result.error.message}`);
+  }
+
+  return new Map(
+    ((result.data || []) as Array<Record<string, unknown>>)
+      .map((entry) => normalizeBusinessProfileRecord(entry as Partial<BusinessProfile>))
+      .filter(Boolean)
+      .map((entry) => [entry!.workspace_id || "", entry!] as const),
+  );
+}
+
+export async function getWorkspaceBusinessProfileById(
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
+  workspaceId: string,
+) {
+  return (await fetchWorkspaceBusinessProfiles(admin, [workspaceId])).get(workspaceId) || null;
+}
+
+async function insertWorkspaceRecord(
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
+  payload: {
+    name: string;
+    owner_user_id: string;
+  },
+) {
+  const fullResult = await admin
+    .from("workspaces")
+    .insert({
+      name: payload.name,
+      owner_user_id: payload.owner_user_id,
+    })
+    .select("*")
+    .single();
+
+  if (fullResult.error) {
+    throw new Error(`Could not create workspace: ${fullResult.error.message}. Ensure all database migrations have been applied.`);
+  }
+
+  return fullResult.data as WorkspaceRecord | null;
+}
+
+export async function updateWorkspaceIdentityRecord(
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
+  workspaceId: string,
+  payload: {
+    name: string;
+  },
+) {
+  const fullResult = await admin
+    .from("workspaces")
+    .update({ name: payload.name })
+    .eq("id", workspaceId);
+
+  if (fullResult.error) {
+    throw new Error(`Could not update workspace: ${fullResult.error.message}`);
+  }
+}
+
+export async function upsertWorkspaceBusinessProfile(
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
+  payload: {
+    user_id: string;
+    workspace_id: string;
+    business_name: string;
+    website?: string | null;
+    industry?: string | null;
+    privacy_policy_url?: string | null;
+    location?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    description?: string | null;
+    logo_url?: string | null;
+    brand_color?: string | null;
+    default_cta?: string | null;
+  },
+) {
+  const fullPayload = {
+    user_id: payload.user_id,
+    workspace_id: payload.workspace_id,
+    business_name: payload.business_name,
+    location: payload.location || "",
+    phone: payload.phone || "",
+    email: payload.email || "",
+    description: mergeBusinessProfileDescription(payload.description || "", {
+      website: payload.website,
+      industry: payload.industry,
+      privacy_policy_url: payload.privacy_policy_url,
+    }),
+    logo_url: payload.logo_url || null,
+    brand_color: payload.brand_color || "#6D5EF8",
+    default_cta: payload.default_cta || "Get My Quote",
+  };
+
+  const fullResult = await admin
+    .from("business_profiles")
+    .upsert(fullPayload, { onConflict: "workspace_id" })
+    .select("*")
+    .maybeSingle();
+
+  const result =
+    fullResult.error &&
+    (isMissingColumnError(fullResult.error, "business_profiles", "website") ||
+      isMissingColumnError(fullResult.error, "business_profiles", "industry") ||
+      isMissingColumnError(fullResult.error, "business_profiles", "privacy_policy_url"))
+      ? await admin
+          .from("business_profiles")
+          .upsert(
+            {
+              user_id: fullPayload.user_id,
+              workspace_id: fullPayload.workspace_id,
+              business_name: fullPayload.business_name,
+              location: fullPayload.location,
+              phone: fullPayload.phone,
+              email: fullPayload.email,
+              description: fullPayload.description,
+              logo_url: fullPayload.logo_url,
+              brand_color: fullPayload.brand_color,
+              default_cta: fullPayload.default_cta,
+            },
+            { onConflict: "workspace_id" },
+          )
+          .select("*")
+          .maybeSingle()
+      : fullResult;
+
+  if (result.error) {
+    throw new Error(`Could not save business profile: ${result.error.message}`);
+  }
+
+  return normalizeBusinessProfileRecord((result.data || null) as Partial<BusinessProfile> | null);
 }
 
 function buildDemoWorkspaceContext(): WorkspaceContext {
@@ -141,6 +427,9 @@ function buildDemoWorkspaceContext(): WorkspaceContext {
       user_id: demoUser.id,
       workspace_id: "workspace-demo",
       business_name: "Demo Workspace",
+      website: "",
+      industry: "",
+      privacy_policy_url: "",
       location: "",
       phone: "",
       email: demoUser.email,
@@ -270,7 +559,7 @@ async function ensureWorkspaceContextResolved(user: UserIdentityLike): Promise<W
   }
 
   if (workspaces.length === 1 && workspaces[0]?.owner_user_id === user.id) {
-    const preferredWorkspaceName = buildWorkspaceName(profile.first_name);
+    const preferredWorkspaceName = buildWorkspaceName(derivedNames.displayName);
     const currentWorkspace = workspaces[0];
 
     if (isGenericWorkspaceName(currentWorkspace.name) && currentWorkspace.name !== preferredWorkspaceName) {
@@ -295,21 +584,11 @@ async function ensureWorkspaceContextResolved(user: UserIdentityLike): Promise<W
   }
 
   if (!workspaces.length) {
-    const workspaceName = buildWorkspaceName(profile.first_name);
-    const createdWorkspace = await admin
-      .from("workspaces")
-      .insert({
-        name: workspaceName,
-        owner_user_id: user.id,
-      })
-      .select("*")
-      .single();
-
-    if (createdWorkspace.error) {
-      throw new Error(`Could not create workspace: ${createdWorkspace.error.message}. Ensure all database migrations have been applied.`);
-    }
-
-    const workspace = createdWorkspace.data as Omit<WorkspaceSummary, "role"> | null;
+    const workspaceName = buildWorkspaceName(derivedNames.displayName);
+    const workspace = await insertWorkspaceRecord(admin, {
+      name: workspaceName,
+      owner_user_id: user.id,
+    });
     if (!workspace) return null;
 
     await admin.from("workspace_memberships").insert({
@@ -318,20 +597,20 @@ async function ensureWorkspaceContextResolved(user: UserIdentityLike): Promise<W
       role: "owner",
     });
 
-    await admin.from("business_profiles").upsert(
-      {
-        user_id: user.id,
-        workspace_id: workspace.id,
-        business_name: workspaceName,
-        location: "",
-        phone: "",
-        email: user.email || "",
-        description: "",
-        brand_color: "#6D5EF8",
-        default_cta: "Get My Quote",
-      },
-      { onConflict: "workspace_id" },
-    );
+    await upsertWorkspaceBusinessProfile(admin, {
+      user_id: user.id,
+      workspace_id: workspace.id,
+      business_name: workspaceName,
+      website: "",
+      industry: "",
+      privacy_policy_url: "",
+      location: "",
+      phone: "",
+      email: user.email || "",
+      description: "",
+      brand_color: "#6D5EF8",
+      default_cta: "Get My Quote",
+    });
 
     const updatedProfile = await admin
       .from("profiles")
@@ -344,7 +623,7 @@ async function ensureWorkspaceContextResolved(user: UserIdentityLike): Promise<W
       profile = updatedProfile.data as ProfileRecord;
     }
 
-    workspaces = [{ ...workspace, role: "owner" }];
+    workspaces = [{ ...workspace, role: "owner", business_name: workspaceName }];
   }
 
   const resolvedProfile = profile;
@@ -353,6 +632,10 @@ async function ensureWorkspaceContextResolved(user: UserIdentityLike): Promise<W
   const activeWorkspace =
     workspaces.find((workspace) => workspace.id === resolvedProfile.active_workspace_id) ||
     workspaces[0];
+
+  if (!workspaces.some((workspace) => workspace.id === activeWorkspace.id)) {
+    workspaces = [activeWorkspace, ...workspaces];
+  }
 
   if (resolvedProfile.active_workspace_id !== activeWorkspace.id) {
     const updatedProfile = await admin
@@ -373,43 +656,48 @@ async function ensureWorkspaceContextResolved(user: UserIdentityLike): Promise<W
     .eq("workspace_id", activeWorkspace.id)
     .maybeSingle();
 
-  let businessProfile = (businessProfileResult.data as BusinessProfile | null) || null;
+  let businessProfile = normalizeBusinessProfileRecord((businessProfileResult.data || null) as Partial<BusinessProfile> | null);
+
+  const workspaceIds = Array.from(new Set(workspaces.map((workspace) => workspace.id)));
+  const workspaceBusinessProfilesById = await fetchWorkspaceBusinessProfiles(admin, workspaceIds);
 
   if (!businessProfile) {
-    const insertedBusinessProfile = await admin
-      .from("business_profiles")
-      .upsert(
-        {
-          user_id: user.id,
-          workspace_id: activeWorkspace.id,
-          business_name: activeWorkspace.name,
-          location: "",
-          phone: "",
-          email: user.email || "",
-          description: "",
-          brand_color: "#6D5EF8",
-          default_cta: "Get My Quote",
-        },
-        { onConflict: "workspace_id" },
-      )
-      .select("*")
-      .single();
-
-    businessProfile = (insertedBusinessProfile.data as BusinessProfile | null) || null;
+    businessProfile = await upsertWorkspaceBusinessProfile(admin, {
+      user_id: user.id,
+      workspace_id: activeWorkspace.id,
+      business_name: activeWorkspace.business_name || activeWorkspace.name,
+      website: activeWorkspace.website || "",
+      industry: activeWorkspace.industry || "",
+      privacy_policy_url: "",
+      location: "",
+      phone: activeWorkspace.business_phone || "",
+      email: activeWorkspace.business_email || user.email || "",
+      description: "",
+      brand_color: "#6D5EF8",
+      default_cta: "Get My Quote",
+    });
   }
 
   const resolvedNames = deriveNameParts(user, resolvedProfile);
-  const resolvedWorkspaceName = getWorkspaceDisplayName(activeWorkspace.name, resolvedProfile.first_name);
+  const resolvedWorkspaceName = getWorkspaceDisplayName(activeWorkspace.name, resolvedNames.displayName);
 
   return {
     profile: resolvedProfile,
-    workspaces: workspaces.map((workspace) =>
-      workspace.id === activeWorkspace.id
-        ? { ...workspace, name: resolvedWorkspaceName }
-        : workspace,
-    ),
+    workspaces: workspaces.map((workspace) => ({
+      ...workspace,
+      business_name: workspaceBusinessProfilesById.get(workspace.id)?.business_name || workspace.business_name || workspace.name,
+      website: workspaceBusinessProfilesById.get(workspace.id)?.website || workspace.website || null,
+      industry: workspaceBusinessProfilesById.get(workspace.id)?.industry || workspace.industry || null,
+      name:
+        workspace.owner_user_id === user.id
+          ? getWorkspaceDisplayName(workspace.name, resolvedNames.displayName)
+          : workspace.name,
+    })),
     activeWorkspace: {
       ...activeWorkspace,
+      business_name: businessProfile?.business_name || activeWorkspace.business_name || activeWorkspace.name,
+      website: businessProfile?.website || activeWorkspace.website || null,
+      industry: businessProfile?.industry || activeWorkspace.industry || null,
       name: resolvedWorkspaceName,
     },
     businessProfile,
@@ -483,7 +771,15 @@ export async function userHasWorkspaceAccess(userId: string, workspaceId: string
 
 export async function createWorkspaceForUser(
   user: UserIdentityLike,
-  requestedName?: string | null,
+  input?: {
+    workspaceName?: string | null;
+    businessName?: string | null;
+    businessEmail?: string | null;
+    businessPhone?: string | null;
+    website?: string | null;
+    industry?: string | null;
+    privacyPolicyUrl?: string | null;
+  } | null,
 ) {
   if (!isSupabaseServerConfigured()) return null;
   const admin = createSupabaseAdminClient();
@@ -492,17 +788,26 @@ export async function createWorkspaceForUser(
   const context = await ensureWorkspaceContextResolved(user);
   if (!context) return null;
 
-  const workspaceName = requestedName?.trim() || buildWorkspaceName(context.profile.first_name, context.workspaces.length);
-  const createdWorkspace = await admin
-    .from("workspaces")
-    .insert({
-      name: workspaceName,
-      owner_user_id: user.id,
-    })
-    .select("*")
-    .single();
-
-  const workspace = createdWorkspace.data as WorkspaceSummary | null;
+  const requestedWorkspaceName = normalizeWorkspaceLabel(input?.workspaceName);
+  const businessName = normalizeWorkspaceLabel(input?.businessName);
+  const derivedWorkspaceName =
+    requestedWorkspaceName ||
+    businessName ||
+    buildWorkspaceFallbackName(context.userDisplayName || context.profile.first_name);
+  const workspaceName = makeUniqueWorkspaceName(
+    derivedWorkspaceName,
+    context.workspaces.map((workspace) => workspace.name),
+  );
+  const normalizedBusinessName = businessName || workspaceName;
+  const businessEmail = normalizeWorkspaceLabel(input?.businessEmail) || user.email || "";
+  const businessPhone = normalizeWorkspaceLabel(input?.businessPhone) || "";
+  const website = normalizeWorkspaceLabel(input?.website) || "";
+  const industry = normalizeWorkspaceLabel(input?.industry) || "";
+  const privacyPolicyUrl = normalizeWorkspaceLabel(input?.privacyPolicyUrl) || "";
+  const workspace = await insertWorkspaceRecord(admin, {
+    name: workspaceName,
+    owner_user_id: user.id,
+  });
   if (!workspace) return null;
 
   await admin.from("workspace_memberships").insert({
@@ -511,24 +816,31 @@ export async function createWorkspaceForUser(
     role: "owner",
   });
 
-  await admin.from("business_profiles").upsert(
-    {
-      user_id: user.id,
-      workspace_id: workspace.id,
-      business_name: workspaceName,
-      location: "",
-      phone: "",
-      email: user.email || "",
-      description: "",
-      brand_color: "#6D5EF8",
-      default_cta: "Get My Quote",
-    },
-    { onConflict: "workspace_id" },
-  );
+  await upsertWorkspaceBusinessProfile(admin, {
+    user_id: user.id,
+    workspace_id: workspace.id,
+    business_name: normalizedBusinessName,
+    website,
+    industry,
+    privacy_policy_url: privacyPolicyUrl,
+    location: "",
+    phone: businessPhone,
+    email: businessEmail,
+    description: "",
+    brand_color: "#6D5EF8",
+    default_cta: "Get My Quote",
+  });
 
   await admin.from("profiles").update({ active_workspace_id: workspace.id }).eq("user_id", user.id);
 
-  return workspace;
+  return {
+    ...workspace,
+    business_name: normalizedBusinessName,
+    business_email: businessEmail,
+    business_phone: businessPhone,
+    website,
+    industry,
+  };
 }
 
 export async function getCurrentWorkspaceMembers(): Promise<WorkspaceMember[]> {

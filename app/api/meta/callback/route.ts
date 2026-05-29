@@ -44,7 +44,9 @@ export async function GET(request: NextRequest) {
     (nextCookie?.startsWith("/")
       ? nextCookie
       : "/workspace/settings?section=integrations");
-  const resolvedScopeSet = statePayload?.scopeSet || (scopeSetCookie === "lead_forms" ? "lead_forms" : "default");
+  const resolvedScopeSet =
+    statePayload?.scopeSet ||
+    (scopeSetCookie === "leads" ? "leads" : scopeSetCookie === "lead_forms" ? "lead_forms" : "default");
   const requestedScopes = statePayload?.requestedScopes?.length
     ? statePayload.requestedScopes
     : requestedScopesCookie
@@ -137,7 +139,11 @@ export async function GET(request: NextRequest) {
       debugToken?.data?.scopes ||
       (requestedScopes.length
         ? requestedScopes
-        : getMetaScopes({ includeLeadFormManagement: resolvedScopeSet === "lead_forms" }));
+        : getMetaScopes({
+            includeLeadFormManagement: resolvedScopeSet === "lead_forms" || resolvedScopeSet === "leads",
+            includeLeadRetrieval: resolvedScopeSet === "leads",
+            includePageWebhookManagement: resolvedScopeSet === "leads",
+          }));
     const tokenExpiresAt =
       typeof debugToken?.data?.expires_at === "number" &&
       debugToken.data.expires_at > 0

@@ -13,6 +13,8 @@ const defaultMetaScopes = [
 ] as const;
 
 const leadFormManagementMetaScopes = ["pages_manage_ads"] as const;
+const leadRetrievalMetaScopes = ["leads_retrieval"] as const;
+const pageWebhookManagementMetaScopes = ["pages_manage_metadata"] as const;
 
 export type MetaAdAccount = {
   id: string;
@@ -23,6 +25,23 @@ export type MetaAdAccount = {
   currency?: string;
   business_name?: string;
   funding_source_details?: Record<string, unknown>;
+  spend_cap?: string | number;
+  amount_spent?: string | number;
+};
+
+export type MetaInsightActionMetric = {
+  action_type?: string;
+  value?: string;
+};
+
+export type MetaAdAccountInsightsRow = {
+  spend?: string;
+  clicks?: string;
+  cpc?: string;
+  ctr?: string;
+  impressions?: string;
+  actions?: MetaInsightActionMetric[];
+  cost_per_action_type?: MetaInsightActionMetric[];
 };
 
 export type MetaPage = {
@@ -65,6 +84,34 @@ export type MetaCampaignStatus = {
   status?: string;
   configured_status?: string;
   effective_status?: string;
+};
+
+export type MetaLeadFieldValue = {
+  name?: string;
+  values?: string[];
+};
+
+export type MetaLeadDetails = {
+  id: string;
+  created_time?: string;
+  ad_id?: string;
+  ad_name?: string;
+  adset_id?: string;
+  adset_name?: string;
+  campaign_id?: string;
+  campaign_name?: string;
+  form_id?: string;
+  is_organic?: boolean;
+  platform?: string;
+  field_data?: MetaLeadFieldValue[];
+};
+
+export type MetaLeadFormDetails = {
+  id: string;
+  name?: string;
+  locale?: string;
+  status?: string;
+  questions?: Array<Record<string, unknown>>;
 };
 
 export type MetaLeadFormAccessResult = {
@@ -220,13 +267,20 @@ function dedupeScopes(scopes: string[]) {
   return Array.from(new Set(scopes.map((scope) => scope.trim()).filter(Boolean)));
 }
 
-export function getMetaScopes(options?: { includeLeadFormManagement?: boolean }) {
+export function getMetaScopes(options?: {
+  includeLeadFormManagement?: boolean;
+  includeLeadRetrieval?: boolean;
+  includePageWebhookManagement?: boolean;
+}) {
   const raw = readMetaEnv("META_SCOPES") || env.metaScopes;
   const fallback = [...defaultMetaScopes];
+  const extraScopes = [
+    ...(options?.includeLeadFormManagement ? [...leadFormManagementMetaScopes] : []),
+    ...(options?.includeLeadRetrieval ? [...leadRetrievalMetaScopes] : []),
+    ...(options?.includePageWebhookManagement ? [...pageWebhookManagementMetaScopes] : []),
+  ];
   if (!raw) {
-    return options?.includeLeadFormManagement
-      ? dedupeScopes([...fallback, ...leadFormManagementMetaScopes])
-      : fallback;
+    return extraScopes.length ? dedupeScopes([...fallback, ...extraScopes]) : fallback;
   }
 
   const parsed = raw
@@ -235,9 +289,7 @@ export function getMetaScopes(options?: { includeLeadFormManagement?: boolean })
     .filter(Boolean);
 
   const scopes = parsed.length ? parsed : fallback;
-  return options?.includeLeadFormManagement
-    ? dedupeScopes([...scopes, ...leadFormManagementMetaScopes])
-    : dedupeScopes(scopes);
+  return extraScopes.length ? dedupeScopes([...scopes, ...extraScopes]) : dedupeScopes(scopes);
 }
 
 function buildMetaGraphUrl(path: string) {
@@ -251,7 +303,12 @@ function getMetaOauthDialogUrl() {
 
 export function getMetaOAuthUrl(
   state: string,
-  options?: { includeLeadFormManagement?: boolean; forceReauth?: boolean },
+  options?: {
+    includeLeadFormManagement?: boolean;
+    includeLeadRetrieval?: boolean;
+    includePageWebhookManagement?: boolean;
+    forceReauth?: boolean;
+  },
 ) {
   const appId = readMetaEnv("META_APP_ID") || env.metaAppId;
   const redirectUri = readMetaEnv("META_REDIRECT_URI") || env.metaRedirectUri || `${env.appUrl}/api/meta/callback`;
@@ -406,7 +463,7 @@ export async function fetchMetaAdAccounts(accessToken: string) {
   const url = new URL(buildMetaGraphUrl("me/adaccounts"));
   url.searchParams.set(
     "fields",
-    "id,account_id,name,account_status,disable_reason,currency,business_name,funding_source_details",
+    "id,account_id,name,account_status,disable_reason,currency,business_name,funding_source_details,spend_cap,amount_spent",
   );
   url.searchParams.set("limit", "200");
   url.searchParams.set("access_token", accessToken);
@@ -443,6 +500,13 @@ export async function fetchMetaLeadForms(accessToken: string, pageId: string) {
   url.searchParams.set("access_token", accessToken);
   const payload = await fetchMetaJson<{ data?: MetaLeadForm[] }>(url.toString());
   return payload.data || [];
+}
+
+export async function fetchMetaLeadFormDetails(accessToken: string, formId: string) {
+  const url = new URL(buildMetaGraphUrl(formId));
+  url.searchParams.set("fields", "id,name,locale,status,questions");
+  url.searchParams.set("access_token", accessToken);
+  return fetchMetaJson<MetaLeadFormDetails>(url.toString());
 }
 
 export async function fetchMetaCampaignStatus(accessToken: string, campaignId: string) {
@@ -552,6 +616,79 @@ export async function fetchMetaGeoLocationSearch({
 
   const payload = await fetchMetaJson<{ data?: MetaGeoLocationSearchResult[] }>(url.toString());
   return payload.data || [];
+}
+
+export async function fetchMetaLeadDetails(accessToken: string, leadId: string) {
+  const url = new URL(buildMetaGraphUrl(leadId));
+  url.searchParams.set(
+    "fields",
+    [
+      "id",
+      "created_time",
+      "ad_id",
+      "ad_name",
+      "adset_id",
+      "adset_name",
+      "campaign_id",
+      "campaign_name",
+      "form_id",
+      "is_organic",
+      "platform",
+      "field_data",
+    ].join(","),
+  );
+  url.searchParams.set("access_token", accessToken);
+  return fetchMetaJson<MetaLeadDetails>(url.toString());
+}
+
+export async function fetchMetaLeadFormLeads({
+  accessToken,
+  formId,
+  after,
+  limit = 50,
+}: {
+  accessToken: string;
+  formId: string;
+  after?: string | null;
+  limit?: number;
+}) {
+  const url = new URL(buildMetaGraphUrl(`${formId}/leads`));
+  url.searchParams.set(
+    "fields",
+    [
+      "id",
+      "created_time",
+      "ad_id",
+      "ad_name",
+      "adset_id",
+      "adset_name",
+      "campaign_id",
+      "campaign_name",
+      "form_id",
+      "is_organic",
+      "platform",
+      "field_data",
+    ].join(","),
+  );
+  url.searchParams.set("limit", String(limit));
+  if (after) {
+    url.searchParams.set("after", after);
+  }
+  url.searchParams.set("access_token", accessToken);
+  const payload = await fetchMetaJson<{
+    data?: MetaLeadDetails[];
+    paging?: {
+      cursors?: {
+        after?: string;
+      };
+      next?: string;
+    };
+  }>(url.toString());
+  return {
+    data: payload.data || [],
+    after: payload.paging?.cursors?.after || null,
+    hasNext: Boolean(payload.paging?.next),
+  };
 }
 
 export async function createMetaLeadForm({
@@ -664,15 +801,49 @@ export async function createMetaLeadForm({
   });
 }
 
+export async function subscribeMetaPageToLeadgenWebhooks({
+  accessToken,
+  pageId,
+}: {
+  accessToken: string;
+  pageId: string;
+}) {
+  const url = new URL(buildMetaGraphUrl(`${pageId}/subscribed_apps`));
+  const body = new URLSearchParams({
+    subscribed_fields: "leadgen",
+    access_token: accessToken,
+  });
+  return fetchMetaJson<{ success?: boolean }>(url.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+}
+
 export async function fetchMetaAdAccountDetails(accessToken: string, adAccountId: string) {
   const normalizedId = adAccountId.replace(/^act_/, "");
   const url = new URL(buildMetaGraphUrl(`act_${normalizedId}`));
   url.searchParams.set(
     "fields",
-    "id,account_id,name,account_status,disable_reason,currency,business_name,funding_source_details",
+    "id,account_id,name,account_status,disable_reason,currency,business_name,funding_source_details,spend_cap,amount_spent",
   );
   url.searchParams.set("access_token", accessToken);
   return fetchMetaJson<MetaAdAccount>(url.toString());
+}
+
+export async function fetchMetaAdAccountInsights(accessToken: string, adAccountId: string) {
+  const normalizedId = adAccountId.replace(/^act_/, "");
+  const url = new URL(buildMetaGraphUrl(`act_${normalizedId}/insights`));
+  url.searchParams.set(
+    "fields",
+    "spend,clicks,cpc,ctr,impressions,actions,cost_per_action_type",
+  );
+  url.searchParams.set("level", "account");
+  url.searchParams.set("date_preset", "last_30d");
+  url.searchParams.set("limit", "1");
+  url.searchParams.set("access_token", accessToken);
+  const payload = await fetchMetaJson<{ data?: MetaAdAccountInsightsRow[] }>(url.toString());
+  return payload.data?.[0] || null;
 }
 
 export async function mapMetaAssets(accessToken: string) {

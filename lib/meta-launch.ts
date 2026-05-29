@@ -35,6 +35,7 @@ import {
   getWorkspaceMetaIntegrationState,
 } from "@/lib/meta-integration";
 import { env } from "@/lib/env";
+import { getWorkspaceBusinessProfileById } from "@/lib/workspaces";
 import {
   CampaignGoal,
   CampaignAdType,
@@ -129,6 +130,9 @@ type MetaLaunchContext = {
   launchStateModel: CampaignLaunchState;
   businessProfile: {
     business_name: string;
+    website?: string | null;
+    industry?: string | null;
+    privacy_policy_url?: string | null;
     location: string;
     phone: string;
     email: string;
@@ -845,13 +849,20 @@ async function loadMetaLaunchContext({
     throw new Error("Template for this campaign could not be loaded.");
   }
 
-  const { data: businessProfileData } = await admin
-    .from("business_profiles")
-    .select("business_name, location, phone, email, description, logo_url")
-    .eq("workspace_id", campaign.workspace_id)
-    .maybeSingle();
-  const businessProfile =
-    (businessProfileData as MetaLaunchContext["businessProfile"]) || null;
+  const workspaceBusinessProfile = await getWorkspaceBusinessProfileById(admin, campaign.workspace_id);
+  const businessProfile = workspaceBusinessProfile
+    ? {
+        business_name: workspaceBusinessProfile.business_name,
+        website: workspaceBusinessProfile.website,
+        industry: workspaceBusinessProfile.industry,
+        privacy_policy_url: workspaceBusinessProfile.privacy_policy_url,
+        location: workspaceBusinessProfile.location,
+        phone: workspaceBusinessProfile.phone,
+        email: workspaceBusinessProfile.email,
+        description: workspaceBusinessProfile.description,
+        logo_url: workspaceBusinessProfile.logo_url,
+      }
+    : null;
 
   const latestLaunchSnapshot = await readLatestCampaignLaunchSnapshot({
     admin,
@@ -880,6 +891,9 @@ async function loadMetaLaunchContext({
           user_id: campaign.user_id,
           workspace_id: campaign.workspace_id,
           business_name: businessProfile.business_name,
+          website: businessProfile.website || "",
+          industry: businessProfile.industry || "",
+          privacy_policy_url: businessProfile.privacy_policy_url || "",
           location: businessProfile.location,
           phone: businessProfile.phone,
           email: businessProfile.email,
@@ -1103,6 +1117,9 @@ export async function runMetaLaunchPreflight({
           user_id: context.campaign.user_id,
           workspace_id: context.workspaceId,
           business_name: context.businessProfile.business_name,
+          website: context.businessProfile.website || "",
+          industry: context.businessProfile.industry || "",
+          privacy_policy_url: context.businessProfile.privacy_policy_url || "",
           location: context.businessProfile.location,
           phone: context.businessProfile.phone,
           email: context.businessProfile.email,

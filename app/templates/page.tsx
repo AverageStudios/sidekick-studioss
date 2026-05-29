@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Folder, MoreHorizontal } from "lucide-react";
+import { Folder } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -45,43 +45,17 @@ export default async function TemplatesPage() {
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
             {hasDrafts ? (
               <Link href="/templates/drafts" className="block">
-                <Card className="group max-w-[20rem] overflow-hidden rounded-[24px] border-[var(--line)] bg-white transition duration-200 hover:shadow-[0_8px_28px_rgba(16,24,40,0.06)]">
-                  <div className="border-b border-[var(--line)] bg-[linear-gradient(180deg,#f6f4ff_0%,#fdfcff_100%)] px-4 pb-4 pt-5">
-                    <div className="mb-3 h-5 w-24 rounded-t-[14px] rounded-b-[6px] bg-[#e8e1ff]" />
-                    <div className="rounded-[22px] border border-[#ebe6fb] bg-white p-4 shadow-[0_10px_24px_rgba(109,94,248,0.08)]">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <span className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-[var(--soft-panel)] text-[var(--brand)]">
-                            <Folder className="h-5 w-5" />
-                          </span>
-                          <div>
-                            <p className="text-sm font-semibold text-[var(--ink)]">Drafts</p>
-                            <p className="text-xs text-[var(--muted)]">{draftCampaigns.length} saved campaign{draftCampaigns.length === 1 ? "" : "s"}</p>
-                          </div>
-                        </div>
-                        <span className="rounded-full bg-[#fff4e8] px-2.5 py-1 text-[11px] font-medium text-[#9c6328]">
-                          Draft
-                        </span>
-                      </div>
-
-                      <div className="mt-4 space-y-2">
-                        {draftCampaigns.slice(0, 3).map((campaign) => (
-                          <div key={campaign.id} className="rounded-[14px] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5">
-                            <p className="truncate text-sm font-medium text-[var(--ink)]">{campaign.name}</p>
-                            <p className="mt-1 text-[11px] text-[var(--muted)]">
-                              Edited {new Date(campaign.updated_at).toLocaleDateString()}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4">
-                    <span className="rounded-[12px] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-[11px] text-[var(--muted)]">
-                      Open drafts
+                <Card className="group flex min-h-[12rem] items-center justify-center overflow-hidden rounded-[24px] border-[var(--line)] bg-white px-6 py-6 transition duration-200 hover:shadow-[0_8px_28px_rgba(16,24,40,0.06)]">
+                  <div className="flex flex-col items-center gap-3 text-center">
+                    <span className="flex h-16 w-16 items-center justify-center rounded-[20px] bg-[var(--soft-panel)] text-[var(--brand)] shadow-[0_8px_20px_rgba(109,94,248,0.08)]">
+                      <Folder className="h-8 w-8" />
                     </span>
-                    <MoreHorizontal className="h-4 w-4 text-[var(--muted)]" />
+                    <div>
+                      <p className="text-[1.1rem] font-semibold tracking-[-0.03em] text-[var(--ink)]">Drafts</p>
+                      <p className="mt-1 text-sm text-[var(--muted)]">
+                        {draftCampaigns.length} saved campaign{draftCampaigns.length === 1 ? "" : "s"}
+                      </p>
+                    </div>
                   </div>
                 </Card>
               </Link>
@@ -128,7 +102,6 @@ export default async function TemplatesPage() {
                         <span className="rounded-[12px] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-[11px] text-[var(--muted)]">
                           Open
                         </span>
-                        <MoreHorizontal className="h-4 w-4 text-[var(--muted)]" />
                       </div>
                     </div>
                   </Card>

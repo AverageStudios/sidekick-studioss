@@ -109,32 +109,32 @@ const stepDefinitions: Record<CampaignWizardStepId, CampaignStepDefinition> = {
   "ad-type": {
     id: "ad-type",
     label: "Ad Type",
-    description: "Choose how this campaign should drive responses.",
+    description: "How should people respond to this ad?",
   },
   "campaign-basics": {
     id: "campaign-basics",
-    label: "Campaign Basics",
-    description: "Set the campaign name, Meta page, ad account, and daily budget.",
+    label: "Budget",
+    description: "Set a daily budget and the Meta account this campaign will run from.",
   },
   location: {
     id: "location",
-    label: "Target Location",
-    description: "Define where Meta should deliver the campaign.",
+    label: "Audience",
+    description: "Where should Meta deliver this campaign?",
   },
   "destination-setup": {
     id: "destination-setup",
-    label: "Destination Setup",
-    description: "Configure the destination details that match the selected ad type.",
+    label: "Destination",
+    description: "Where do people go after they click?",
   },
   placeholders: {
     id: "placeholders",
-    label: "Fill Placeholders",
-    description: "Replace every template variable with campaign-specific content.",
+    label: "Your Details",
+    description: "Personalize the template with your business content.",
   },
   "review-launch": {
     id: "review-launch",
     label: "Review & Launch",
-    description: "Review the campaign, run readiness checks, and publish to Meta.",
+    description: "Everything looks good. Ready when you are.",
   },
 };
 

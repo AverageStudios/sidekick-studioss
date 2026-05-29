@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BarChart3, Building2, ChevronDown, CircleHelp, LayoutDashboard, LayoutGrid, LayoutTemplate, LifeBuoy, LogOut, Plus, Shield, SlidersHorizontal, UserCircle2, Users } from "lucide-react";
 import { ConfigNotice } from "@/components/config-notice";
 import { InitialsAvatar } from "@/components/initials-avatar";
-import { createWorkspaceAction, signOutAction, switchWorkspaceAction } from "@/app/actions";
+import { signOutAction, switchWorkspaceAction } from "@/app/actions";
 import { getCurrentProfile, getCurrentRole, getCurrentUser } from "@/lib/auth";
 import { getSupabaseFallbackMessage } from "@/lib/env";
 import { cn } from "@/lib/utils";
@@ -44,9 +44,13 @@ export async function AppShell({
     user_metadata: {},
   };
   const identityProfile = accountProfile || workspaceContext?.profile || null;
+  const userDisplayName =
+    getUserDisplayNameFromProfile(identityProfile, identityUser) ||
+    workspaceContext?.userDisplayName ||
+    "Workspace member";
   const workspaceName =
     workspaceContext?.activeWorkspace.name ||
-    getWorkspaceDisplayName(undefined, identityProfile?.first_name || null);
+    getWorkspaceDisplayName(undefined, userDisplayName);
   const workspaceInitial =
     workspaceContext?.workspaceInitial ||
     workspaceName.trim().slice(0, 1).toUpperCase() ||
@@ -55,10 +59,6 @@ export async function AppShell({
     getUserInitialsFromProfile(identityProfile, identityUser) ||
     workspaceContext?.userInitials ||
     "U";
-  const userDisplayName =
-    getUserDisplayNameFromProfile(identityProfile, identityUser) ||
-    workspaceContext?.userDisplayName ||
-    "Workspace member";
   const userEmail = identityUser.email || workspaceContext?.userEmail || "";
 
   const autoAdminItems = role === "admin" ? [{ href: "/admin", label: "Admin", icon: Shield }] : [];
@@ -129,7 +129,9 @@ export async function AppShell({
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-[var(--ink)]">{currentWorkspace.name}</p>
-                        <p className="text-xs text-[var(--muted)]">Current workspace</p>
+                        <p className="truncate text-xs text-[var(--muted)]">
+                          {currentWorkspace.business_name || "Current workspace"}
+                        </p>
                       </div>
                       <Building2 className="h-4 w-4 text-[var(--ink)]" />
                     </div>
@@ -148,24 +150,23 @@ export async function AppShell({
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-medium text-[var(--ink)]">{workspace.name}</p>
-                          <p className="text-xs text-[var(--muted)] capitalize">{workspace.role}</p>
+                          <p className="truncate text-xs text-[var(--muted)]">
+                            {workspace.business_name || workspace.role}
+                          </p>
                         </div>
                       </button>
                     </form>
                 ))}
 
-                <form action={createWorkspaceAction}>
-                  <input type="hidden" name="redirectTo" value="/workspaces" />
-                  <button
-                    type="submit"
-                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
-                  >
+                <Link
+                  href="/workspaces/new"
+                  className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
+                >
                     <span className="flex h-6 w-6 items-center justify-center rounded-lg border border-[var(--line)] bg-white text-[var(--muted)]">
                       <Plus className="h-3.5 w-3.5" />
                     </span>
                     <span>New workspace</span>
-                  </button>
-                </form>
+                </Link>
               </div>
             </div>
           </details>

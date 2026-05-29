@@ -29,7 +29,14 @@ export type TemplateCategory = TemplateIndustry;
 
 export type UserRole = "admin" | "user";
 export type TemplateStatus = "draft" | "published" | "archived";
-export type LeadStatus = "new" | "contacted" | "booked" | "closed";
+export type LeadStatus =
+  | "new"
+  | "contacted"
+  | "qualified"
+  | "closed"
+  | "archived"
+  | "booked";
+export type LeadSource = "meta_lead_ad" | "website_funnel" | "manual" | "unknown";
 export type CampaignPlatform = "meta";
 export type CampaignLocationScope = "world" | "country" | "state" | "city" | "zip" | "neighborhood" | "address";
 export type CampaignLocationTargetingType = "home" | "recent" | "travel_in" | "recent_and_home";
@@ -414,6 +421,9 @@ export type BusinessProfile = {
   user_id: string;
   workspace_id: string | null;
   business_name: string;
+  website: string | null;
+  industry: string | null;
+  privacy_policy_url: string | null;
   location: string;
   phone: string;
   email: string;
@@ -443,6 +453,11 @@ export type WorkspaceRecord = {
   id: string;
   name: string;
   owner_user_id: string;
+  business_name?: string | null;
+  business_email?: string | null;
+  business_phone?: string | null;
+  website?: string | null;
+  industry?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -564,13 +579,35 @@ export type LeadRecord = {
   id: string;
   user_id: string;
   workspace_id: string | null;
-  campaign_id: string;
-  funnel_id: string;
-  name: string;
-  phone: string;
-  email: string;
-  service_interest: string;
+  campaign_id: string | null;
+  funnel_id: string | null;
+  meta_lead_id?: string | null;
+  meta_page_id?: string | null;
+  meta_page_name?: string | null;
+  meta_form_id?: string | null;
+  meta_form_name?: string | null;
+  meta_campaign_id?: string | null;
+  meta_adset_id?: string | null;
+  meta_ad_id?: string | null;
+  source?: LeadSource | null;
+  ad_type?: CampaignAdType | null;
+  full_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  company_name?: string | null;
+  job_title?: string | null;
+  service_interest: string | null;
   message: string | null;
+  notes?: string | null;
+  normalized_fields_json?: Record<string, unknown> | null;
+  field_data_json?: Array<Record<string, unknown>> | null;
+  raw_payload_json?: Record<string, unknown> | null;
+  meta_created_time?: string | null;
+  last_synced_at?: string | null;
+  is_test_lead?: boolean | null;
   status: LeadStatus;
   created_at: string;
   updated_at: string;

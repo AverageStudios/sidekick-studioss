@@ -46,38 +46,22 @@ export function DashboardOnboarding({
 
   return (
     <div className="grid gap-6 lg:gap-7">
-      <Card className="overflow-hidden border-[color-mix(in_oklab,var(--brand)_12%,white)] bg-[linear-gradient(135deg,rgba(255,255,255,0.98)_0%,rgba(246,242,255,0.9)_58%,rgba(250,249,245,0.96)_100%)] p-6 shadow-[0_22px_46px_rgba(16,24,40,0.05)] sm:p-7 lg:p-8">
-        <div className="space-y-5">
-          <div className="space-y-4">
-            <Badge>First run</Badge>
-            <div className="space-y-3">
-              <h1 className="max-w-3xl text-3xl font-semibold tracking-[-0.06em] text-[var(--ink)] sm:text-[2.6rem]">
-                Set up your workspace in three quick steps
-              </h1>
-              <p className="max-w-2xl text-sm leading-7 text-[var(--muted-strong)] sm:text-base">
-                SideKick starts with one clear path: choose the industry library you want, pick the template you want to launch from, then move into your workspace with the right starting point already saved.
-              </p>
+      <div className="grid gap-3 md:grid-cols-3">
+        {onboardingSteps.map((step, index) => (
+          <Card
+            key={step.id}
+            className="rounded-[22px] border border-[var(--line)] bg-white/78 px-4 py-4 shadow-[var(--shadow-soft)]"
+          >
+            <div className="flex items-center justify-between">
+              <span className="rounded-full bg-[var(--soft-brand)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--brand-ink)]">
+                {step.id}
+              </span>
+              {index < 2 ? <ArrowRight className="h-4 w-4 text-[var(--brand)]" /> : <Sparkles className="h-4 w-4 text-[var(--brand)]" />}
             </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-3">
-            {onboardingSteps.map((step, index) => (
-              <div
-                key={step.id}
-                className="rounded-[22px] border border-[var(--line)] bg-white/78 px-4 py-4 shadow-[var(--shadow-soft)]"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="rounded-full bg-[var(--soft-brand)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--brand-ink)]">
-                    {step.id}
-                  </span>
-                  {index < 2 ? <ArrowRight className="h-4 w-4 text-[var(--brand)]" /> : <Sparkles className="h-4 w-4 text-[var(--brand)]" />}
-                </div>
-                <p className="mt-4 text-sm font-medium text-[var(--ink)]">{step.title}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </Card>
+            <p className="mt-4 text-sm font-medium text-[var(--ink)]">{step.title}</p>
+          </Card>
+        ))}
+      </div>
 
       <form action={completeOnboardingAction} className="grid gap-6 xl:grid-cols-[0.88fr_1.12fr]">
         <Card className="p-6 sm:p-7">

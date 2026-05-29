@@ -49,10 +49,10 @@ function getSection(section: string | undefined): WorkspaceSection {
 export default async function WorkspaceSettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ section?: string; saved?: string; error?: string }>;
+  searchParams: Promise<{ section?: string; saved?: string; error?: string; created?: string }>;
 }) {
   const user = await requireUser();
-  const [{ section: rawSection, saved, error }, workspaceContext, members, dashboardSnapshot] = await Promise.all([
+  const [{ section: rawSection, saved, error, created }, workspaceContext, members, dashboardSnapshot] = await Promise.all([
     searchParams,
     getCurrentWorkspaceContext(),
     getCurrentWorkspaceMembers(),
@@ -79,8 +79,6 @@ export default async function WorkspaceSettingsPage({
   const instagramActors = integrationState?.assets.instagramActors || [];
   const metaConnected =
     Boolean(connection && integrationState?.tokenAvailable && connection.status === "connected");
-  const hasSelectedAdAccount = Boolean(integrationState?.selected.adAccountId);
-  const hasSelectedPage = Boolean(integrationState?.selected.pageId);
   const metaConnectNext = encodeURIComponent("/workspace/settings?section=integrations");
   const selectedPageLeadFormAccess =
     connection?.metadata_json &&
@@ -206,6 +204,23 @@ export default async function WorkspaceSettingsPage({
                   Basic settings for your workspace and business identity.
                 </p>
 
+                {created === "1" ? (
+                  <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
+                    <p className="text-sm font-semibold text-emerald-800">Workspace created</p>
+                    <p className="mt-1 text-sm leading-6 text-emerald-700">
+                      This is now a separate business environment. Next best steps: connect Meta, confirm your business defaults, and launch your first campaign from this workspace.
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <Button asChild size="sm">
+                        <Link href="/workspace/settings?section=integrations">Connect Meta</Link>
+                      </Button>
+                      <Button asChild size="sm" variant="outline">
+                        <Link href="/templates/new">Launch first campaign</Link>
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+
                 <form action={updateWorkspaceGeneralAction} className="mt-8 space-y-6">
                   <div>
                     <div className="mb-2 flex items-center justify-between gap-3">
@@ -234,6 +249,69 @@ export default async function WorkspaceSettingsPage({
                       defaultValue={businessProfile?.business_name || workspaceName}
                       placeholder="Business name"
                       required
+                    />
+                  </div>
+
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="businessEmail">
+                        Business email
+                      </label>
+                      <Input
+                        id="businessEmail"
+                        name="businessEmail"
+                        type="email"
+                        defaultValue={businessProfile?.email || user.email || ""}
+                        placeholder="hello@yourbusiness.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="businessPhone">
+                        Business phone
+                      </label>
+                      <Input
+                        id="businessPhone"
+                        name="businessPhone"
+                        defaultValue={businessProfile?.phone || ""}
+                        placeholder="(555) 123-4567"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="website">
+                        Website
+                      </label>
+                      <Input
+                        id="website"
+                        name="website"
+                        defaultValue={businessProfile?.website || ""}
+                        placeholder="https://yourbusiness.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="privacyPolicyUrl">
+                        Privacy policy URL
+                      </label>
+                      <Input
+                        id="privacyPolicyUrl"
+                        name="privacyPolicyUrl"
+                        defaultValue={businessProfile?.privacy_policy_url || ""}
+                        placeholder="https://yourbusiness.com/privacy"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="max-w-sm">
+                    <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="industry">
+                      Industry
+                    </label>
+                    <Input
+                      id="industry"
+                      name="industry"
+                      defaultValue={businessProfile?.industry || ""}
+                      placeholder="Auto Detailing"
                     />
                   </div>
 
@@ -459,7 +537,7 @@ export default async function WorkspaceSettingsPage({
                               </p>
                             </div>
                             <Button asChild variant="outline">
-                              <Link href={`/campaigns/${campaign.id}`}>Continue editing</Link>
+                              <Link href={`/campaigns/${campaign.id}`}>Open draft</Link>
                             </Button>
                           </div>
                         ))

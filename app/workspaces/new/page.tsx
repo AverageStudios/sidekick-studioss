@@ -1,0 +1,184 @@
+import Link from "next/link";
+import { ArrowLeft, Briefcase, Building2, Globe } from "lucide-react";
+import { AppShell } from "@/components/app-shell";
+import { createWorkspaceAction } from "@/app/actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { requireUser } from "@/lib/auth";
+import { supportedIndustries } from "@/data/template-taxonomy";
+
+export default async function NewWorkspacePage() {
+  const user = await requireUser();
+
+  return (
+    <AppShell currentPath="/workspaces">
+      <div className="mx-auto max-w-3xl space-y-8">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Workspace</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Create a new workspace</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-7 text-[var(--muted)]">
+              A workspace is a separate business environment with its own campaigns, leads, performance, settings, and Meta connection.
+            </p>
+          </div>
+          <Button asChild variant="outline">
+            <Link href="/workspaces">
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Link>
+          </Button>
+        </div>
+
+        <form action={createWorkspaceAction} className="rounded-[28px] border border-[var(--line)] bg-white p-7 shadow-[0_12px_34px_rgba(15,23,42,0.05)] sm:p-8">
+          <input type="hidden" name="redirectTo" value="/workspace/settings?section=general&created=1" />
+
+          <div className="grid gap-6">
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="workspaceName">
+                  Workspace name
+                </label>
+                <Input
+                  id="workspaceName"
+                  name="workspaceName"
+                  placeholder="Acme Growth Team"
+                  required
+                />
+                <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
+                  This is the label you will see in the workspace switcher.
+                </p>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="businessName">
+                  Business name
+                </label>
+                <Input
+                  id="businessName"
+                  name="businessName"
+                  placeholder="Acme Auto Detailing"
+                  required
+                />
+                <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
+                  Used for workspace identity, publishing defaults, and lead attribution.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="businessEmail">
+                  Business email
+                </label>
+                <Input
+                  id="businessEmail"
+                  name="businessEmail"
+                  type="email"
+                  defaultValue={user.email || ""}
+                  placeholder="hello@yourbusiness.com"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="businessPhone">
+                  Business phone
+                </label>
+                <Input
+                  id="businessPhone"
+                  name="businessPhone"
+                  placeholder="(555) 123-4567"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="website">
+                  Website
+                </label>
+                <Input
+                  id="website"
+                  name="website"
+                  placeholder="https://yourbusiness.com"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="privacyPolicyUrl">
+                  Privacy policy URL
+                </label>
+                <Input
+                  id="privacyPolicyUrl"
+                  name="privacyPolicyUrl"
+                  placeholder="https://yourbusiness.com/privacy"
+                />
+              </div>
+            </div>
+
+            <div className="max-w-sm">
+              <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="industry">
+                Industry
+              </label>
+              <select
+                id="industry"
+                name="industry"
+                className="h-11 w-full rounded-[14px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)]"
+                defaultValue=""
+              >
+                <option value="">Select an industry</option>
+                {supportedIndustries.map((industry) => (
+                  <option key={industry} value={industry}>
+                    {industry}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                {
+                  icon: Building2,
+                  title: "Separate business identity",
+                  copy: "Keep the business name, website, and privacy defaults specific to this workspace.",
+                },
+                {
+                  icon: Briefcase,
+                  title: "Separate campaigns and leads",
+                  copy: "Drafts, launched campaigns, and lead inbox data stay isolated by workspace.",
+                },
+                {
+                  icon: Globe,
+                  title: "Separate integrations",
+                  copy: "Each workspace maintains its own Meta connection, selected page, and ad account.",
+                },
+              ].map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.title} className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
+                    <Icon className="h-4.5 w-4.5 text-[var(--brand)]" />
+                    <p className="mt-3 text-sm font-semibold text-[var(--ink)]">{item.title}</p>
+                    <p className="mt-2 text-xs leading-6 text-[var(--muted)]">{item.copy}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] pt-6">
+              <p className="text-sm text-[var(--muted)]">
+                After creation, we&apos;ll switch you into the new workspace and open workspace settings so you can connect Meta and finish defaults.
+              </p>
+              <div className="flex gap-3">
+                <Button asChild variant="outline">
+                  <Link href="/workspaces">Cancel</Link>
+                </Button>
+                <Button type="submit">
+                  Create workspace
+                </Button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+    </AppShell>
+  );
+}

@@ -15,16 +15,24 @@ import { slugify } from "@/lib/utils";
 import { sendLeadConfirmationEmail, sendWorkspaceInvitationEmail } from "@/services/follow-up";
 import { uploadAsset } from "@/services/storage";
 import { storageBucketName } from "@/services/storage";
-import { createWorkspaceForUser, ensureWorkspaceContextForUser, userHasWorkspaceAccess } from "@/lib/workspaces";
+import {
+  createWorkspaceForUser,
+  ensureWorkspaceContextForUser,
+  updateWorkspaceIdentityRecord,
+  upsertWorkspaceBusinessProfile,
+  userHasWorkspaceAccess,
+} from "@/lib/workspaces";
 import { isMetaConfigured, updateMetaObjectStatus } from "@/lib/meta";
 import { normalizeIndustryLabel } from "@/data/template-taxonomy";
-import { CampaignAdType, CampaignRecord } from "@/types";
+import { CampaignRecord } from "@/types";
+import { getCanonicalLeadStatus } from "@/lib/leads";
 import {
   disconnectWorkspaceMetaConnection,
   saveWorkspaceMetaSelections,
   syncWorkspaceMetaAssets,
   getWorkspaceMetaAccessToken,
 } from "@/lib/meta-integration";
+import { syncWorkspaceMetaLeads } from "@/lib/meta-leads";
 import {
   archiveCampaignWithMetaSync,
   getCampaignLifecycleState,
@@ -637,7 +645,6 @@ async function runCampaignLifecycleAction(
       (value): value is string => Boolean(value),
     );
     const targetMetaStatus: "ACTIVE" | "PAUSED" = action === "resume" ? "ACTIVE" : "PAUSED";
-    const now = new Date().toISOString();
 
     if (action !== "archive" && lifecycleState === "draft") {
       throw new Error("Only launched campaigns can be paused or resumed.");
@@ -690,7 +697,6 @@ async function runCampaignLifecycleAction(
           admin,
           campaign: {
             ...normalizedCampaign,
-            archived_at: now,
           } as CampaignRecord,
         });
       } else {
@@ -753,6 +759,69 @@ export async function resumeCampaignAction(formData: FormData) {
 
 export async function archiveCampaignAction(formData: FormData) {
   await runCampaignLifecycleAction(formData, "archive");
+}
+
+export async function deleteDraftCampaignAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!isSupabaseServerConfigured()) {
+    redirect("/dashboard");
+  }
+
+  const campaignId = String(formData.get("campaignId") || "").trim();
+  const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
+
+  if (!campaignId) {
+    redirect(appendQueryParam(redirectTo, "error", "Campaign could not be found."));
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(appendQueryParam(redirectTo, "error", "Campaign deletion is not available right now."));
+  }
+
+  try {
+    const campaign = await loadManagedCampaign(admin, campaignId);
+    const hasAccess = campaign.workspace_id
+      ? await userHasWorkspaceAccess(user.id, campaign.workspace_id)
+      : campaign.user_id === user.id;
+
+    if (!hasAccess) {
+      throw new Error("You do not have access to this campaign.");
+    }
+
+    if (getCampaignLifecycleState(campaign) !== "draft") {
+      throw new Error("Only draft campaigns can be deleted.");
+    }
+
+    const [leadResult, snapshotResult, followUpResult, funnelResult, publishJobsResult, campaignResult] = await Promise.all([
+      admin.from("leads").delete().eq("campaign_id", campaignId),
+      admin.from("campaign_launch_snapshots").delete().eq("campaign_id", campaignId),
+      admin.from("follow_up_settings").delete().eq("campaign_id", campaignId),
+      admin.from("funnels").delete().eq("campaign_id", campaignId),
+      admin.from("campaign_publish_jobs").delete().eq("campaign_id", campaignId),
+      admin.from("campaigns").delete().eq("id", campaignId).eq("user_id", user.id),
+    ]);
+
+    for (const result of [leadResult, snapshotResult, followUpResult, funnelResult, publishJobsResult, campaignResult]) {
+      if (result.error) {
+        throw new Error(result.error.message);
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Draft deletion failed.";
+    redirect(appendQueryParam(redirectTo, "error", message));
+  }
+
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath("/templates/drafts");
+  revalidatePath("/performance");
+  revalidatePath("/dashboard");
+  revalidatePath("/templates");
+  redirect(appendQueryParam(redirectTo, "success", "Draft deleted."));
 }
 
 export async function syncCampaignStatusAction(formData: FormData) {
@@ -839,7 +908,9 @@ export async function switchWorkspaceAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/templates");
   revalidatePath("/leads");
+  revalidatePath("/performance");
   revalidatePath("/settings");
+  revalidatePath("/workspace/settings");
   revalidatePath("/workspaces");
   redirect(redirectTo);
 }
@@ -850,12 +921,180 @@ export async function createWorkspaceAction(formData: FormData) {
     redirect("/login");
   }
 
-  const redirectTo = String(formData.get("redirectTo") || "/dashboard");
-  await createWorkspaceForUser(user, String(formData.get("workspaceName") || ""));
+  const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=general&created=1");
+  await createWorkspaceForUser(user, {
+    workspaceName: String(formData.get("workspaceName") || ""),
+    businessName: String(formData.get("businessName") || ""),
+    businessEmail: String(formData.get("businessEmail") || ""),
+    businessPhone: String(formData.get("businessPhone") || ""),
+    website: String(formData.get("website") || ""),
+    industry: String(formData.get("industry") || ""),
+    privacyPolicyUrl: String(formData.get("privacyPolicyUrl") || ""),
+  });
 
   revalidatePath("/dashboard");
+  revalidatePath("/templates");
+  revalidatePath("/leads");
+  revalidatePath("/performance");
+  revalidatePath("/workspace/settings");
   revalidatePath("/settings");
   revalidatePath("/workspaces");
+  redirect(redirectTo);
+}
+
+export async function deleteWorkspaceAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  const workspaceId = String(formData.get("workspaceId") || "").trim();
+  const redirectTo = String(formData.get("redirectTo") || "/workspaces");
+
+  if (!workspaceId) {
+    redirect(redirectTo);
+  }
+
+  if (!isSupabaseServerConfigured()) {
+    redirect(redirectTo);
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(redirectTo);
+  }
+
+  const membershipRole = await getWorkspaceMembershipRole({
+    admin,
+    workspaceId,
+    userId: user.id,
+  });
+
+  if (membershipRole !== "owner") {
+    redirect(redirectTo);
+  }
+
+  const workspaceContext = await ensureWorkspaceContextForUser(user);
+  const totalWorkspaces = workspaceContext?.workspaces || [];
+  if (totalWorkspaces.length <= 1) {
+    redirect(redirectTo);
+  }
+
+  const remainingWorkspaces = totalWorkspaces.filter((workspace) => workspace.id !== workspaceId);
+  const nextActiveWorkspaceId = remainingWorkspaces[0]?.id || null;
+
+  const isMissingTableError = (error: { message?: string | null } | null | undefined, tableName: string) => {
+    const message = error?.message || "";
+    return (
+      message.includes(`Could not find the table 'public.${tableName}' in the schema cache`) ||
+      message.includes(`relation \"public.${tableName}\" does not exist`) ||
+      message.includes(`relation \"${tableName}\" does not exist`)
+    );
+  };
+
+  const runWorkspaceCleanup = async (
+    label: string,
+    operation: PromiseLike<{ error: { message?: string | null } | null }>,
+    options?: { optionalTable?: string },
+  ) => {
+    const result = await operation;
+    if (result.error) {
+      if (options?.optionalTable && isMissingTableError(result.error, options.optionalTable)) {
+        return;
+      }
+      throw new Error(`Could not delete workspace ${label}: ${result.error.message || "Unknown database error"}`);
+    }
+  };
+
+  await runWorkspaceCleanup(
+    "publish jobs",
+    admin.from("campaign_publish_jobs").delete().eq("workspace_id", workspaceId),
+    { optionalTable: "campaign_publish_jobs" },
+  );
+  await runWorkspaceCleanup(
+    "launch snapshots",
+    admin.from("campaign_launch_snapshots").delete().eq("workspace_id", workspaceId),
+    { optionalTable: "campaign_launch_snapshots" },
+  );
+  await runWorkspaceCleanup(
+    "provider assets",
+    admin.from("workspace_provider_assets").delete().eq("workspace_id", workspaceId),
+    { optionalTable: "workspace_provider_assets" },
+  );
+  await runWorkspaceCleanup(
+    "provider connections",
+    admin.from("workspace_provider_connections").delete().eq("workspace_id", workspaceId),
+    { optionalTable: "workspace_provider_connections" },
+  );
+  await runWorkspaceCleanup(
+    "legacy Meta connections",
+    admin.from("workspace_meta_connections").delete().eq("workspace_id", workspaceId),
+    { optionalTable: "workspace_meta_connections" },
+  );
+  await runWorkspaceCleanup(
+    "workspace invitations",
+    admin.from("workspace_invitations").delete().eq("workspace_id", workspaceId),
+    { optionalTable: "workspace_invitations" },
+  );
+  await runWorkspaceCleanup(
+    "follow-up settings",
+    admin.from("follow_up_settings").delete().eq("workspace_id", workspaceId),
+  );
+  await runWorkspaceCleanup(
+    "funnels",
+    admin.from("funnels").delete().eq("workspace_id", workspaceId),
+  );
+  await runWorkspaceCleanup(
+    "leads",
+    admin.from("leads").delete().eq("workspace_id", workspaceId),
+  );
+  await runWorkspaceCleanup(
+    "campaigns",
+    admin.from("campaigns").delete().eq("workspace_id", workspaceId),
+  );
+  await runWorkspaceCleanup(
+    "business profile",
+    admin.from("business_profiles").delete().eq("workspace_id", workspaceId),
+  );
+
+  await runWorkspaceCleanup(
+    "active workspace references",
+    admin.from("profiles").update({ active_workspace_id: null }).eq("active_workspace_id", workspaceId),
+  );
+  await runWorkspaceCleanup(
+    "workspace memberships",
+    admin.from("workspace_memberships").delete().eq("workspace_id", workspaceId),
+  );
+
+  const { error: deleteError } = await admin.from("workspaces").delete().eq("id", workspaceId);
+  if (deleteError) {
+    throw new Error(`Could not delete workspace: ${deleteError.message}`);
+  }
+
+  await admin.from("profiles").update({ active_workspace_id: nextActiveWorkspaceId }).eq("user_id", user.id);
+
+  const { data: deletedWorkspaceStillExists, error: verifyDeleteError } = await admin
+    .from("workspaces")
+    .select("id")
+    .eq("id", workspaceId)
+    .maybeSingle();
+
+  if (verifyDeleteError) {
+    throw new Error(`Could not verify workspace deletion: ${verifyDeleteError.message}`);
+  }
+
+  if (deletedWorkspaceStillExists?.id) {
+    throw new Error("Workspace delete did not complete in Supabase.");
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/templates");
+  revalidatePath("/leads");
+  revalidatePath("/performance");
+  revalidatePath("/settings");
+  revalidatePath("/workspace/settings");
+  revalidatePath("/workspaces");
+  revalidatePath("/", "layout");
   redirect(redirectTo);
 }
 
@@ -1311,26 +1550,22 @@ export async function createCampaignAction(formData: FormData) {
   }
   const workspaceContext = await ensureWorkspaceContextForUser(user);
   const activeWorkspaceId = workspaceContext?.activeWorkspace.id || null;
+  if (!activeWorkspaceId) {
+    redirect("/campaigns/campaign-demo");
+  }
 
-  await admin
-    .from("business_profiles")
-    .upsert(
-      {
-        user_id: user.id,
-        workspace_id: activeWorkspaceId,
-        business_name: values.businessName,
-        location: values.city,
-        phone: values.phone,
-        email: values.email,
-        description: values.businessDescription,
-        logo_url: logoUrl || workspaceContext?.businessProfile?.logo_url || null,
-        brand_color: values.brandColor,
-        default_cta: values.ctaText,
-      },
-      { onConflict: "workspace_id" },
-    )
-    .select()
-    .single();
+  await upsertWorkspaceBusinessProfile(admin, {
+    user_id: user.id,
+    workspace_id: activeWorkspaceId,
+    business_name: values.businessName,
+    location: values.city,
+    phone: values.phone,
+    email: values.email,
+    description: values.businessDescription,
+    logo_url: logoUrl || workspaceContext?.businessProfile?.logo_url || null,
+    brand_color: values.brandColor,
+    default_cta: values.ctaText,
+  });
 
   if (activeWorkspaceId) {
     await admin.from("workspaces").update({ name: values.businessName }).eq("id", activeWorkspaceId);
@@ -1358,8 +1593,6 @@ export async function createCampaignAction(formData: FormData) {
       after_images_json: blueprint.funnelConfig.afterImageUrls,
       ad_copy_json: blueprint.adCopy,
       status: intent === "draft" ? "draft" : "published",
-      published_at: intent === "draft" ? null : new Date().toISOString(),
-      archived_at: null,
     })
     .select()
     .single();
@@ -1426,18 +1659,56 @@ export async function submitLeadAction(formData: FormData) {
       .maybeSingle();
     const workspaceId = campaignResult.data?.workspace_id || null;
 
-    await admin.from("leads").insert({
+    const leadInsertPayload = {
       user_id: payload.userId,
       workspace_id: workspaceId,
       campaign_id: payload.campaignId,
       funnel_id: payload.funnelId,
+      source: "website_funnel",
+      full_name: payload.name,
       name: payload.name,
       phone: payload.phone,
       email: payload.email,
       service_interest: payload.serviceInterest,
       message: payload.message,
+      normalized_fields_json: {
+        ...(payload.name ? { full_name: [payload.name] } : {}),
+        ...(payload.email ? { email: [payload.email] } : {}),
+        ...(payload.phone ? { phone: [payload.phone] } : {}),
+        ...(payload.serviceInterest ? { service_interest: [payload.serviceInterest] } : {}),
+        ...(payload.message ? { message: [payload.message] } : {}),
+      },
+      field_data_json: [
+        ...(payload.name ? [{ key: "full_name", label: "Full name", values: [payload.name] }] : []),
+        ...(payload.email ? [{ key: "email", label: "Email", values: [payload.email] }] : []),
+        ...(payload.phone ? [{ key: "phone", label: "Phone", values: [payload.phone] }] : []),
+        ...(payload.serviceInterest ? [{ key: "service_interest", label: "Service interest", values: [payload.serviceInterest] }] : []),
+        ...(payload.message ? [{ key: "message", label: "Message", values: [payload.message] }] : []),
+      ],
+      raw_payload_json: payload,
+      last_synced_at: new Date().toISOString(),
       status: "new",
-    });
+    };
+
+    const insertResult = await admin.from("leads").insert(leadInsertPayload);
+    if (insertResult.error) {
+      const missingColumnMatch = insertResult.error.message.match(/Could not find the '([^']+)' column of 'leads'/i);
+      if (!missingColumnMatch) {
+        throw new Error(insertResult.error.message);
+      }
+      await admin.from("leads").insert({
+        user_id: payload.userId,
+        workspace_id: workspaceId,
+        campaign_id: payload.campaignId,
+        funnel_id: payload.funnelId,
+        name: payload.name,
+        phone: payload.phone,
+        email: payload.email,
+        service_interest: payload.serviceInterest,
+        message: payload.message,
+        status: "new",
+      });
+    }
 
     const { data: followUp } = await admin
       .from("follow_up_settings")
@@ -1464,17 +1735,85 @@ export async function updateLeadStatusAction(formData: FormData) {
   }
 
   const leadId = String(formData.get("leadId") || "");
-  const status = String(formData.get("status") || "new");
+  const redirectTo = String(formData.get("redirectTo") || "/leads");
+  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/leads";
+  const requestedStatus = String(formData.get("status") || "new");
+  const status = getCanonicalLeadStatus(requestedStatus);
+  const allowedStatuses = new Set(["new", "contacted", "qualified", "closed", "archived"]);
+  if (!allowedStatuses.has(status)) {
+    redirect(safeRedirectTo);
+  }
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
-    redirect("/leads");
+    redirect(safeRedirectTo);
   }
   await admin.from("leads").update({ status }).eq("id", leadId);
 
   revalidatePath("/leads");
   revalidatePath("/dashboard");
-  redirect("/leads");
+  redirect(safeRedirectTo);
+}
+
+export async function updateLeadNotesAction(formData: FormData) {
+  if (!isSupabaseServerConfigured()) {
+    redirect("/leads");
+  }
+
+  const leadId = String(formData.get("leadId") || "");
+  const redirectTo = String(formData.get("redirectTo") || "/leads");
+  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/leads";
+  const notes = String(formData.get("notes") || "").trim();
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(safeRedirectTo);
+  }
+
+  await admin.from("leads").update({ notes }).eq("id", leadId);
+
+  revalidatePath("/leads");
+  redirect(safeRedirectTo);
+}
+
+export async function syncMetaLeadsAction(formData: FormData) {
+  if (!isSupabaseServerConfigured()) {
+    redirect("/leads");
+  }
+
+  const redirectTo = String(formData.get("redirectTo") || "/leads");
+  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/leads";
+  const mode = String(formData.get("mode") || "incremental") === "backfill" ? "backfill" : "incremental";
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(safeRedirectTo);
+  }
+
+  const workspaceContext = await ensureWorkspaceContextForUser(user);
+  if (!workspaceContext?.activeWorkspace.id) {
+    redirect("/workspaces");
+  }
+
+  try {
+    await syncWorkspaceMetaLeads({
+      admin,
+      workspaceId: workspaceContext.activeWorkspace.id,
+      mode,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Lead sync failed.";
+    redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`);
+  }
+
+  revalidatePath("/leads");
+  revalidatePath("/dashboard");
+  revalidatePath("/performance");
+  redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}synced=1`);
 }
 
 async function getWorkspaceSettingsActionContext() {
@@ -1529,24 +1868,32 @@ export async function updateWorkspaceGeneralAction(formData: FormData) {
 
   const workspaceName = String(formData.get("workspaceName") || "").trim() || workspaceContext.activeWorkspace.name;
   const businessName = String(formData.get("businessName") || "").trim() || workspaceContext.businessProfile?.business_name || workspaceName;
+  const businessEmail = String(formData.get("businessEmail") || "").trim() || workspaceContext.businessProfile?.email || user.email || "";
+  const businessPhone = String(formData.get("businessPhone") || "").trim() || workspaceContext.businessProfile?.phone || "";
+  const website = String(formData.get("website") || "").trim() || workspaceContext.businessProfile?.website || "";
+  const industry = String(formData.get("industry") || "").trim() || workspaceContext.businessProfile?.industry || "";
+  const privacyPolicyUrl =
+    String(formData.get("privacyPolicyUrl") || "").trim() || workspaceContext.businessProfile?.privacy_policy_url || "";
 
   await Promise.all([
-    admin.from("workspaces").update({ name: workspaceName }).eq("id", workspaceContext.activeWorkspace.id),
-    admin.from("business_profiles").upsert(
-      {
-        user_id: user.id,
-        workspace_id: workspaceContext.activeWorkspace.id,
-        business_name: businessName,
-        location: workspaceContext.businessProfile?.location || "",
-        phone: workspaceContext.businessProfile?.phone || "",
-        email: workspaceContext.businessProfile?.email || user.email || "",
-        description: workspaceContext.businessProfile?.description || "",
-        logo_url: workspaceContext.businessProfile?.logo_url || null,
-        brand_color: workspaceContext.businessProfile?.brand_color || "#6D5EF8",
-        default_cta: workspaceContext.businessProfile?.default_cta || "Get My Quote",
-      },
-      { onConflict: "workspace_id" },
-    ),
+    updateWorkspaceIdentityRecord(admin, workspaceContext.activeWorkspace.id, {
+      name: workspaceName,
+    }),
+    upsertWorkspaceBusinessProfile(admin, {
+      user_id: user.id,
+      workspace_id: workspaceContext.activeWorkspace.id,
+      business_name: businessName,
+      website,
+      industry,
+      privacy_policy_url: privacyPolicyUrl,
+      location: workspaceContext.businessProfile?.location || "",
+      phone: businessPhone,
+      email: businessEmail,
+      description: workspaceContext.businessProfile?.description || "",
+      logo_url: workspaceContext.businessProfile?.logo_url || null,
+      brand_color: workspaceContext.businessProfile?.brand_color || "#6D5EF8",
+      default_cta: workspaceContext.businessProfile?.default_cta || "Get My Quote",
+    }),
   ]);
 
   revalidateWorkspaceSettingsPaths();
@@ -1564,21 +1911,18 @@ export async function updateWorkspaceIconAction(formData: FormData) {
   const logoUrl = await uploadAsset(logoFile, "logos");
   const removeLogo = String(formData.get("removeLogo") || "") === "1";
 
-  await admin.from("business_profiles").upsert(
-    {
-      user_id: user.id,
-      workspace_id: workspaceContext.activeWorkspace.id,
-      business_name: workspaceContext.businessProfile?.business_name || workspaceContext.activeWorkspace.name,
-      location: workspaceContext.businessProfile?.location || "",
-      phone: workspaceContext.businessProfile?.phone || "",
-      email: workspaceContext.businessProfile?.email || user.email || "",
-      description: workspaceContext.businessProfile?.description || "",
-      logo_url: removeLogo ? null : logoUrl || workspaceContext.businessProfile?.logo_url || null,
-      brand_color: String(formData.get("brandColor") || workspaceContext.businessProfile?.brand_color || "#6D5EF8"),
-      default_cta: workspaceContext.businessProfile?.default_cta || "Get My Quote",
-    },
-    { onConflict: "workspace_id" },
-  );
+  await upsertWorkspaceBusinessProfile(admin, {
+    user_id: user.id,
+    workspace_id: workspaceContext.activeWorkspace.id,
+    business_name: workspaceContext.businessProfile?.business_name || workspaceContext.activeWorkspace.name,
+    location: workspaceContext.businessProfile?.location || "",
+    phone: workspaceContext.businessProfile?.phone || "",
+    email: workspaceContext.businessProfile?.email || user.email || "",
+    description: workspaceContext.businessProfile?.description || "",
+    logo_url: removeLogo ? null : logoUrl || workspaceContext.businessProfile?.logo_url || null,
+    brand_color: String(formData.get("brandColor") || workspaceContext.businessProfile?.brand_color || "#6D5EF8"),
+    default_cta: workspaceContext.businessProfile?.default_cta || "Get My Quote",
+  });
 
   revalidateWorkspaceSettingsPaths();
   redirect("/workspace/settings?section=icon&saved=1");
@@ -1591,21 +1935,18 @@ export async function updateWorkspacePreviewAction(formData: FormData) {
     redirect("/workspace/settings?section=preview&saved=1");
   }
 
-  await admin.from("business_profiles").upsert(
-    {
-      user_id: user.id,
-      workspace_id: workspaceContext.activeWorkspace.id,
-      business_name: workspaceContext.businessProfile?.business_name || workspaceContext.activeWorkspace.name,
-      location: String(formData.get("location") || ""),
-      phone: workspaceContext.businessProfile?.phone || "",
-      email: workspaceContext.businessProfile?.email || user.email || "",
-      description: String(formData.get("description") || ""),
-      logo_url: workspaceContext.businessProfile?.logo_url || null,
-      brand_color: workspaceContext.businessProfile?.brand_color || "#6D5EF8",
-      default_cta: workspaceContext.businessProfile?.default_cta || "Get My Quote",
-    },
-    { onConflict: "workspace_id" },
-  );
+  await upsertWorkspaceBusinessProfile(admin, {
+    user_id: user.id,
+    workspace_id: workspaceContext.activeWorkspace.id,
+    business_name: workspaceContext.businessProfile?.business_name || workspaceContext.activeWorkspace.name,
+    location: String(formData.get("location") || ""),
+    phone: workspaceContext.businessProfile?.phone || "",
+    email: workspaceContext.businessProfile?.email || user.email || "",
+    description: String(formData.get("description") || ""),
+    logo_url: workspaceContext.businessProfile?.logo_url || null,
+    brand_color: workspaceContext.businessProfile?.brand_color || "#6D5EF8",
+    default_cta: workspaceContext.businessProfile?.default_cta || "Get My Quote",
+  });
 
   revalidateWorkspaceSettingsPaths();
   redirect("/workspace/settings?section=preview&saved=1");
@@ -1618,21 +1959,18 @@ export async function updateWorkspaceFunnelsAction(formData: FormData) {
     redirect("/workspace/settings?section=funnels&saved=1");
   }
 
-  await admin.from("business_profiles").upsert(
-    {
-      user_id: user.id,
-      workspace_id: workspaceContext.activeWorkspace.id,
-      business_name: workspaceContext.businessProfile?.business_name || workspaceContext.activeWorkspace.name,
-      location: workspaceContext.businessProfile?.location || "",
-      phone: String(formData.get("phone") || ""),
-      email: String(formData.get("email") || user.email || ""),
-      description: workspaceContext.businessProfile?.description || "",
-      logo_url: workspaceContext.businessProfile?.logo_url || null,
-      brand_color: workspaceContext.businessProfile?.brand_color || "#6D5EF8",
-      default_cta: String(formData.get("defaultCta") || "Get My Quote"),
-    },
-    { onConflict: "workspace_id" },
-  );
+  await upsertWorkspaceBusinessProfile(admin, {
+    user_id: user.id,
+    workspace_id: workspaceContext.activeWorkspace.id,
+    business_name: workspaceContext.businessProfile?.business_name || workspaceContext.activeWorkspace.name,
+    location: workspaceContext.businessProfile?.location || "",
+    phone: String(formData.get("phone") || ""),
+    email: String(formData.get("email") || user.email || ""),
+    description: workspaceContext.businessProfile?.description || "",
+    logo_url: workspaceContext.businessProfile?.logo_url || null,
+    brand_color: workspaceContext.businessProfile?.brand_color || "#6D5EF8",
+    default_cta: String(formData.get("defaultCta") || "Get My Quote"),
+  });
 
   revalidateWorkspaceSettingsPaths();
   redirect("/workspace/settings?section=funnels&saved=1");
@@ -1654,25 +1992,25 @@ export async function updateSettingsAction(formData: FormData) {
   }
   const workspaceContext = await ensureWorkspaceContextForUser(user);
   const activeWorkspaceId = workspaceContext?.activeWorkspace.id;
+  if (!activeWorkspaceId) {
+    redirect("/settings?saved=1");
+  }
   const logoFile = formData.get("logo") as File;
   const logoUrl = await uploadAsset(logoFile, "logos");
   const workspaceName = String(formData.get("workspaceName") || formData.get("businessName") || "");
 
-  await admin.from("business_profiles").upsert(
-    {
-      user_id: user.id,
-      workspace_id: activeWorkspaceId,
-      business_name: String(formData.get("businessName") || ""),
-      location: String(formData.get("location") || ""),
-      phone: String(formData.get("phone") || ""),
-      email: String(formData.get("email") || ""),
-      description: String(formData.get("description") || ""),
-      logo_url: logoUrl || workspaceContext?.businessProfile?.logo_url || null,
-      brand_color: String(formData.get("brandColor") || "#6D5EF8"),
-      default_cta: String(formData.get("defaultCta") || "Get My Quote"),
-    },
-    { onConflict: "workspace_id" },
-  );
+  await upsertWorkspaceBusinessProfile(admin, {
+    user_id: user.id,
+    workspace_id: activeWorkspaceId || "",
+    business_name: String(formData.get("businessName") || ""),
+    location: String(formData.get("location") || ""),
+    phone: String(formData.get("phone") || ""),
+    email: String(formData.get("email") || ""),
+    description: String(formData.get("description") || ""),
+    logo_url: logoUrl || workspaceContext?.businessProfile?.logo_url || null,
+    brand_color: String(formData.get("brandColor") || "#6D5EF8"),
+    default_cta: String(formData.get("defaultCta") || "Get My Quote"),
+  });
 
   if (activeWorkspaceId && workspaceName) {
     await admin.from("workspaces").update({ name: workspaceName }).eq("id", activeWorkspaceId);

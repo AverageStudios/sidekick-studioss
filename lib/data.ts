@@ -4,6 +4,8 @@ import { demoBundle, demoCampaign, demoFunnel, demoLeads } from "@/lib/demo-data
 import { isDemoModeEnabled, isSupabaseServerConfigured } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { hydrateAndSyncCampaignRecords, repairCampaignMetaIdentifiers, syncCampaignStatusFromMeta } from "@/lib/campaign-management";
+import { getCanonicalLeadStatus, getLeadSubmittedAt } from "@/lib/leads";
+import { buildLeadSyncReconnectUrl, getLeadInboxSearchMatch, getWorkspaceLeadSyncHealth, type WorkspaceLeadSyncHealth } from "@/lib/meta-leads";
 import { listPublishedTemplates, getPublishedTemplateBySlug } from "@/lib/template-repository";
 import { ensureWorkspaceContextByUserId, getActiveWorkspaceIdForUser, userHasWorkspaceAccess } from "@/lib/workspaces";
 import { getWorkspaceMetaIntegrationState } from "@/lib/meta-integration";
@@ -63,7 +65,7 @@ export const getDashboardSnapshot = cache(async (userId: string) => {
       liveFunnels: 1,
       newLeads: demoLeads.filter((lead) => lead.status === "new").length,
       contactedLeads: demoLeads.filter((lead) => lead.status === "contacted").length,
-      bookedLeads: demoLeads.filter((lead) => lead.status === "booked").length,
+      bookedLeads: demoLeads.filter((lead) => getCanonicalLeadStatus(lead.status) === "qualified").length,
       recentLeads: demoLeads,
       campaigns: [demoCampaign],
       funnels: [demoFunnel],
@@ -73,11 +75,11 @@ export const getDashboardSnapshot = cache(async (userId: string) => {
   const supabase = createSupabaseAdminClient();
   if (!supabase) {
     return isDemoModeEnabled()
-      ? {
+        ? {
           liveFunnels: 1,
           newLeads: demoLeads.filter((lead) => lead.status === "new").length,
           contactedLeads: demoLeads.filter((lead) => lead.status === "contacted").length,
-          bookedLeads: demoLeads.filter((lead) => lead.status === "booked").length,
+          bookedLeads: demoLeads.filter((lead) => getCanonicalLeadStatus(lead.status) === "qualified").length,
           recentLeads: demoLeads,
           campaigns: [demoCampaign],
           funnels: [demoFunnel],
@@ -106,9 +108,9 @@ export const getDashboardSnapshot = cache(async (userId: string) => {
 
   return {
     liveFunnels: (funnelsResult.data || []).filter((funnel) => funnel.is_published).length,
-    newLeads: leads.filter((lead) => lead.status === "new").length,
-    contactedLeads: leads.filter((lead) => lead.status === "contacted").length,
-    bookedLeads: leads.filter((lead) => lead.status === "booked").length,
+    newLeads: leads.filter((lead) => getCanonicalLeadStatus(lead.status) === "new").length,
+    contactedLeads: leads.filter((lead) => getCanonicalLeadStatus(lead.status) === "contacted").length,
+    bookedLeads: leads.filter((lead) => getCanonicalLeadStatus(lead.status) === "qualified").length,
     recentLeads: leads,
     campaigns,
     funnels: funnelsResult.data || [],
@@ -315,6 +317,128 @@ export const getLeads = cache(async (userId: string, status?: string) => {
   const { data } = await query;
   return (data || []) as LeadRecord[];
 });
+
+export async function getLeadInboxData(
+  userId: string,
+  options?: {
+    status?: string;
+    query?: string;
+    campaignId?: string;
+    dateRange?: string;
+    leadId?: string;
+  },
+) {
+  if (!isSupabaseServerConfigured()) {
+    const allLeads = demoLeads
+      .slice()
+      .sort((left, right) => +new Date(getLeadSubmittedAt(right)) - +new Date(getLeadSubmittedAt(left)));
+    const filtered = allLeads.filter((lead) => {
+      const matchesStatus =
+        !options?.status ||
+        options.status === "all" ||
+        getCanonicalLeadStatus(lead.status) === options.status;
+      const matchesSearch = getLeadInboxSearchMatch(lead, options?.query || "");
+      const matchesCampaign = !options?.campaignId || lead.campaign_id === options.campaignId;
+      return matchesStatus && matchesSearch && matchesCampaign;
+    });
+
+    return {
+      leads: filtered,
+      allLeads,
+      selectedLead:
+        filtered.find((lead) => lead.id === options?.leadId) ||
+        allLeads.find((lead) => lead.id === options?.leadId) ||
+        filtered[0] ||
+        null,
+      campaigns: [demoCampaign],
+      syncHealth: null as WorkspaceLeadSyncHealth | null,
+      reconnectUrl: buildLeadSyncReconnectUrl("/leads"),
+    };
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return {
+      leads: [] as LeadRecord[],
+      allLeads: [] as LeadRecord[],
+      selectedLead: null as LeadRecord | null,
+      campaigns: [] as CampaignRecord[],
+      syncHealth: null as WorkspaceLeadSyncHealth | null,
+      reconnectUrl: buildLeadSyncReconnectUrl("/leads"),
+    };
+  }
+
+  const workspaceId = await getActiveWorkspaceIdForUser(userId);
+  if (!workspaceId) {
+    return {
+      leads: [] as LeadRecord[],
+      allLeads: [] as LeadRecord[],
+      selectedLead: null as LeadRecord | null,
+      campaigns: [] as CampaignRecord[],
+      syncHealth: null as WorkspaceLeadSyncHealth | null,
+      reconnectUrl: buildLeadSyncReconnectUrl("/leads"),
+    };
+  }
+
+  const [leadsResult, campaignsResult, syncHealth] = await Promise.all([
+    admin.from("leads").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
+    admin
+      .from("campaigns")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false }),
+    getWorkspaceLeadSyncHealth({ admin, workspaceId }).catch(() => null),
+  ]);
+
+  if (leadsResult.error) {
+    throw new Error(leadsResult.error.message);
+  }
+  if (campaignsResult.error) {
+    throw new Error(campaignsResult.error.message);
+  }
+
+  const allLeads = ((leadsResult.data || []) as LeadRecord[]).slice().sort(
+    (left, right) => +new Date(getLeadSubmittedAt(right)) - +new Date(getLeadSubmittedAt(left)),
+  );
+  const campaigns = await hydrateAndSyncCampaignRecords({
+    admin,
+    campaigns: (campaignsResult.data || []) as CampaignRecord[],
+    syncLiveStatuses: false,
+  });
+
+  const now = Date.now();
+  const minTimestamp =
+    options?.dateRange === "7d"
+      ? now - 7 * 24 * 60 * 60 * 1000
+      : options?.dateRange === "30d"
+        ? now - 30 * 24 * 60 * 60 * 1000
+        : null;
+
+  const filteredLeads = allLeads.filter((lead) => {
+    const matchesStatus =
+      !options?.status ||
+      options.status === "all" ||
+      getCanonicalLeadStatus(lead.status) === options.status;
+    const matchesSearch = getLeadInboxSearchMatch(lead, options?.query || "");
+    const matchesCampaign = !options?.campaignId || lead.campaign_id === options.campaignId;
+    const submittedTime = +new Date(getLeadSubmittedAt(lead));
+    const matchesDate = !minTimestamp || submittedTime >= minTimestamp;
+    return matchesStatus && matchesSearch && matchesCampaign && matchesDate;
+  });
+
+  return {
+    leads: filteredLeads,
+    allLeads,
+    selectedLead:
+      filteredLeads.find((lead) => lead.id === options?.leadId) ||
+      allLeads.find((lead) => lead.id === options?.leadId) ||
+      filteredLeads[0] ||
+      null,
+    campaigns,
+    syncHealth,
+    reconnectUrl: buildLeadSyncReconnectUrl("/leads"),
+  };
+}
 
 export const getWorkspaceMetaIntegrationForUser = cache(async (userId: string) => {
   if (!isSupabaseServerConfigured()) {

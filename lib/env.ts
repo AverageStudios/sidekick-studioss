@@ -23,6 +23,7 @@ export const env = {
   metaAppSecret: readEnv("META_APP_SECRET"),
   metaRedirectUri: readEnv("META_REDIRECT_URI"),
   metaScopes: readEnv("META_SCOPES"),
+  metaWebhookVerifyToken: readEnv("META_WEBHOOK_VERIFY_TOKEN"),
   metaGraphApiVersion: readEnv("META_GRAPH_API_VERSION") || "v25.0",
   metaTokenEncryptionKey: readEnv("META_TOKEN_ENCRYPTION_KEY"),
 } as const;

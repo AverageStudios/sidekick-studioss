@@ -43,10 +43,17 @@ export async function GET(request: NextRequest) {
   const next = request.nextUrl.searchParams.get("next");
   const scopeSet = request.nextUrl.searchParams.get("scopeSet");
   const reconnectRequested = request.nextUrl.searchParams.get("reconnect") === "1";
-  const includeLeadFormManagement = scopeSet === "lead_forms";
-  const resolvedScopeSet: MetaOAuthScopeSet = includeLeadFormManagement ? "lead_forms" : "default";
+  const includeLeadFormManagement = scopeSet === "lead_forms" || scopeSet === "leads";
+  const includeLeadRetrieval = scopeSet === "leads";
+  const includePageWebhookManagement = scopeSet === "leads";
+  const resolvedScopeSet: MetaOAuthScopeSet =
+    scopeSet === "leads" ? "leads" : includeLeadFormManagement ? "lead_forms" : "default";
   const safeNext = next?.startsWith("/") ? next : "/workspace/settings?section=integrations";
-  const requestedScopes = getMetaScopes({ includeLeadFormManagement });
+  const requestedScopes = getMetaScopes({
+    includeLeadFormManagement,
+    includeLeadRetrieval,
+    includePageWebhookManagement,
+  });
   const forceReauth = reconnectRequested || includeLeadFormManagement;
   const state = createMetaOAuthState({
     nonce: randomUUID(),
@@ -55,7 +62,12 @@ export async function GET(request: NextRequest) {
     scopeSet: resolvedScopeSet,
     requestedScopes,
   });
-  const oauthUrl = getMetaOAuthUrl(state, { includeLeadFormManagement, forceReauth });
+  const oauthUrl = getMetaOAuthUrl(state, {
+    includeLeadFormManagement,
+    includeLeadRetrieval,
+    includePageWebhookManagement,
+    forceReauth,
+  });
 
   if (!oauthUrl) {
     const settingsUrl = new URL("/workspace/settings", env.appUrl);

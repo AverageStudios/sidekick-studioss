@@ -12,6 +12,7 @@ import {
   MessageCircle,
   PhoneCall,
   Rocket,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -29,7 +30,6 @@ import {
   getNextWizardStep,
   getPreviousWizardStep,
   getWizardSectionForStep,
-  getWizardSections,
   getTemplatePlaceholderFields,
   getTemplateSetupValuesFromLaunchState,
   getVisibleWizardSteps,
@@ -103,6 +103,22 @@ type LaunchPreflightResponse = {
     campaign: { name: string };
     adSet: { dailyBudgetCents: number };
     creative: { destinationUrl: string; leadFormMode: CampaignLeadFormMode };
+  };
+};
+
+type BudgetGuidanceResponse = {
+  currency: string;
+  maxDailyBudget: number;
+  spendCap: number | null;
+  remainingSpendCap: number | null;
+  note: string;
+  estimate: {
+    metricLabel: string | null;
+    averageUnitCost: number | null;
+    lowPerDay: number | null;
+    highPerDay: number | null;
+    source: "meta_lead_history" | "meta_click_history" | "meta_unavailable";
+    note: string;
   };
 };
 
@@ -281,7 +297,7 @@ function SectionCard({
   return (
     <Card
       className={cn(
-        "rounded-[24px] border border-[color-mix(in_oklab,var(--brand)_8%,var(--line))] bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]",
+        "rounded-[28px] border border-[rgba(102,112,133,0.12)] bg-white/96 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.06)] backdrop-blur-sm",
         className,
       )}
     >
@@ -291,6 +307,36 @@ function SectionCard({
       </div>
       {children}
     </Card>
+  );
+}
+
+function TopStepPill({
+  stepNumber,
+  label,
+  active,
+  complete,
+}: {
+  stepNumber: number;
+  label: string;
+  active: boolean;
+  complete: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span
+        className={cn(
+          "flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-semibold transition-all",
+          complete || active
+            ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_10px_18px_rgba(109,94,248,0.18)]"
+            : "border-[rgba(102,112,133,0.18)] bg-white text-[var(--muted-strong)]",
+        )}
+      >
+        {complete ? <CheckCircle2 className="h-3.5 w-3.5" /> : stepNumber}
+      </span>
+      <span className={cn("text-xs font-medium", active ? "text-[var(--ink)]" : "text-[var(--muted)]")}>
+        {label}
+      </span>
+    </div>
   );
 }
 
@@ -354,6 +400,37 @@ function formatBudgetDisplay(value: string) {
   return `$${formatted}/day`;
 }
 
+function formatCurrencyAmount(value: number, currency = "USD", maximumFractionDigits = 0) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits,
+  }).format(value);
+}
+
+function budgetToSliderValue(amount: number, min: number, max: number) {
+  if (max <= min) return 0;
+  const safeAmount = Math.min(max, Math.max(min, amount));
+  return Math.round(
+    ((Math.log(safeAmount) - Math.log(min)) / (Math.log(max) - Math.log(min))) * 100,
+  );
+}
+
+function sliderValueToBudget(value: number, min: number, max: number) {
+  if (max <= min) return min;
+  const ratio = Math.min(100, Math.max(0, value)) / 100;
+  const scaled = Math.exp(Math.log(min) + (Math.log(max) - Math.log(min)) * ratio);
+  const rounded =
+    scaled >= 10000 ? Math.round(scaled / 250) * 250
+    : scaled >= 2500 ? Math.round(scaled / 100) * 100
+    : scaled >= 1000 ? Math.round(scaled / 50) * 50
+    : scaled >= 250 ? Math.round(scaled / 25) * 25
+    : scaled >= 100 ? Math.round(scaled / 10) * 10
+    : Math.round(scaled / 5) * 5;
+
+  return Math.min(max, Math.max(min, rounded));
+}
+
 function IssueList({
   title,
   issues,
@@ -377,6 +454,71 @@ function IssueList({
           <li key={`${issue.code || issue.message}`}>• {issue.message}</li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+const industryVisuals: Record<string, { emoji: string; color: string; bg: string }> = {
+  "Car Detailing": { emoji: "🚗", color: "#C05621", bg: "#FFF0E6" },
+  "Chiropractic": { emoji: "🧑‍⚕️", color: "#0369A1", bg: "#E0F2FE" },
+  "Physical Therapy": { emoji: "💪", color: "#166534", bg: "#DCFCE7" },
+  "Cleaning Services": { emoji: "🧹", color: "#6D28D9", bg: "#EDE9FE" },
+  "Fitness / Personal Training": { emoji: "🏋️", color: "#0F766E", bg: "#CCFBF1" },
+  "Flooring": { emoji: "🪵", color: "#92400E", bg: "#FEF3C7" },
+  "Landscape / Lawn Care": { emoji: "🌿", color: "#15803D", bg: "#DCFCE7" },
+  "Plumbing": { emoji: "🔧", color: "#0E7490", bg: "#CFFAFE" },
+  "Pool Services": { emoji: "🏊", color: "#1D4ED8", bg: "#DBEAFE" },
+  "Roofing": { emoji: "🏠", color: "#B91C1C", bg: "#FEE2E2" },
+  "Spas & Massage": { emoji: "💆", color: "#BE185D", bg: "#FCE7F3" },
+};
+
+function AnimatedNumber({ value, duration = 300 }: { value: number; duration?: number }) {
+  const [shown, setShown] = useState(value);
+  const fromRef = useRef(value);
+
+  useEffect(() => {
+    const from = fromRef.current;
+    const to = value;
+    if (from === to) return;
+    const t0 = performance.now();
+    let raf: number;
+    const tick = (t: number) => {
+      const k = Math.min(1, (t - t0) / duration);
+      const eased = 1 - Math.pow(1 - k, 3);
+      setShown(Math.round(from + (to - from) * eased));
+      if (k < 1) {
+        raf = requestAnimationFrame(tick);
+      } else {
+        fromRef.current = to;
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+
+  return <>{shown}</>;
+}
+
+function WizardDisclosure({
+  label,
+  value,
+  children,
+}: {
+  label: string;
+  value?: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="lf-disclosure" data-open={open}>
+      <div className="lf-disclosure-head" onClick={() => setOpen((v) => !v)}>
+        <span className="lf-disclosure-label">{label}</span>
+        {value ? <span className="lf-disclosure-value">{value}</span> : null}
+        <svg className="lf-disclosure-chevron" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </div>
+      {open ? <div className="lf-disclosure-body">{children}</div> : null}
     </div>
   );
 }
@@ -514,9 +656,7 @@ export function TemplateLaunchWizard({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [currentIssues, setCurrentIssues] = useState<LaunchIssue[]>([]);
   const [preflight, setPreflight] = useState<LaunchPreflightResponse | null>(null);
-  const [preflightMode, setPreflightMode] = useState<CampaignPublishMode>("draft");
   const [preflightError, setPreflightError] = useState<string | null>(null);
-  const [isPreflighting, setIsPreflighting] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishErrorDetails, setPublishErrorDetails] = useState<string | null>(null);
@@ -528,8 +668,11 @@ export function TemplateLaunchWizard({
   const [activeLocationSuggestionIndex, setActiveLocationSuggestionIndex] = useState(0);
   const [locationSearchError, setLocationSearchError] = useState<string | null>(null);
   const [isSearchingLocations, setIsSearchingLocations] = useState(false);
+  const [budgetGuidance, setBudgetGuidance] = useState<BudgetGuidanceResponse | null>(null);
+  const [budgetGuidanceError, setBudgetGuidanceError] = useState<string | null>(null);
   const locationSuggestionCacheRef = useRef<Map<string, CachedLocationLookup>>(new Map());
   const locationSearchAbortRef = useRef<AbortController | null>(null);
+  const budgetGuidanceAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     function refreshMetaState() {
@@ -622,6 +765,47 @@ export function TemplateLaunchWizard({
     };
   }, [deferredLocationQuery]);
 
+  useEffect(() => {
+    const adAccountId = launchState.integrationSelections.adAccountId;
+    const adType = launchState.selection.adType;
+
+    if (!adAccountId) {
+      budgetGuidanceAbortRef.current?.abort();
+      return;
+    }
+
+    budgetGuidanceAbortRef.current?.abort();
+    const controller = new AbortController();
+    budgetGuidanceAbortRef.current = controller;
+    let cancelled = false;
+
+    fetch(`/api/meta/budget-guidance?adAccountId=${encodeURIComponent(adAccountId)}&adType=${encodeURIComponent(adType)}`, {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const payload = (await response.json().catch(() => null)) as BudgetGuidanceResponse & { error?: string } | null;
+        if (cancelled) return;
+        if (!response.ok || !payload || payload.error) {
+          setBudgetGuidance(null);
+          setBudgetGuidanceError(payload?.error || "Meta budget guidance could not be loaded.");
+          return;
+        }
+        setBudgetGuidance(payload);
+        setBudgetGuidanceError(null);
+      })
+      .catch(() => {
+        if (!cancelled && !controller.signal.aborted) {
+          setBudgetGuidance(null);
+          setBudgetGuidanceError("Meta budget guidance could not be loaded.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [launchState.integrationSelections.adAccountId, launchState.selection.adType]);
+
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.slug === launchState.selection.templateSlug) || null,
     [launchState.selection.templateSlug, templates],
@@ -633,11 +817,8 @@ export function TemplateLaunchWizard({
   );
   const currentStepIndex = visibleSteps.findIndex((step) => step.id === launchState.stepId);
   const resolvedStepIndex = currentStepIndex >= 0 ? currentStepIndex : 0;
-  const wizardSections = useMemo(
-    () => getWizardSections(launchState.selection.adType),
-    [launchState.selection.adType],
-  );
-  const { index: currentSectionIndex, section: currentSectionDefinition } = useMemo(
+  const currentStepDefinition = visibleSteps[resolvedStepIndex] || visibleSteps[0] || null;
+  const { section: currentSectionDefinition } = useMemo(
     () => getWizardSectionForStep(launchState.selection.adType, launchState.stepId),
     [launchState.selection.adType, launchState.stepId],
   );
@@ -666,6 +847,8 @@ export function TemplateLaunchWizard({
     preferredPageId: launchState.integrationSelections.pageId,
     fallbackName: businessProfile?.business_name || "Select a Facebook Page",
   });
+  const visibleBudgetGuidance = launchState.integrationSelections.adAccountId ? budgetGuidance : null;
+  const visibleBudgetGuidanceError = launchState.integrationSelections.adAccountId ? budgetGuidanceError : null;
 
   const validation = validateWizardStep({
     stepId: launchState.stepId,
@@ -1099,9 +1282,7 @@ export function TemplateLaunchWizard({
       return null;
     }
 
-    setIsPreflighting(true);
     setPreflightError(null);
-    setPreflightMode(mode);
     const response = await fetch("/api/meta/preflight", {
       method: "POST",
       headers: {
@@ -1120,7 +1301,6 @@ export function TemplateLaunchWizard({
       | { error?: string }
       | null;
 
-    setIsPreflighting(false);
     if (!response.ok || !payload || ("error" in payload && payload.error && !("blockingIssues" in payload))) {
       setPreflight(null);
       setPreflightError(payload?.error || "Launch readiness could not be checked.");
@@ -1209,47 +1389,41 @@ export function TemplateLaunchWizard({
     switch (launchState.stepId) {
       case "industry":
         return (
-          <SectionCard
-            title="Select Industry"
-            description="Pick the library the wizard should filter against."
-            className="p-5 sm:p-6"
-          >
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {supportedIndustries.map((industry) => {
-                const active = launchState.selection.industry === industry;
-                return (
-                  <button
-                    key={industry}
-                    type="button"
-                    onClick={() =>
-                      updateLaunchState((current) =>
-                        normalizeCampaignLaunchState(
-                          {
-                            ...current,
-                            selection: {
-                              ...current.selection,
-                              industry,
-                              category: industry,
-                            },
+          <div className="lf-industry-grid lf-fade">
+            {supportedIndustries.map((industry) => {
+              const visuals = industryVisuals[industry] || { emoji: "🏢", color: "#6D5EF8", bg: "#EFECFF" };
+              const active = launchState.selection.industry === industry;
+              return (
+                <button
+                  key={industry}
+                  type="button"
+                  data-active={active}
+                  className="lf-industry-tile focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:ring-offset-2"
+                  onClick={() =>
+                    updateLaunchState((current) =>
+                      normalizeCampaignLaunchState(
+                        {
+                          ...current,
+                          selection: {
+                            ...current.selection,
+                            industry,
+                            category: industry,
                           },
-                          selectedTemplate || templates[0],
-                          businessProfile,
-                        ),
-                      )
-                    }
-                    className={cn(
-                      "rounded-[24px] border px-4 py-5 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--brand)_50%,white)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]",
-                      active
-                        ? "border-[color-mix(in_oklab,var(--brand)_32%,white)] bg-[var(--soft-brand)] shadow-[0_16px_32px_rgba(109,94,248,0.12)]"
-                        : "border-[var(--line)] bg-white/82 shadow-[var(--shadow-soft)] hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--brand)_18%,white)] hover:bg-white active:translate-y-px",
-                    )}
-                  >
-                    <p className="font-semibold text-[var(--ink)]">{industry}</p>
-                  </button>
-                );
-              })}
-            </div>
-          </SectionCard>
+                        },
+                        selectedTemplate || templates[0],
+                        businessProfile,
+                      ),
+                    )
+                  }
+                >
+                  <div className="lf-industry-icon" style={{ background: visuals.bg, color: visuals.color }}>
+                    {visuals.emoji}
+                  </div>
+                  <span className="text-sm font-semibold leading-tight text-[var(--foreground)]">{industry}</span>
+                </button>
+              );
+            })}
+          </div>
         );
       case "template":
         return (
@@ -1297,312 +1471,382 @@ export function TemplateLaunchWizard({
         );
       case "ad-type":
         return (
-          <SectionCard
-            title="Pick Ad Type"
-            description="This controls the rest of the step flow, validation rules, and Meta publish preparation."
-          >
-            <div className="grid gap-4 lg:grid-cols-2">
-              {adTypeOptions.map((option) => {
-                const Icon = option.icon;
-                const active =
-                  option.id === "messenger_leads"
-                    ? launchState.selection.adType === "messenger_leads" ||
-                      launchState.selection.adType === "messenger_engagement"
-                    : launchState.selection.adType === option.id;
-                const templateSupportsOption = templateSupportsAdType(selectedTemplate, option.id);
+          <div className="grid gap-4 sm:grid-cols-2">
+            {adTypeOptions.map((option) => {
+              const Icon = option.icon;
+              const active =
+                option.id === "messenger_leads"
+                  ? launchState.selection.adType === "messenger_leads" ||
+                    launchState.selection.adType === "messenger_engagement"
+                  : launchState.selection.adType === option.id;
+              const templateSupportsOption = templateSupportsAdType(selectedTemplate, option.id);
 
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => applyAdType(option.id)}
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => applyAdType(option.id)}
+                  className={cn(
+                    "relative overflow-hidden rounded-[28px] border p-7 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--brand)_50%,white)] focus-visible:ring-offset-2",
+                    active
+                      ? "border-[var(--brand)] bg-[linear-gradient(135deg,rgba(109,94,248,0.08)_0%,rgba(109,94,248,0.03)_100%)] shadow-[0_0_0_1px_var(--brand),0_20px_48px_rgba(109,94,248,0.14)]"
+                      : "border-[var(--line)] bg-white shadow-[var(--shadow-soft)] hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--brand)_22%,white)] hover:shadow-[0_12px_32px_rgba(15,23,42,0.08)] active:translate-y-px",
+                  )}
+                >
+                  <div
                     className={cn(
-                      "rounded-[24px] border px-5 py-5 text-left transition",
+                      "mb-5 flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-200",
                       active
-                        ? "border-[var(--brand)] bg-[rgba(109,94,248,0.08)]"
-                        : "border-[var(--line)] bg-white hover:border-[rgba(109,94,248,0.3)]",
+                        ? "bg-[var(--brand)] text-white shadow-[0_8px_20px_rgba(109,94,248,0.28)]"
+                        : "bg-[rgba(109,94,248,0.08)] text-[var(--brand)]",
                     )}
                   >
-                    <div className="flex items-start gap-4">
-                      <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[rgba(109,94,248,0.1)] text-[var(--brand)]">
-                        <Icon className="h-5 w-5" />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-base font-semibold text-[var(--ink)]">{option.label}</span>
-                        <span className="mt-1 block text-sm leading-6 text-[var(--muted)]">{option.description}</span>
-                        <span className="mt-2 block text-xs leading-5 text-[var(--muted-strong)]">
-                          {getAdTypeFieldHint(option.id)}
-                        </span>
-                        {!templateSupportsOption ? (
-                          <span className="mt-2 inline-flex rounded-full bg-[var(--soft-panel)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted-strong)]">
-                            Not preset by template
-                          </span>
-                        ) : null}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </SectionCard>
-        );
-      case "campaign-basics":
-        return (
-          <SectionCard
-            title="Campaign Basics"
-            description="Only the shared Meta essentials live here: campaign name, Facebook Page, ad account, and daily budget."
-          >
-            <div className="grid gap-4">
-              <SectionCard
-                title="Campaign Basics"
-                description="Set the campaign identity and the account it will run from."
-                className="bg-[var(--soft-panel)]"
-              >
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-[var(--ink)]">Campaign name</label>
-                    <Input
-                      value={launchState.campaign.name}
-                      onChange={(event) =>
-                        updateLaunchState((current) => ({
-                          ...current,
-                          campaign: {
-                            ...current.campaign,
-                            name: event.target.value,
-                          },
-                        }))
-                      }
-                      placeholder="Campaign name"
-                    />
+                    <Icon className="h-5 w-5" />
                   </div>
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-[var(--ink)]">Ad account</label>
-                    <select
-                      value={launchState.integrationSelections.adAccountId}
-                      onChange={(event) =>
-                        updateLaunchState((current) => ({
-                          ...current,
-                          integrationSelections: {
-                            ...current.integrationSelections,
-                            adAccountId: event.target.value,
-                          },
-                        }))
-                      }
-                      className="h-11 rounded-[16px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)]"
-                    >
-                      <option value="">Select ad account</option>
-                      {(metaIntegration?.assets.adAccounts || []).map((account) => (
-                        <option key={account.asset_id} value={account.asset_id}>
-                          {account.name || account.asset_id}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-2 lg:col-span-2">
-                    <label className="block text-sm font-medium text-[var(--ink)]">Facebook Page</label>
-                    <select
-                      value={launchState.integrationSelections.pageId}
-                      onChange={(event) =>
-                        updateLaunchState((current) => ({
-                          ...current,
-                          integrationSelections: {
-                            ...current.integrationSelections,
-                            pageId: event.target.value,
-                          },
-                        }))
-                      }
-                      className="h-11 rounded-[16px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)]"
-                    >
-                      <option value="">Select page</option>
-                      {(metaIntegration?.assets.pages || []).map((page) => (
-                        <option key={page.asset_id} value={page.asset_id}>
-                          {page.name || page.asset_id}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </SectionCard>
-
-              <SectionCard
-                title="Budget & Schedule"
-                description="Keep the spend settings in their own block so they stay easy to scan."
-                className="bg-[var(--soft-panel)]"
-              >
-                <div className="max-w-md space-y-2">
-                  <label className="block text-sm font-medium text-[var(--ink)]">Daily budget</label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium text-[var(--muted-strong)]">
-                      $
+                  <p className="text-[1.05rem] font-semibold tracking-[-0.02em] text-[var(--ink)]">{option.label}</p>
+                  <p className="mt-2 text-sm leading-[1.7] text-[var(--muted)]">{option.description}</p>
+                  {active ? (
+                    <span className="absolute right-5 top-5 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--brand)]">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-white" />
                     </span>
-                    <Input
-                      value={launchState.campaign.dailyBudget}
-                      onChange={(event) =>
-                        updateLaunchState((current) => ({
-                          ...current,
-                          campaign: {
-                            ...current.campaign,
-                            dailyBudget: event.target.value,
-                          },
-                        }))
-                      }
-                      placeholder="25"
-                      className="pl-8"
-                    />
-                  </div>
-                  <p className="text-sm text-[var(--muted)]">Used as the Meta ad set daily budget.</p>
-                </div>
-              </SectionCard>
-            </div>
-          </SectionCard>
+                  ) : null}
+                  {!templateSupportsOption ? (
+                    <span className="mt-3 inline-block rounded-full bg-[var(--soft-panel)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted-strong)]">
+                      Not preset
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
         );
+      case "campaign-basics": {
+        const budgetRaw = launchState.campaign.dailyBudget.replace(/[^0-9.]/g, "");
+        const budgetAmount = Number.parseFloat(budgetRaw) || 25;
+        const BUDGET_MIN = 5;
+        const BUDGET_MAX = Math.max(BUDGET_MIN, Math.round(visibleBudgetGuidance?.maxDailyBudget || 50000));
+        const sliderValue = budgetToSliderValue(budgetAmount, BUDGET_MIN, BUDGET_MAX);
+        const monthlyBudget = budgetAmount * 30.4;
+        const weeklyBudget = budgetAmount * 7;
+        const estimateUnitCost = visibleBudgetGuidance?.estimate.averageUnitCost || null;
+        const estimateMetricLabel = visibleBudgetGuidance?.estimate.metricLabel || null;
+        const estimatedDailyResults =
+          estimateUnitCost && estimateUnitCost > 0 ? budgetAmount / estimateUnitCost : null;
+        const estimatedDailyRange = estimatedDailyResults
+          ? {
+              low: Math.max(0, estimatedDailyResults * 0.82),
+              high: estimatedDailyResults * 1.18,
+            }
+          : null;
+
+        const setBudget = (val: number) => {
+          updateLaunchState((current) => ({
+            ...current,
+            campaign: {
+              ...current.campaign,
+              dailyBudget: String(Math.max(BUDGET_MIN, Math.min(BUDGET_MAX, Math.round(val)))),
+            },
+          }));
+        };
+
+        const setBudgetFromInput = (rawValue: string) => {
+          const nextValue = rawValue.replace(/[^0-9.]/g, "");
+          updateLaunchState((current) => ({
+            ...current,
+            campaign: {
+              ...current.campaign,
+              dailyBudget: nextValue,
+            },
+          }));
+        };
+
+        return (
+          <div className="flex flex-col gap-8">
+            {/* Budget hero */}
+            <div className="lf-fade flex flex-col items-center gap-5 pt-4 pb-2">
+              <div className="flex items-baseline gap-2">
+                <span className="text-[2rem] font-semibold text-[var(--muted)]">$</span>
+                <span
+                  className="font-bold tracking-[-0.05em] text-[var(--foreground)]"
+                  style={{ fontSize: "clamp(5rem,12vw,7.5rem)", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}
+                >
+                  <AnimatedNumber value={budgetAmount} />
+                </span>
+                <span className="mb-3 self-end text-lg font-medium text-[var(--muted)]">/day</span>
+              </div>
+
+              {/* Reach pill */}
+              <div className="flex items-center gap-1.5 rounded-full bg-[rgba(109,94,248,0.08)] px-4 py-2 text-sm text-[var(--brand)]">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2L10.5 7H14L10.5 10L12 14.5L8 11.5L4 14.5L5.5 10L2 7H5.5L8 2Z" fill="currentColor"/></svg>
+                <span>
+                  {estimatedDailyRange && estimateMetricLabel ? (
+                    <>
+                      Est.{" "}
+                      <strong>
+                        {estimatedDailyRange.low.toFixed(1)}-{estimatedDailyRange.high.toFixed(1)}
+                      </strong>{" "}
+                      {estimateMetricLabel} · <strong>{formatCurrencyAmount(monthlyBudget, visibleBudgetGuidance?.currency || "USD")}</strong>/mo
+                    </>
+                  ) : (
+                    <>
+                      <strong>{formatCurrencyAmount(weeklyBudget, visibleBudgetGuidance?.currency || "USD")}</strong>/wk ·{" "}
+                      <strong>{formatCurrencyAmount(monthlyBudget, visibleBudgetGuidance?.currency || "USD")}</strong>/mo
+                    </>
+                  )}
+                </span>
+              </div>
+
+              <div className="w-full max-w-xl space-y-3 rounded-[18px] border border-[rgba(17,24,39,0.07)] bg-white px-4 py-4 text-left shadow-[0_8px_22px_rgba(15,23,42,0.04)]">
+                <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                  Daily budget
+                </label>
+                <div className="rounded-[16px] border border-[rgba(17,24,39,0.10)] bg-[rgba(247,248,250,0.95)] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] focus-within:border-[color-mix(in_oklab,var(--brand)_55%,white)] focus-within:ring-2 focus-within:ring-[color-mix(in_oklab,var(--brand)_18%,white)]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-[var(--muted-strong)]">$</span>
+                    <Input
+                      inputMode="decimal"
+                      value={launchState.campaign.dailyBudget}
+                      onChange={(event) => setBudgetFromInput(event.target.value)}
+                      placeholder="25"
+                      className="h-11 border-0 bg-transparent px-0 text-[1.05rem] font-semibold tracking-[-0.02em] shadow-none focus-visible:ring-0"
+                    />
+                    <span className="text-sm font-medium text-[var(--muted)]">/day</span>
+                  </div>
+                  <div className="mt-4 px-1">
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={sliderValue}
+                      onChange={(e) => setBudget(sliderValueToBudget(Number(e.target.value), BUDGET_MIN, BUDGET_MAX))}
+                      className="campaign-budget-slider w-full"
+                    />
+                    <div className="mt-2 flex justify-between text-[11px] text-[var(--muted)]">
+                      <span>{formatCurrencyAmount(BUDGET_MIN, visibleBudgetGuidance?.currency || "USD")}</span>
+                      <span>{formatCurrencyAmount(Math.min(50, BUDGET_MAX), visibleBudgetGuidance?.currency || "USD")}</span>
+                      <span>{formatCurrencyAmount(Math.min(250, BUDGET_MAX), visibleBudgetGuidance?.currency || "USD")}</span>
+                      <span>{formatCurrencyAmount(Math.min(1000, BUDGET_MAX), visibleBudgetGuidance?.currency || "USD")}</span>
+                      <span>{formatCurrencyAmount(BUDGET_MAX, visibleBudgetGuidance?.currency || "USD")}</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs leading-5 text-[var(--muted)]">
+                  {visibleBudgetGuidance?.note ||
+                    "Meta uses daily budget as an average over the week, not a hard single-day ceiling."}
+                </p>
+                {visibleBudgetGuidance?.remainingSpendCap ? (
+                  <p className="text-xs leading-5 text-[var(--muted)]">
+                    Remaining account spending limit:{" "}
+                    <strong>{formatCurrencyAmount(visibleBudgetGuidance.remainingSpendCap, visibleBudgetGuidance.currency)}</strong>
+                  </p>
+                ) : null}
+                {visibleBudgetGuidanceError ? (
+                  <p className="text-xs leading-5 text-amber-700">{visibleBudgetGuidanceError}</p>
+                ) : null}
+                {visibleBudgetGuidance?.estimate.note ? (
+                  <p className="text-xs leading-5 text-[var(--muted)]">{visibleBudgetGuidance.estimate.note}</p>
+                ) : null}
+              </div>
+            </div>
+
+            {/* Collapsible secondary settings */}
+            <div className="lf-fade lf-d2 flex flex-col gap-3">
+              <WizardDisclosure label="Campaign name" value={launchState.campaign.name || "Unnamed campaign"}>
+                <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Internal name (only you see this)</label>
+                <Input
+                  value={launchState.campaign.name}
+                  onChange={(event) =>
+                    updateLaunchState((current) => ({
+                      ...current,
+                      campaign: { ...current.campaign, name: event.target.value },
+                    }))
+                  }
+                  placeholder="Campaign name"
+                  className="mt-1"
+                />
+              </WizardDisclosure>
+
+              <WizardDisclosure
+                label="Ad account"
+                value={
+                  metaIntegration?.assets.adAccounts.find((a) => a.asset_id === launchState.integrationSelections.adAccountId)?.name ||
+                  (launchState.integrationSelections.adAccountId ? "Selected" : "Not selected")
+                }
+              >
+                <select
+                  value={launchState.integrationSelections.adAccountId}
+                  onChange={(event) =>
+                    updateLaunchState((current) => ({
+                      ...current,
+                      integrationSelections: { ...current.integrationSelections, adAccountId: event.target.value },
+                    }))
+                  }
+                  className="mt-1 h-11 w-full rounded-[14px] border border-[var(--line)] bg-[var(--soft-panel)] px-3 text-sm text-[var(--foreground)] focus:outline-none"
+                >
+                  <option value="">Select ad account</option>
+                  {(metaIntegration?.assets.adAccounts || []).map((account) => (
+                    <option key={account.asset_id} value={account.asset_id}>{account.name || account.asset_id}</option>
+                  ))}
+                </select>
+              </WizardDisclosure>
+
+              <WizardDisclosure
+                label="Facebook Page"
+                value={
+                  metaIntegration?.assets.pages.find((p) => p.asset_id === launchState.integrationSelections.pageId)?.name ||
+                  (launchState.integrationSelections.pageId ? "Selected" : "Not selected")
+                }
+              >
+                <select
+                  value={launchState.integrationSelections.pageId}
+                  onChange={(event) =>
+                    updateLaunchState((current) => ({
+                      ...current,
+                      integrationSelections: { ...current.integrationSelections, pageId: event.target.value },
+                    }))
+                  }
+                  className="mt-1 h-11 w-full rounded-[14px] border border-[var(--line)] bg-[var(--soft-panel)] px-3 text-sm text-[var(--foreground)] focus:outline-none"
+                >
+                  <option value="">Select Facebook Page</option>
+                  {(metaIntegration?.assets.pages || []).map((page) => (
+                    <option key={page.asset_id} value={page.asset_id}>{page.name || page.asset_id}</option>
+                  ))}
+                </select>
+              </WizardDisclosure>
+            </div>
+          </div>
+        );
+      }
       case "location":
         return (
-          <SectionCard
-            title="Target Location"
-            description="Use the no-map flow: search Meta locations when possible, or add a manual fallback cleanly."
-          >
-            <div className="grid gap-4">
-              <SectionCard
-                title="Location Search"
-                description="Find Meta-recognized locations first, then pick the matching targeting mode."
-                className="bg-[var(--soft-panel)]"
-              >
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_14rem]">
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-[var(--ink)]">Location</label>
-                    <div className="relative">
-                      <Input
-                        value={pendingLocation}
-                        onChange={(event) => {
-                          const nextValue = event.target.value;
-                          setPendingLocation(nextValue);
-                          setActiveLocationSuggestionIndex(0);
-                          if (nextValue.trim().length < 2) {
-                            locationSearchAbortRef.current?.abort();
-                            setLocationSuggestions([]);
-                            setLocationSearchError(null);
-                            setIsSearchingLocations(false);
-                          }
-                        }}
-                        onKeyDown={handleLocationKeyDown}
-                        onFocus={() => {
-                          if (locationSuggestions.length) {
-                            setActiveLocationSuggestionIndex(0);
-                          }
-                        }}
-                        placeholder="Search a city, state, ZIP, or address"
-                        autoComplete="off"
-                        aria-autocomplete="list"
-                        aria-expanded={locationSuggestions.length > 0}
-                      />
-                      {locationSuggestions.length ? (
-                        <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-[18px] border border-[var(--line)] bg-white shadow-[0_20px_48px_rgba(15,23,42,0.12)]">
-                          {locationSuggestions.slice(0, 6).map((suggestion, index) => (
-                            <button
-                              key={suggestion.id}
-                              type="button"
-                              onMouseDown={(event) => event.preventDefault()}
-                              onClick={() => addLocationFromSuggestion(suggestion)}
-                              className={cn(
-                                "flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors",
-                                index === activeLocationSuggestionIndex
-                                  ? "bg-[rgba(109,94,248,0.08)]"
-                                  : "hover:bg-[rgba(15,23,42,0.03)]",
-                              )}
-                            >
-                              <span className="min-w-0">
-                                <span className="block truncate text-sm font-medium text-[var(--ink)]">
-                                  {suggestion.label}
-                                </span>
-                                <span className="block text-xs text-[var(--muted)]">
-                                  {`${getLocationScopeLabel(suggestion.scope)}${suggestion.source ? ` • ${suggestion.source === "meta" ? "Meta" : "Autocomplete"}` : ""}`}
-                                </span>
-                              </span>
-                              {index === activeLocationSuggestionIndex ? (
-                                <span className="shrink-0 rounded-full bg-[var(--brand)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
-                                  Enter
-                                </span>
-                              ) : (
-                                <ChevronRight className="h-4 w-4 shrink-0 text-[var(--muted)]" />
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-[var(--ink)]">Targeting mode</label>
-                    <select
-                      value={locationMode}
-                      onChange={(event) =>
-                        setLocationMode(event.target.value as CampaignLaunchLocation["targetingMode"])
-                      }
-                      className="h-11 w-full rounded-[16px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)]"
+          <div className="grid gap-6">
+            {/* Search */}
+            <div className="relative">
+              <Input
+                value={pendingLocation}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  setPendingLocation(nextValue);
+                  setActiveLocationSuggestionIndex(0);
+                  if (nextValue.trim().length < 2) {
+                    locationSearchAbortRef.current?.abort();
+                    setLocationSuggestions([]);
+                    setLocationSearchError(null);
+                    setIsSearchingLocations(false);
+                  }
+                }}
+                onKeyDown={handleLocationKeyDown}
+                onFocus={() => {
+                  if (locationSuggestions.length) {
+                    setActiveLocationSuggestionIndex(0);
+                  }
+                }}
+                placeholder="Search a city, state, ZIP, or address…"
+                autoComplete="off"
+                aria-autocomplete="list"
+                aria-expanded={locationSuggestions.length > 0}
+                className="h-13 rounded-[18px] px-5 text-base shadow-[0_2px_12px_rgba(15,23,42,0.06)]"
+              />
+              {isSearchingLocations ? (
+                <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">
+                  Searching…
+                </span>
+              ) : null}
+              {locationSuggestions.length ? (
+                <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-[20px] border border-[var(--line)] bg-white shadow-[0_20px_48px_rgba(15,23,42,0.12)]">
+                  {locationSuggestions.slice(0, 6).map((suggestion, index) => (
+                    <button
+                      key={suggestion.id}
+                      type="button"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => addLocationFromSuggestion(suggestion)}
+                      className={cn(
+                        "flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors",
+                        index === activeLocationSuggestionIndex
+                          ? "bg-[rgba(109,94,248,0.07)]"
+                          : "hover:bg-[rgba(15,23,42,0.03)]",
+                      )}
                     >
-                      {locationTargetingModeOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-[var(--ink)]">
+                          {suggestion.label}
+                        </span>
+                        <span className="block text-xs text-[var(--muted)]">
+                          {getLocationScopeLabel(suggestion.scope)}
+                          {suggestion.source ? ` · ${suggestion.source === "meta" ? "Meta" : "Autocomplete"}` : ""}
+                        </span>
+                      </span>
+                      {index === activeLocationSuggestionIndex ? (
+                        <span className="shrink-0 rounded-full bg-[var(--brand)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
+                          Enter
+                        </span>
+                      ) : (
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[var(--muted)]" />
+                      )}
+                    </button>
+                  ))}
                 </div>
+              ) : null}
+            </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button type="button" onClick={addManualLocation} variant="outline">
-                    Add location
-                  </Button>
-                  {isSearchingLocations ? <p className="text-sm text-[var(--muted)]">Searching Meta locations…</p> : null}
-                </div>
+            {locationSearchError ? (
+              <p className="text-sm text-rose-500">{locationSearchError}</p>
+            ) : null}
 
-                {locationSearchError ? <p className="mt-3 text-sm text-rose-600">{locationSearchError}</p> : null}
-              </SectionCard>
+            {/* Targeting mode + manual add */}
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                value={locationMode}
+                onChange={(event) =>
+                  setLocationMode(event.target.value as CampaignLaunchLocation["targetingMode"])
+                }
+                className="h-10 rounded-[14px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)] focus:outline-none"
+              >
+                {locationTargetingModeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <Button type="button" onClick={addManualLocation} variant="outline" className="h-10">
+                Add manually
+              </Button>
+            </div>
 
-              <SectionCard title="Selected Locations" description="Adjust radius and distance for each saved location." className="bg-[var(--soft-panel)]">
-                <div className="space-y-3">
+            {/* Selected location chips */}
+            {launchState.targeting.locations.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
+                  {launchState.targeting.locations.length === 1 ? "1 location" : `${launchState.targeting.locations.length} locations`}
+                </p>
+                <div className="space-y-2">
                   {launchState.targeting.locations.map((location) => (
                     <div
                       key={location.id}
-                      className="rounded-2xl border border-[var(--line)] bg-white px-4 py-3"
+                      className="flex items-center gap-3 rounded-[18px] border border-[var(--line)] bg-white px-4 py-3"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-[var(--ink)]">{location.label}</p>
-                          <p className="text-xs text-[var(--muted)]">
-                            {location.scope ? `${location.scope} • ` : ""}
-                            {locationTargetingModeOptions.find((item) => item.value === location.targetingMode)?.label}
-                          </p>
-                        </div>
-                        <Button type="button" variant="outline" onClick={() => removeLocation(location.id)}>
-                          Remove
-                        </Button>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-[var(--ink)]">{location.label}</p>
+                        <p className="text-xs text-[var(--muted)]">
+                          {location.scope ? `${location.scope}` : ""}
+                          {location.radiusAllowed !== false
+                            ? ` · ${location.radius || "10"} ${location.distanceUnit === "kilometer" ? "km" : "mi"}`
+                            : ""}
+                        </p>
                       </div>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
-                        <div className="space-y-2">
-                          <label className="block text-xs font-medium uppercase tracking-[0.14em] text-[var(--muted-strong)]">
-                            Radius
-                          </label>
-                          <Input
+                      {location.radiusAllowed !== false ? (
+                        <div className="flex items-center gap-2 shrink-0">
+                          <input
                             type="number"
                             min={1}
                             max={50}
-                            step={1}
                             value={location.radius}
                             onChange={(event) =>
-                              updateLocationTargeting(location.id, {
-                                radius: event.target.value,
-                              })
+                              updateLocationTargeting(location.id, { radius: event.target.value })
                             }
-                            disabled={location.radiusAllowed === false}
-                            className="h-10"
+                            className="h-8 w-16 rounded-[10px] border border-[var(--line)] bg-white px-2 text-center text-sm text-[var(--ink)] focus:outline-none"
                           />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="block text-xs font-medium uppercase tracking-[0.14em] text-[var(--muted-strong)]">
-                            Distance
-                          </label>
                           <select
                             value={location.distanceUnit || "mile"}
                             onChange={(event) =>
@@ -1610,80 +1854,127 @@ export function TemplateLaunchWizard({
                                 distanceUnit: event.target.value as CampaignLaunchLocation["distanceUnit"],
                               })
                             }
-                            disabled={location.radiusAllowed === false}
-                            className="h-10 w-full rounded-[16px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)] disabled:cursor-not-allowed disabled:bg-[var(--soft-panel)]"
+                            className="h-8 rounded-[10px] border border-[var(--line)] bg-white px-2 text-sm text-[var(--ink)] focus:outline-none"
                           >
-                            <option value="mile">Miles</option>
-                            <option value="kilometer">Kilometers</option>
+                            <option value="mile">mi</option>
+                            <option value="kilometer">km</option>
                           </select>
                         </div>
-                      </div>
-                      {location.radiusAllowed === false ? (
-                        <p className="mt-2 text-xs text-[var(--muted)]">
-                          This location type does not support radius targeting in Meta.
-                        </p>
                       ) : null}
+                      <button
+                        type="button"
+                        onClick={() => removeLocation(location.id)}
+                        className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--muted)] transition-colors hover:bg-rose-50 hover:text-rose-500"
+                        aria-label="Remove location"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   ))}
                 </div>
-              </SectionCard>
+              </div>
+            ) : (
+              <div className="rounded-[20px] border border-dashed border-[var(--line)] px-5 py-8 text-center">
+                <p className="text-sm text-[var(--muted)]">No locations added yet. Search above to add one.</p>
+              </div>
+            )}
 
-              <SectionCard title="Audience Filters" description="Keep age targeting separate so it is easy to scan." className="bg-[var(--soft-panel)]">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-[var(--ink)]">Minimum age</label>
-                    <Input
-                      type="number"
-                      min={18}
-                      max={65}
-                      value={launchState.targeting.ageMin}
-                      onChange={(event) =>
-                        updateLaunchState((current) => ({
-                          ...current,
-                          targeting: {
-                            ...current.targeting,
-                            ageMin: event.target.value,
-                          },
-                        }))
-                      }
-                    />
+            <details className="group overflow-hidden rounded-[22px] border border-[var(--line)] bg-[var(--soft-panel)]">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 marker:hidden">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--ink)]">More advanced targeting options</p>
+                  <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                    Age range, gender, and other supported refinements live here.
+                  </p>
+                </div>
+                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-strong)] transition-transform group-open:rotate-45">
+                  +
+                </span>
+              </summary>
+
+              <div className="border-t border-[rgba(102,112,133,0.12)] px-4 py-4">
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="space-y-3 rounded-[18px] border border-[var(--line)] bg-white px-4 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Age range</p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <input
+                        type="number"
+                        min={18}
+                        max={65}
+                        value={launchState.targeting.ageMin}
+                        onChange={(event) =>
+                          updateLaunchState((current) => ({
+                            ...current,
+                            targeting: { ...current.targeting, ageMin: event.target.value },
+                          }))
+                        }
+                        className="h-9 w-20 rounded-[12px] border border-[var(--line)] bg-white px-2 text-center text-sm text-[var(--ink)] focus:outline-none"
+                      />
+                      <span className="text-xs text-[var(--muted)]">to</span>
+                      <input
+                        type="number"
+                        min={18}
+                        max={65}
+                        value={launchState.targeting.ageMax}
+                        onChange={(event) =>
+                          updateLaunchState((current) => ({
+                            ...current,
+                            targeting: { ...current.targeting, ageMax: event.target.value },
+                          }))
+                        }
+                        className="h-9 w-20 rounded-[12px] border border-[var(--line)] bg-white px-2 text-center text-sm text-[var(--ink)] focus:outline-none"
+                      />
+                      <span className="text-xs text-[var(--muted)]">years old</span>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-[var(--ink)]">Maximum age</label>
-                    <Input
-                      type="number"
-                      min={18}
-                      max={65}
-                      value={launchState.targeting.ageMax}
-                      onChange={(event) =>
-                        updateLaunchState((current) => ({
-                          ...current,
-                          targeting: {
-                            ...current.targeting,
-                            ageMax: event.target.value,
-                          },
-                        }))
-                      }
-                    />
+
+                  <div className="space-y-3 rounded-[18px] border border-[var(--line)] bg-white px-4 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Gender</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { value: "all", label: "All" },
+                        { value: "male", label: "Men" },
+                        { value: "female", label: "Women" },
+                      ].map((option) => {
+                        const active = launchState.targeting.gender === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() =>
+                              updateLaunchState((current) => ({
+                                ...current,
+                                targeting: {
+                                  ...current.targeting,
+                                  gender: option.value as CampaignLaunchState["targeting"]["gender"],
+                                },
+                              }))
+                            }
+                            className={cn(
+                              "h-9 rounded-[12px] border px-3 text-sm font-medium transition-colors",
+                              active
+                                ? "border-[var(--brand)] bg-[rgba(109,94,248,0.08)] text-[var(--brand)]"
+                                : "border-[var(--line)] bg-white text-[var(--muted-strong)] hover:border-[rgba(109,94,248,0.28)]",
+                            )}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </SectionCard>
-            </div>
-          </SectionCard>
+              </div>
+            </details>
+          </div>
         );
       case "destination-setup":
         return (
-          <SectionCard
-            title="Destination Setup"
-            description="Only the destination settings that match the selected ad type appear here."
-          >
+          <div className="grid gap-5">
             {launchState.selection.adType === "lead_form" ? (
-              <div className="grid gap-4">
-                <SectionCard
-                  title="Form Setup"
-                  description="Choose the form source and the contact fields it should collect."
-                  className="bg-[var(--soft-panel)]"
-                >
+              <div className="grid gap-5">
+                <div className="rounded-[28px] bg-[var(--soft-panel)] px-5 py-5">
+                  <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Form Source</p>
                   <div className="grid gap-4">
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-[var(--ink)]">Lead form mode</label>
@@ -1827,7 +2118,16 @@ export function TemplateLaunchWizard({
                           </div>
                         </div>
 
-                        <div className="rounded-[24px] border border-[var(--line)] bg-[rgba(15,23,42,0.02)] p-4">
+                        <WizardDisclosure
+                          label="Custom Questions"
+                          value={
+                            launchState.adTypeConfig.leadForm.customQuestions.length
+                              ? `${launchState.adTypeConfig.leadForm.customQuestions.length} question${
+                                  launchState.adTypeConfig.leadForm.customQuestions.length === 1 ? "" : "s"
+                                }`
+                              : "Optional"
+                          }
+                        >
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
                               <p className="text-sm font-semibold text-[var(--ink)]">Custom Questions</p>
@@ -1957,49 +2257,23 @@ export function TemplateLaunchWizard({
                               No custom questions yet. Add one when you need qualification beyond Meta’s standard prefill fields.
                             </p>
                           )}
-                        </div>
+                        </WizardDisclosure>
                       </div>
                     )}
                   </div>
-                </SectionCard>
+                </div>
 
-                <SectionCard
-                  title="Thank You Page"
-                  description="Optional post-submit destination and button settings."
-                  className="bg-[var(--soft-panel)]"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-[var(--ink)]">Enable thank-you page</p>
-                    <label className="flex items-center gap-2 text-sm text-[var(--muted-strong)]">
-                      <input
-                        type="checkbox"
-                        checked={launchState.adTypeConfig.leadForm.thankYou.enabled}
-                        onChange={(event) =>
-                          updateLaunchState((current) => ({
-                            ...current,
-                            adTypeConfig: {
-                              ...current.adTypeConfig,
-                              leadForm: {
-                                ...current.adTypeConfig.leadForm,
-                                thankYou: {
-                                  ...current.adTypeConfig.leadForm.thankYou,
-                                  enabled: event.target.checked,
-                                },
-                              },
-                            },
-                          }))
-                        }
-                        className="h-4 w-4 rounded border-[var(--line)]"
-                      />
-                      Enabled
-                    </label>
-                  </div>
-
-                  {launchState.adTypeConfig.leadForm.thankYou.enabled ? (
-                    <div className="mt-4 grid gap-4">
-                      <div className="grid gap-4 lg:grid-cols-2">
-                        <Input
-                          value={launchState.adTypeConfig.leadForm.thankYou.headline}
+                <div className="rounded-[28px] bg-[var(--soft-panel)] px-5 py-5">
+                  <WizardDisclosure
+                    label="Thank-You Page"
+                    value={launchState.adTypeConfig.leadForm.thankYou.enabled ? "Enabled" : "Disabled"}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-[var(--ink)]">Enable thank-you page</p>
+                      <label className="flex items-center gap-2 text-sm text-[var(--muted-strong)]">
+                        <input
+                          type="checkbox"
+                          checked={launchState.adTypeConfig.leadForm.thankYou.enabled}
                           onChange={(event) =>
                             updateLaunchState((current) => ({
                               ...current,
@@ -2009,123 +2283,150 @@ export function TemplateLaunchWizard({
                                   ...current.adTypeConfig.leadForm,
                                   thankYou: {
                                     ...current.adTypeConfig.leadForm.thankYou,
-                                    headline: event.target.value,
+                                    enabled: event.target.checked,
                                   },
                                 },
                               },
                             }))
                           }
-                          placeholder="Thank-you headline"
+                          className="h-4 w-4 rounded border-[var(--line)]"
                         />
-                        <Input
-                          value={launchState.adTypeConfig.leadForm.thankYou.buttonLabel}
-                          onChange={(event) =>
-                            updateLaunchState((current) => ({
-                              ...current,
-                              adTypeConfig: {
-                                ...current.adTypeConfig,
-                                leadForm: {
-                                  ...current.adTypeConfig.leadForm,
-                                  thankYou: {
-                                    ...current.adTypeConfig.leadForm.thankYou,
-                                    buttonLabel: event.target.value,
-                                  },
-                                },
-                              },
-                            }))
-                          }
-                          placeholder="Button label"
-                        />
-                      </div>
-                      <Textarea
-                        value={launchState.adTypeConfig.leadForm.thankYou.description}
-                        onChange={(event) =>
-                          updateLaunchState((current) => ({
-                            ...current,
-                            adTypeConfig: {
-                              ...current.adTypeConfig,
-                              leadForm: {
-                                ...current.adTypeConfig.leadForm,
-                                thankYou: {
-                                  ...current.adTypeConfig.leadForm.thankYou,
-                                  description: event.target.value,
-                                },
-                              },
-                            },
-                          }))
-                        }
-                        rows={3}
-                        placeholder="Thank-you description"
-                      />
-                      <div className="grid gap-4 lg:grid-cols-[12rem_minmax(0,1fr)]">
-                        <select
-                          value={launchState.adTypeConfig.leadForm.thankYou.buttonAction}
-                          onChange={(event) =>
-                            updateLaunchState((current) => ({
-                              ...current,
-                              adTypeConfig: {
-                                ...current.adTypeConfig,
-                                leadForm: {
-                                  ...current.adTypeConfig.leadForm,
-                                  thankYou: {
-                                    ...current.adTypeConfig.leadForm.thankYou,
-                                    buttonAction: event.target.value as CampaignLaunchState["adTypeConfig"]["leadForm"]["thankYou"]["buttonAction"],
-                                  },
-                                },
-                              },
-                            }))
-                          }
-                          className="h-11 rounded-[16px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)]"
-                        >
-                          <option value="OPEN_WEBSITE">Website</option>
-                          <option value="DOWNLOAD">Download</option>
-                          <option value="CALL_BUSINESS">Call Business</option>
-                        </select>
-                        {launchState.adTypeConfig.leadForm.thankYou.buttonAction === "CALL_BUSINESS" ? (
-                          <Input
-                            value={launchState.adTypeConfig.leadForm.thankYou.completionPhone}
-                            onChange={(event) =>
-                              updateLaunchState((current) => ({
-                                ...current,
-                                adTypeConfig: {
-                                  ...current.adTypeConfig,
-                                  leadForm: {
-                                    ...current.adTypeConfig.leadForm,
-                                    thankYou: {
-                                      ...current.adTypeConfig.leadForm.thankYou,
-                                      completionPhone: event.target.value,
-                                    },
-                                  },
-                                },
-                              }))
-                            }
-                            placeholder="Phone number used by the thank-you button"
-                          />
-                        ) : (
-                          <Input
-                            value={launchState.adTypeConfig.leadForm.thankYou.websiteUrl}
-                            onChange={(event) =>
-                              updateLaunchState((current) => ({
-                                ...current,
-                                adTypeConfig: {
-                                  ...current.adTypeConfig,
-                                  leadForm: {
-                                    ...current.adTypeConfig.leadForm,
-                                    thankYou: {
-                                      ...current.adTypeConfig.leadForm.thankYou,
-                                      websiteUrl: event.target.value,
-                                    },
-                                  },
-                                },
-                              }))
-                            }
-                            placeholder="Optional destination URL"
-                          />
-                        )}
-                      </div>
+                        Enabled
+                      </label>
                     </div>
-                  ) : null}
-                </SectionCard>
+
+                    {launchState.adTypeConfig.leadForm.thankYou.enabled ? (
+                      <div className="mt-4 grid gap-4">
+                        <div className="grid gap-4 lg:grid-cols-2">
+                          <Input
+                            value={launchState.adTypeConfig.leadForm.thankYou.headline}
+                            onChange={(event) =>
+                              updateLaunchState((current) => ({
+                                ...current,
+                                adTypeConfig: {
+                                  ...current.adTypeConfig,
+                                  leadForm: {
+                                    ...current.adTypeConfig.leadForm,
+                                    thankYou: {
+                                      ...current.adTypeConfig.leadForm.thankYou,
+                                      headline: event.target.value,
+                                    },
+                                  },
+                                },
+                              }))
+                            }
+                            placeholder="Thank-you headline"
+                          />
+                          <Input
+                            value={launchState.adTypeConfig.leadForm.thankYou.buttonLabel}
+                            onChange={(event) =>
+                              updateLaunchState((current) => ({
+                                ...current,
+                                adTypeConfig: {
+                                  ...current.adTypeConfig,
+                                  leadForm: {
+                                    ...current.adTypeConfig.leadForm,
+                                    thankYou: {
+                                      ...current.adTypeConfig.leadForm.thankYou,
+                                      buttonLabel: event.target.value,
+                                    },
+                                  },
+                                },
+                              }))
+                            }
+                            placeholder="Button label"
+                          />
+                        </div>
+                        <Textarea
+                          value={launchState.adTypeConfig.leadForm.thankYou.description}
+                          onChange={(event) =>
+                            updateLaunchState((current) => ({
+                              ...current,
+                              adTypeConfig: {
+                                ...current.adTypeConfig,
+                                leadForm: {
+                                  ...current.adTypeConfig.leadForm,
+                                  thankYou: {
+                                    ...current.adTypeConfig.leadForm.thankYou,
+                                    description: event.target.value,
+                                  },
+                                },
+                              },
+                            }))
+                          }
+                          rows={3}
+                          placeholder="Thank-you description"
+                        />
+                        <div className="grid gap-4 lg:grid-cols-[12rem_minmax(0,1fr)]">
+                          <select
+                            value={launchState.adTypeConfig.leadForm.thankYou.buttonAction}
+                            onChange={(event) =>
+                              updateLaunchState((current) => ({
+                                ...current,
+                                adTypeConfig: {
+                                  ...current.adTypeConfig,
+                                  leadForm: {
+                                    ...current.adTypeConfig.leadForm,
+                                    thankYou: {
+                                      ...current.adTypeConfig.leadForm.thankYou,
+                                      buttonAction: event.target.value as CampaignLaunchState["adTypeConfig"]["leadForm"]["thankYou"]["buttonAction"],
+                                    },
+                                  },
+                                },
+                              }))
+                            }
+                            className="h-11 rounded-[16px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)]"
+                          >
+                            <option value="OPEN_WEBSITE">Website</option>
+                            <option value="DOWNLOAD">Download</option>
+                            <option value="CALL_BUSINESS">Call Business</option>
+                          </select>
+                          {launchState.adTypeConfig.leadForm.thankYou.buttonAction === "CALL_BUSINESS" ? (
+                            <Input
+                              value={launchState.adTypeConfig.leadForm.thankYou.completionPhone}
+                              onChange={(event) =>
+                                updateLaunchState((current) => ({
+                                  ...current,
+                                  adTypeConfig: {
+                                    ...current.adTypeConfig,
+                                    leadForm: {
+                                      ...current.adTypeConfig.leadForm,
+                                      thankYou: {
+                                        ...current.adTypeConfig.leadForm.thankYou,
+                                        completionPhone: event.target.value,
+                                      },
+                                    },
+                                  },
+                                }))
+                              }
+                              placeholder="Phone number used by the thank-you button"
+                            />
+                          ) : (
+                            <Input
+                              value={launchState.adTypeConfig.leadForm.thankYou.websiteUrl}
+                              onChange={(event) =>
+                                updateLaunchState((current) => ({
+                                  ...current,
+                                  adTypeConfig: {
+                                    ...current.adTypeConfig,
+                                    leadForm: {
+                                      ...current.adTypeConfig.leadForm,
+                                      thankYou: {
+                                        ...current.adTypeConfig.leadForm.thankYou,
+                                        websiteUrl: event.target.value,
+                                      },
+                                    },
+                                  },
+                                }))
+                              }
+                              placeholder="Optional destination URL"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
+                  </WizardDisclosure>
+                </div>
               </div>
             ) : null}
 
@@ -2245,7 +2546,7 @@ export function TemplateLaunchWizard({
                 />
               </div>
             ) : null}
-          </SectionCard>
+          </div>
         );
       case "placeholders": {
         const placeholderPreviewPrimary =
@@ -2268,14 +2569,11 @@ export function TemplateLaunchWizard({
           "Learn more";
 
         return (
-          <SectionCard
-            title="Fill Placeholders"
-            description="This step is generated from the template content. Every deduplicated template variable lives here."
-          >
-            <div className="grid gap-6">
-              <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-5">
+            {placeholderFields.length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-2">
                 {placeholderFields.map((field) => (
-                  <div key={field.id} className="space-y-2">
+                  <div key={field.id} className="space-y-1.5">
                     <label className="block text-sm font-medium text-[var(--ink)]">{field.label}</label>
                     <Input
                       value={launchState.placeholders.values[field.id] || ""}
@@ -2293,220 +2591,151 @@ export function TemplateLaunchWizard({
                       placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
                     />
                     {field.description ? (
-                      <p className="text-xs leading-5 text-[var(--muted)]">{field.description}</p>
+                      <p className="text-xs text-[var(--muted)]">{field.description}</p>
                     ) : null}
                   </div>
                 ))}
               </div>
-
-              <div className="mx-auto w-full max-w-[18rem] overflow-hidden rounded-[24px] border border-[var(--line)] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-                <div className="overflow-hidden rounded-[24px] bg-white">
-                  <FacebookAdPreview
-                    template={selectedTemplate}
-                    pageName={pagePreviewIdentity.pageName}
-                    pageAvatarUrl={pagePreviewIdentity.pageAvatarUrl}
-                    primaryText={placeholderPreviewPrimary}
-                    headline={placeholderPreviewHeadline}
-                    description={placeholderPreviewDescription}
-                    ctaLabel={placeholderPreviewCta}
-                    imageUrl={selectedTemplate?.previewImage || null}
-                    compact
-                    showMetaHeader
-                    showMetaBar={false}
-                    showReactionsBar={false}
-                    showActionsRow={false}
-                    interactiveControls={false}
-                    className="border-0 bg-transparent p-0 shadow-none"
-                  />
-                </div>
+            ) : (
+              <div className="rounded-[20px] border border-dashed border-[var(--line)] px-5 py-8 text-center">
+                <p className="text-sm text-[var(--muted)]">This template has no placeholder variables to fill.</p>
               </div>
-            </div>
-          </SectionCard>
+            )}
+          </div>
         );
       }
       case "review-launch":
         return (
-          <div className="space-y-6">
-            <SectionCard
-              title="Launch Actions"
-              description="Save a draft now, or launch the campaign and let readiness checks run automatically."
+          <div className="grid gap-4">
+            {/* Summary cards — clean and quick to scan */}
+            <ReviewGroupCard
+              title="Budget"
+              onEdit={() => updateLaunchState((current) => ({ ...current, stepId: "campaign-basics" }))}
             >
-              <div className="flex flex-wrap gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => persistDraft()}
-                  disabled={!selectedTemplate || saveState === "saving"}
-                >
-                  {saveState === "saving" ? "Saving..." : "Save Draft"}
-                </Button>
-                <Button type="button" onClick={() => handleLaunch("live")} disabled={isPublishing || !selectedTemplate}>
-                  {isPublishing ? "Launching..." : "Launch Campaign"}
-                  <Rocket className="h-4 w-4" />
-                </Button>
-                {!metaConnected || launchState.selection.adType === "lead_form" ? (
-                  <Button type="button" variant="outline" asChild>
-                    <Link href={metaConnectHref}>Reconnect Facebook</Link>
-                  </Button>
-                ) : null}
-              </div>
-              <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
-                Launching automatically runs preflight. If anything blocks publish, the issues will appear below.
-              </p>
-              {saveState === "error" && saveError ? (
-                <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
-                  {saveError}
-                </div>
+              <SummaryRow label="Daily budget" value={formatBudgetDisplay(launchState.campaign.dailyBudget)} />
+              <SummaryRow label="Ad type" value={getAdTypeLabel(launchState.selection.adType)} />
+              <SummaryRow label="Campaign name" value={launchState.campaign.name || "—"} />
+            </ReviewGroupCard>
+
+            <ReviewGroupCard
+              title="Audience"
+              onEdit={() => updateLaunchState((current) => ({ ...current, stepId: "location" }))}
+            >
+              <SummaryRow
+                label="Primary location"
+                value={launchState.targeting.locations[0]?.label || "—"}
+              />
+              {launchState.targeting.locations.length > 1 ? (
+                <SummaryRow
+                  label="Additional locations"
+                  value={`+${launchState.targeting.locations.length - 1} more`}
+                />
               ) : null}
-            </SectionCard>
+              <SummaryRow
+                label="Age range"
+                value={`${launchState.targeting.ageMin || "18"}–${launchState.targeting.ageMax || "65"}`}
+              />
+            </ReviewGroupCard>
 
-            <SectionCard
-              title="Review Summary"
-              description="This final step keeps only the launch-critical details visible before publish."
+            <ReviewGroupCard
+              title="Destination"
+              onEdit={() => updateLaunchState((current) => ({ ...current, stepId: "destination-setup" }))}
             >
-              <div className="grid gap-4">
-                <ReviewGroupCard
-                  title="Campaign Basics"
-                  description="Review the high-level campaign identity before launch."
-                  onEdit={() => updateLaunchState((current) => ({ ...current, stepId: "campaign-basics" }))}
-                >
-                  <SummaryRow label="Campaign name" value={launchState.campaign.name || "Missing"} />
-                  <SummaryRow
-                    label="Ad account"
-                    value={
-                      metaIntegration?.assets.adAccounts.find((account) => account.asset_id === launchState.integrationSelections.adAccountId)?.name || "Missing"
-                    }
-                  />
-                  <SummaryRow
-                    label="Facebook Page"
-                    value={
-                      metaIntegration?.assets.pages.find((page) => page.asset_id === launchState.integrationSelections.pageId)?.name || "Missing"
-                    }
-                  />
-                </ReviewGroupCard>
+              <SummaryRow
+                label="Destination"
+                value={
+                  launchState.selection.adType === "lead_form"
+                    ? launchState.adTypeConfig.leadForm.mode === "existing"
+                      ? launchState.adTypeConfig.leadForm.selectedFormName || "Existing Meta form"
+                      : launchState.adTypeConfig.leadForm.managedFormName || "Managed form"
+                    : launchState.selection.adType === "landing_page"
+                      ? launchState.adTypeConfig.landingPage.url || "—"
+                      : launchState.selection.adType === "call_now"
+                        ? launchState.adTypeConfig.callNow.phoneNumber || "—"
+                        : "Messenger"
+                }
+              />
+              <SummaryRow label="Template" value={selectedTemplate?.name || "—"} />
+              {placeholderFields.length > 0 ? (
+                <SummaryRow
+                  label="Placeholders"
+                  value={`${Object.values(launchState.placeholders.values).filter((v) => v.trim()).length} / ${placeholderFields.length} filled`}
+                />
+              ) : null}
+            </ReviewGroupCard>
 
-                <ReviewGroupCard
-                  title="Budget & Schedule"
-                  description="Keep spend in its own block so it is easy to verify."
-                  onEdit={() => updateLaunchState((current) => ({ ...current, stepId: "campaign-basics" }))}
-                >
-                  <SummaryRow label="Ad type" value={getAdTypeLabel(launchState.selection.adType)} />
-                  <SummaryRow label="Daily budget" value={formatBudgetDisplay(launchState.campaign.dailyBudget)} />
-                </ReviewGroupCard>
+            {/* Issues — only shown if present */}
+            {(currentIssues.length > 0 || localReadinessIssues.length > 0) ? (
+              <IssueList title="Resolve before launch" issues={currentIssues.length ? currentIssues : localReadinessIssues} />
+            ) : null}
+            {preflightError ? (
+              <div className="rounded-[20px] border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
+                {preflightError}
+              </div>
+            ) : null}
+            {preflight?.blockingIssues.length ? (
+              <IssueList title="Blocking issues" issues={preflight.blockingIssues} />
+            ) : null}
+            {preflight?.warnings.length ? (
+              <IssueList title="Warnings" issues={preflight.warnings} tone="amber" />
+            ) : null}
 
-                <ReviewGroupCard
-                  title="Targeting"
-                  description="Locations and audience filters stay grouped together."
-                  onEdit={() => updateLaunchState((current) => ({ ...current, stepId: "location" }))}
-                >
-                  <SummaryRow label="Locations" value={launchState.targeting.locations.length || 0} />
-                  <SummaryRow
-                    label="Age range"
-                    value={`${launchState.targeting.ageMin || "18"} - ${launchState.targeting.ageMax || "65"}`}
-                  />
-                  <SummaryRow
-                    label="Primary location"
-                    value={launchState.targeting.locations[0]?.label || "Missing"}
-                  />
-                </ReviewGroupCard>
+            {/* Publish feedback */}
+            {publishError ? (
+              <div className="rounded-[20px] border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
+                {publishError}
+                {publishErrorDetails ? (
+                  <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-[16px] bg-white/70 p-3 text-xs leading-5 text-rose-800">
+                    {publishErrorDetails}
+                  </pre>
+                ) : null}
+              </div>
+            ) : null}
+            {publishSuccess ? (
+              <div className="rounded-[20px] border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-700">
+                {publishSuccess}
+              </div>
+            ) : null}
+            {saveState === "error" && saveError ? (
+              <div className="rounded-[20px] border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
+                {saveError}
+              </div>
+            ) : null}
 
-                <ReviewGroupCard
-                  title="Destination Setup"
-                  description="Confirm the correct Meta destination path for the selected ad type."
-                  onEdit={() => updateLaunchState((current) => ({ ...current, stepId: "destination-setup" }))}
-                >
-                  <SummaryRow
-                    label="Destination"
-                    value={
-                      launchState.selection.adType === "lead_form"
-                        ? launchState.adTypeConfig.leadForm.mode === "existing"
-                          ? launchState.adTypeConfig.leadForm.selectedFormName || "Existing Meta lead form"
-                          : launchState.adTypeConfig.leadForm.managedFormName || "Managed lead form"
-                        : launchState.selection.adType === "landing_page"
-                          ? launchState.adTypeConfig.landingPage.url || "Missing"
-                          : launchState.selection.adType === "call_now"
-                            ? launchState.adTypeConfig.callNow.phoneNumber || "Missing"
-                            : "Messenger conversation"
-                    }
-                  />
-                  {launchState.selection.adType === "lead_form" ? (
-                    <>
-                      <SummaryRow
-                        label="Form mode"
-                        value={
-                          launchState.adTypeConfig.leadForm.mode === "existing" ? "Existing Meta form" : "Managed by SideKick"
-                        }
-                      />
-                      <SummaryRow
-                        label="Thank-you page"
-                        value={launchState.adTypeConfig.leadForm.thankYou.enabled ? "Enabled" : "Disabled"}
-                      />
-                    </>
+            {/* Launch actions — dominant CTA at the bottom */}
+            <div className="mt-2 rounded-[28px] bg-[linear-gradient(135deg,rgba(109,94,248,0.06)_0%,rgba(109,94,248,0.02)_100%)] border border-[rgba(109,94,248,0.12)] px-6 py-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="font-semibold text-[var(--ink)]">Ready to go live?</p>
+                  <p className="mt-0.5 text-sm text-[var(--muted)]">Preflight checks run automatically on launch.</p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => persistDraft()}
+                    disabled={!selectedTemplate || saveState === "saving"}
+                    className="h-11 px-5"
+                  >
+                    {saveState === "saving" ? "Saving…" : "Save Draft"}
+                  </Button>
+                  {!metaConnected || launchState.selection.adType === "lead_form" ? (
+                    <Button type="button" variant="outline" asChild className="h-11 px-5">
+                      <Link href={metaConnectHref}>Reconnect Facebook</Link>
+                    </Button>
                   ) : null}
-                </ReviewGroupCard>
-
-                <ReviewGroupCard
-                  title="Creative Details"
-                  description="Check the template copy and CTA that will be sent to Meta."
-                  onEdit={() => updateLaunchState((current) => ({ ...current, stepId: "placeholders" }))}
-                >
-                  <SummaryRow label="Template" value={selectedTemplate?.name || "Missing"} />
-                  <SummaryRow
-                    label="CTA"
-                    value={launchState.review.ctaText || selectedTemplate?.ctaDefault || "Learn more"}
-                  />
-                  <SummaryRow
-                    label="Placeholders filled"
-                    value={`${Object.values(launchState.placeholders.values).filter((value) => value.trim()).length} / ${placeholderFields.length}`}
-                  />
-                </ReviewGroupCard>
+                  <Button
+                    type="button"
+                    onClick={() => handleLaunch("live")}
+                    disabled={isPublishing || !selectedTemplate}
+                    className="h-11 px-6"
+                  >
+                    {isPublishing ? "Launching…" : "Launch Campaign"}
+                    <Rocket className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
-            </SectionCard>
-
-            <SectionCard
-              title="Launch Readiness"
-              description="Preflight results, blocking issues, and publish feedback appear here after you launch."
-            >
-              <div className="mt-5 space-y-4">
-                <IssueList title="Local wizard blockers" issues={currentIssues.length ? currentIssues : localReadinessIssues} />
-                {preflightError ? (
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
-                    {preflightError}
-                  </div>
-                ) : null}
-                {preflight ? (
-                  <div className="rounded-2xl border border-[var(--line)] bg-[rgba(15,23,42,0.02)] px-4 py-4">
-                    <div className="grid gap-2 text-sm text-[var(--muted-strong)] sm:grid-cols-2">
-                      <p>Blocking issues: {preflight.blockingIssues.length}</p>
-                      <p>Warnings: {preflight.warnings.length}</p>
-                      <p>Ad account: {preflight.resolvedAssets.adAccount?.name || "Missing"}</p>
-                      <p>Page: {preflight.resolvedAssets.page?.name || "Missing"}</p>
-                    </div>
-                    {preflight.blockingIssues.length ? (
-                      <IssueList title="Blocking issues" issues={preflight.blockingIssues} />
-                    ) : null}
-                    {preflight.warnings.length ? (
-                      <IssueList title="Warnings" issues={preflight.warnings} tone="amber" />
-                    ) : null}
-                  </div>
-                ) : null}
-                {publishError ? (
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
-                    {publishError}
-                    {publishErrorDetails ? (
-                      <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-2xl bg-white/70 p-3 text-xs leading-5 text-rose-800">
-                        {publishErrorDetails}
-                      </pre>
-                    ) : null}
-                  </div>
-                ) : null}
-                {publishSuccess ? (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-700">
-                    {publishSuccess}
-                  </div>
-                ) : null}
-              </div>
-            </SectionCard>
+            </div>
           </div>
         );
       default:
@@ -2515,146 +2744,107 @@ export function TemplateLaunchWizard({
   }
 
   return (
-    <div
-      className={cn(
-        immersive
-          ? "min-h-[calc(100vh-68px)] w-full bg-[radial-gradient(circle_at_top_left,rgba(109,94,248,0.12),transparent_30%),linear-gradient(180deg,#dbe8f4_0%,#eef4fb_100%)] p-0"
-          : "min-h-[calc(100vh-2rem)] rounded-[36px] border border-white/70 bg-[radial-gradient(circle_at_top_left,rgba(109,94,248,0.12),transparent_30%),linear-gradient(180deg,#dbe8f4_0%,#eef4fb_100%)] p-3 sm:p-4",
-      )}
-    >
+    <div className={cn("bg-[var(--background)]", immersive ? "" : "")}>
+      {/* ── 2-col shell ── */}
       <div
         className={cn(
-          "grid min-h-[calc(100vh-3rem)] overflow-hidden bg-white lg:grid-cols-[19rem_minmax(0,1fr)]",
-          immersive ? "rounded-none shadow-none min-h-[calc(100vh-68px)]" : "rounded-[32px] shadow-[0_28px_90px_rgba(15,23,42,0.10)]",
+          "lf-shell",
+          (launchState.stepId === "industry" || launchState.stepId === "template") && "lf-shell--full",
         )}
       >
-        <aside className="relative overflow-hidden bg-[linear-gradient(180deg,var(--brand-ink)_0%,var(--brand)_100%)] px-6 py-7 text-white">
-          <div className="relative z-10">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/12 text-sm font-semibold">
-                SK
+        {/* Left: scrollable content + sticky footer */}
+        <div className="lf-content-wrap">
+          <div className="lf-content">
+            {/* Step header */}
+            <div key={`header-${launchState.stepId}`} className="step-content mb-1">
+              <div className="lf-eyebrow">Step {resolvedStepIndex + 1} of {visibleSteps.length}</div>
+              <h1 className="lf-title" style={{ whiteSpace: "pre-line" }}>
+                {getStepHeadline(launchState.stepId)}
+              </h1>
+              <p className="lf-subtitle">
+                {currentStepDefinition?.description || currentSectionDefinition?.description || "Work through the campaign setup step by step."}
+              </p>
+            </div>
+
+            {/* Validation issues */}
+            {currentIssues.length > 0 && launchState.stepId !== "review-launch" ? (
+              <div className="mb-5">
+                <IssueList title="Fix these to continue" issues={currentIssues} />
               </div>
-              <div>
-                <p className="text-[1.02rem] font-semibold tracking-[-0.03em]">SideKick Studioss</p>
-                <p className="text-sm text-white/70">Simple launch flow</p>
-              </div>
-            </div>
+            ) : null}
 
-            <div className="mt-10 space-y-2">
-              {wizardSections.map((section, index) => {
-                const active = section.id === currentSectionDefinition.id;
-                const sectionStartIndex = visibleSteps.findIndex((step) => section.stepIds.includes(step.id));
-                const sectionEndIndex =
-                  sectionStartIndex >= 0 ? sectionStartIndex + section.stepIds.length - 1 : -1;
-                const complete = sectionEndIndex >= 0 && resolvedStepIndex > sectionEndIndex;
-                const stepCountLabel = `${section.stepIds.length} step${section.stepIds.length === 1 ? "" : "s"}`;
-                return (
-                  <div key={section.id} className="flex flex-col items-start">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateLaunchState((current) => ({
-                          ...current,
-                          stepId: section.stepIds[0],
-                        }))
-                      }
-                      className={cn(
-                        "group flex w-full items-start gap-4 rounded-[20px] px-3 py-3 text-left transition-colors",
-                        active ? "bg-white/12" : "hover:bg-white/8",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition-all",
-                          complete
-                            ? "bg-white text-[var(--brand-ink)]"
-                            : active
-                              ? "bg-white text-[var(--brand-ink)] shadow-[0_8px_20px_rgba(255,255,255,0.18)]"
-                              : "border border-white/18 bg-white/8 text-white/85",
-                        )}
-                      >
-                        {complete ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
-                      </span>
-                      <span className="min-w-0">
-                        <span className={cn("block text-[0.98rem] font-medium", active ? "text-white" : "text-white/86")}>
-                          {section.label}
-                        </span>
-                        <span className="mt-1 block text-sm leading-5 text-white/66">{section.description}</span>
-                        <span className="mt-2 inline-flex rounded-full border border-white/12 bg-white/8 px-2.5 py-0.5 text-[11px] font-medium tracking-[0.08em] text-white/72 uppercase">
-                          {stepCountLabel}
-                        </span>
-                      </span>
-                    </button>
-                    {index < wizardSections.length - 1 ? (
-                      <div className="ml-[1.125rem] h-6 w-px bg-white/14" />
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-10 rounded-[24px] border border-white/12 bg-white/8 px-4 py-4 text-sm leading-6 text-white/78">
-              Clean, guided setup with the right Meta fields appearing only when they are needed.
-            </div>
-          </div>
-
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-[radial-gradient(circle_at_20%_30%,rgba(255,255,255,0.14),transparent_45%),radial-gradient(circle_at_80%_70%,rgba(255,255,255,0.10),transparent_40%)] opacity-70" />
-        </aside>
-
-        <main className="flex min-w-0 flex-col bg-[linear-gradient(180deg,#ffffff_0%,#fbfcfe_100%)]">
-          <div className="border-b border-[var(--line)] px-6 py-6 sm:px-8 sm:py-8 lg:px-10">
-            <p className="text-sm font-medium text-[var(--muted-strong)]">
-              Step {currentSectionIndex + 1} / {wizardSections.length}
-            </p>
-            <h1 className="mt-2 text-[clamp(2rem,3vw,3.1rem)] font-semibold tracking-[-0.06em] text-[var(--ink)]">
-              {currentSectionDefinition?.label || "Launch"}
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              {currentSectionDefinition?.description || "Work through the steps one at a time with a clean, simple flow."}
-            </p>
-          </div>
-
-          <div className="flex min-h-0 flex-1 flex-col gap-6 px-6 py-6 sm:px-8 lg:px-10">
-            {currentIssues.length > 0 ? <IssueList title="Current step issues" issues={currentIssues} /> : null}
-
-            <div className="space-y-5">
+            {/* Step content */}
+            <div key={launchState.stepId} className="step-content">
               {renderStepContent()}
-
-              {launchState.stepId === "review-launch" ? (
-                <SectionCard
-                  title="Preview"
-                  description="A quick look at how the selected template will render before you publish."
-                >
-                <FacebookAdPreview
-                  template={selectedTemplate}
-                  pageName={pagePreviewIdentity.pageName}
-                  pageAvatarUrl={pagePreviewIdentity.pageAvatarUrl}
-                  primaryText={previewBlueprint?.adCopy.primary}
-                  headline={previewBlueprint?.adCopy.headlines[0]}
-                  description={previewBlueprint?.adCopy.descriptions[0]}
-                  ctaLabel={launchState.review.ctaText || selectedTemplate?.ctaDefault}
-                  imageUrl={selectedTemplate?.previewImage || null}
-                  compact
-                />
-                </SectionCard>
-              ) : null}
             </div>
+          </div>
 
-            <div className="mt-auto flex items-center justify-between gap-4 border-t border-[var(--line)] pt-5">
-              <Button type="button" variant="outline" onClick={handleBack} disabled={currentStepIndex <= 0}>
+          {/* Sticky gradient footer nav */}
+          <div className="lf-footer">
+            <div className="flex items-center justify-between gap-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleBack}
+                disabled={currentStepIndex <= 0}
+                className="h-11 rounded-[14px] px-5"
+              >
                 <ChevronLeft className="h-4 w-4" />
                 Back
               </Button>
               {launchState.stepId !== "review-launch" ? (
-                <Button type="button" onClick={handleContinue}>
+                <Button
+                  type="button"
+                  onClick={handleContinue}
+                  className="h-11 rounded-[14px] px-6 shadow-[0_8px_24px_rgba(109,94,248,0.28)]"
+                >
                   Continue
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               ) : null}
             </div>
           </div>
-        </main>
+        </div>
+
+        {launchState.stepId !== "industry" && launchState.stepId !== "template" ? (
+          /* Right: sticky preview pane */
+          <div className="lf-right">
+            <div className="lf-preview-shell">
+              <div className="lf-preview-body">
+                <div className="mx-auto w-full max-w-[428px] overflow-hidden rounded-[18px] border border-[rgba(17,24,39,0.08)]">
+                  <FacebookAdPreview
+                    template={selectedTemplate}
+                    pageName={pagePreviewIdentity.pageName}
+                    pageAvatarUrl={pagePreviewIdentity.pageAvatarUrl}
+                    primaryText={previewBlueprint?.adCopy.primary}
+                    headline={previewBlueprint?.adCopy.headlines[0]}
+                    description={previewBlueprint?.adCopy.descriptions[0]}
+                    ctaLabel={launchState.review.ctaText || selectedTemplate?.ctaDefault}
+                    imageUrl={selectedTemplate?.previewImage || null}
+                    compact
+                    mediaFit="contain"
+                    className="w-full rounded-none border-0 bg-transparent p-0 shadow-none"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
+}
+
+function getStepHeadline(stepId: string): string {
+  switch (stepId) {
+    case "industry": return "What kind of business\nare you running?";
+    case "template": return "Pick a campaign\nwe know works.";
+    case "ad-type": return "How should people\nrespond?";
+    case "campaign-basics": return "Set your daily budget.";
+    case "location": return "Where should we\nrun this?";
+    case "destination-setup": return "Where do people go\nafter they click?";
+    case "placeholders": return "Make it yours.";
+    case "review-launch": return "Ready to launch.";
+    default: return "Campaign Setup";
+  }
 }

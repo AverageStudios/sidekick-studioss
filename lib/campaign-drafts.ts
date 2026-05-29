@@ -160,18 +160,15 @@ export async function ensureCampaignDraft({
       ad_copy_json: blueprint.adCopy,
       launch_state_json: launchState,
       status: "draft",
-      published_at: null,
-      archived_at: null,
     });
 
     const results = await Promise.all([
       admin
         .from("funnels")
-        .update({
+      .update({
           workspace_id: workspaceId,
           config_json: blueprint.funnelConfig,
           is_published: false,
-          published_at: null,
         })
         .eq("campaign_id", existingDraft.id)
         .eq("user_id", userId),
@@ -226,8 +223,6 @@ export async function ensureCampaignDraft({
     ad_copy_json: blueprint.adCopy,
     launch_state_json: launchState,
     status: "draft",
-    published_at: null,
-    archived_at: null,
   });
 
   const results = await Promise.all([
@@ -237,7 +232,6 @@ export async function ensureCampaignDraft({
       campaign_id: campaign.id,
       slug,
       is_published: false,
-      published_at: null,
       config_json: blueprint.funnelConfig,
     }),
     admin.from("follow_up_settings").upsert(

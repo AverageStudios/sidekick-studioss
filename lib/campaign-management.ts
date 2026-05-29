@@ -344,10 +344,8 @@ async function persistCampaignManagementState({
     meta_status_synced_at: now,
     management_sync_state: "synced",
   };
-
   if (lifecycle === "archived") {
     campaignPayload.status = "archived";
-    campaignPayload.archived_at = campaign.archived_at || now;
   }
 
   await updateCampaignWithSchemaFallback(admin, campaign.id, campaignPayload).catch(() => {});
@@ -525,7 +523,6 @@ export async function archiveCampaignWithMetaSync({
   const archivedCampaign = {
     ...repaired.campaign,
     status: "archived",
-    archived_at: now,
     external_publish_status: "archived",
     meta_status_synced_at: now,
     management_sync_state: "synced",

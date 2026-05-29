@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { env } from "@/lib/env";
 
-export type MetaOAuthScopeSet = "default" | "lead_forms";
+export type MetaOAuthScopeSet = "default" | "lead_forms" | "leads";
 
 type MetaOAuthStatePayload = {
   version: 1;
@@ -86,7 +86,11 @@ export function parseMetaOAuthState(value: string | null | undefined): MetaOAuth
   if (!parsed || typeof parsed !== "object") return null;
   const candidate = parsed as Partial<MetaOAuthStatePayload>;
   const scopeSet =
-    candidate.scopeSet === "lead_forms" ? "lead_forms" : "default";
+    candidate.scopeSet === "lead_forms"
+      ? "lead_forms"
+      : candidate.scopeSet === "leads"
+        ? "leads"
+        : "default";
   const requestedScopes = Array.isArray(candidate.requestedScopes)
     ? normalizeRequestedScopes(
         candidate.requestedScopes.filter((scope): scope is string => typeof scope === "string"),

@@ -1,13 +1,37 @@
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
 import { notFound } from "next/navigation";
+import type { ComponentType } from "react";
+import {
+  AlertTriangle,
+  Archive,
+  Clock3,
+  ExternalLink,
+  FileText,
+  Globe,
+  LayoutTemplate,
+  Rocket,
+  SquarePen,
+  Sparkles,
+} from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { FacebookAdPreview } from "@/components/facebook-ad-preview";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { archiveCampaignAction, pauseCampaignAction, resumeCampaignAction, syncCampaignStatusAction } from "@/app/actions";
 import { requireUser } from "@/lib/auth";
-import { getCampaignBundle } from "@/lib/data";
+import { getCampaignBundle, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
+import {
+  createLaunchStateView,
+  evaluateLaunchReadiness,
+  getAdTypeLabel,
+  getStepDefinition,
+  getTemplatePlaceholderFields,
+  getTemplateSetupValuesFromLaunchState,
+  getMetaCompatibleCtaLabel,
+  resolvePlaceholderValue,
+  campaignGoalOptions,
+} from "@/lib/campaign-launch";
 import {
   getCampaignLastSyncedAt,
   getCampaignLifecycleLabel,
@@ -15,7 +39,93 @@ import {
   getCampaignMetaIdentifiers,
   getCampaignSyncState,
 } from "@/lib/campaign-management";
+import { resolveMetaPagePreviewIdentity } from "@/lib/meta-page-identity";
 import { cn } from "@/lib/utils";
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatCurrencyAmount(value: string | null | undefined) {
+  const numeric = Number.parseFloat(String(value || "").replace(/[^0-9.]/g, ""));
+  if (!Number.isFinite(numeric) || numeric <= 0) return "—";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(numeric);
+}
+
+function lifecycleTone(state: string) {
+  switch (state) {
+    case "active":
+      return "border-[#bbf7d0] bg-[#f0fdf4] text-[#15803d]";
+    case "paused":
+      return "border-[#fed7aa] bg-[#fff7ed] text-[#c2410c]";
+    case "archived":
+      return "border-[#e2e8f0] bg-[#f8fafc] text-[#475569]";
+    case "draft":
+      return "border-[#c7d2fe] bg-[#eef2ff] text-[#4f46e5]";
+    case "unknown":
+    default:
+      return "border-[var(--line)] bg-[var(--surface)] text-[var(--muted-strong)]";
+  }
+}
+
+function InfoRow({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail?: string | null;
+}) {
+  return (
+    <div className="rounded-[20px] bg-[var(--soft-panel)] px-4 py-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">{label}</p>
+      <p className="mt-2 text-sm font-medium leading-6 text-[var(--ink)]">{value}</p>
+      {detail ? <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{detail}</p> : null}
+    </div>
+  );
+}
+
+function SectionTitle({
+  title,
+  description,
+  icon: Icon,
+}: {
+  title: string;
+  description: string;
+  icon: ComponentType<{ className?: string }>;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--soft-panel)] text-[var(--brand)]">
+        <Icon className="h-4.5 w-4.5" />
+      </div>
+      <div>
+        <h2 className="text-lg font-semibold tracking-[-0.03em] text-[var(--ink)]">{title}</h2>
+        <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+type TimelineItem = {
+  title: string;
+  detail: string;
+  timestamp: string;
+};
 
 export default async function CampaignPage({
   params,
@@ -26,7 +136,10 @@ export default async function CampaignPage({
 }) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
   const user = await requireUser();
-  const bundle = await getCampaignBundle(user.id, id);
+  const [bundle, metaIntegration] = await Promise.all([
+    getCampaignBundle(user.id, id),
+    getWorkspaceMetaIntegrationForUser(user.id),
+  ]);
 
   if (!bundle) {
     notFound();
@@ -36,27 +149,150 @@ export default async function CampaignPage({
   const lifecycleLabel = getCampaignLifecycleLabel(bundle.campaign);
   const metaIds = getCampaignMetaIdentifiers(bundle.campaign);
   const redirectTo = `/campaigns/${bundle.campaign.id}`;
-  const hasMetaIds = Boolean(metaIds.campaignId || metaIds.adSetId || metaIds.adId || metaIds.leadFormId);
-  const canPause = lifecycleState === "active";
-  const canResume = lifecycleState === "paused";
-  const canArchive = lifecycleState === "active" || lifecycleState === "paused" || lifecycleState === "unknown";
-  const openInMetaHref = "https://business.facebook.com/adsmanager";
   const lastSyncedAt = getCampaignLastSyncedAt(bundle.campaign);
   const syncState = getCampaignSyncState(bundle.campaign);
+  const isDraft = bundle.campaign.status === "draft";
+  const isPublished = bundle.campaign.status === "published";
+  const canPause = lifecycleState === "active";
+  const canResume = lifecycleState === "paused";
+  const canArchive = lifecycleState === "active" || lifecycleState === "paused" || lifecycleState === "unknown" || isDraft;
+  const pageIdentity = resolveMetaPagePreviewIdentity({
+    integration: metaIntegration,
+    fallbackName: "No Facebook Page selected",
+  });
 
-  const description =
-    lifecycleState === "draft"
-      ? "Your campaign instance is saved as a draft. Review the copy, finish the funnel details, and publish when you are ready."
-      : lifecycleState === "paused"
-        ? "This launched campaign is currently paused. Resume it when you want Meta to spend again."
-        : lifecycleState === "archived"
-          ? "This campaign is archived locally for history and troubleshooting. It stays out of the active views."
-          : lifecycleState === "unknown"
-            ? "This launched campaign needs a fresh Meta status sync before the app can confidently label it active or paused."
-            : "Your launched campaign is active. Use the controls below to pause, archive, or inspect the launch metadata.";
+  const launchState = bundle.campaign.launch_state_json || null;
+  const launchView = launchState ? createLaunchStateView(launchState) : null;
+  const setupValues = launchState
+    ? getTemplateSetupValuesFromLaunchState(bundle.template, launchState, bundle.businessProfile)
+    : null;
+  const launchIssues = launchState
+    ? evaluateLaunchReadiness({
+        state: launchState,
+        template: bundle.template,
+        businessProfile: bundle.businessProfile,
+      })
+    : [];
+  const placeholderFields = getTemplatePlaceholderFields(bundle.template);
+  const filledPlaceholderCount = launchState && setupValues
+    ? placeholderFields.filter((field) => resolvePlaceholderValue(field.id, launchState, setupValues)).length
+    : 0;
+  const readyToPublish =
+    Boolean(launchState) &&
+    metaIntegration?.connection?.status === "connected" &&
+    Boolean(metaIntegration?.tokenAvailable) &&
+    Boolean(metaIntegration?.selected.adAccountId) &&
+    Boolean(metaIntegration?.selected.pageId) &&
+    launchIssues.length === 0;
+
+  const currentStep = launchState ? getStepDefinition(launchState.stepId) : null;
+  const objectiveLabel =
+    launchView?.campaignGoal
+      ? campaignGoalOptions.find((option) => option.id === launchView.campaignGoal)?.label || launchView.campaignGoal
+      : "Not configured";
+  const adTypeLabel = getAdTypeLabel(launchView?.adType || bundle.template.defaultAdType || "lead_form");
+  const budgetLabel = launchView ? formatCurrencyAmount(launchView.dailyBudget) : "—";
+
+  const destinationSummary = (() => {
+    if (!launchView) {
+      return {
+        label: "Launch state missing",
+        value: "Open the editor to restore the saved campaign setup.",
+        detail: null as string | null,
+      };
+    }
+
+    switch (launchView.adType) {
+      case "lead_form":
+        return {
+          label: "Lead form",
+          value:
+            launchView.leadForm.mode === "existing"
+              ? launchView.leadForm.selectedFormName || "Existing Meta form"
+              : launchView.leadForm.managedFormName || "Managed lead form",
+          detail:
+            launchView.leadForm.mode === "existing"
+              ? launchView.leadForm.selectedFormId || "No form selected yet"
+              : launchView.advanced.privacyPolicyUrl
+                ? "Privacy policy connected"
+                : "Privacy policy still needs to be added",
+        };
+      case "landing_page":
+        return {
+          label: "Destination URL",
+          value: launchView.landingPageUrl || "Not configured",
+          detail: launchView.trackingPixelId
+            ? `Pixel ${launchView.trackingPixelName || launchView.trackingPixelId}`
+            : "No pixel selected yet",
+        };
+      case "call_now":
+        return {
+          label: "Call destination",
+          value: launchView.phoneNumber || "Not configured",
+          detail: "Uses the business phone number for call ads.",
+        };
+      case "messenger_leads":
+      case "messenger_engagement":
+        return {
+          label: "Messenger destination",
+          value: launchView.messengerWelcomeMessage || "Messenger is configured",
+          detail: launchView.messengerReplyPrompt || "Reply prompt not added yet",
+        };
+      default:
+        return {
+          label: "Destination",
+          value: "Not configured",
+          detail: null,
+        };
+    }
+  })();
+
+  const timelineItems: Array<TimelineItem | null> = [
+    {
+      title: "Draft created",
+      detail: "This campaign instance was saved in SideKick.",
+      timestamp: bundle.campaign.created_at,
+    },
+    {
+      title: "Last edited",
+      detail: "Most recent campaign save.",
+      timestamp: bundle.campaign.updated_at,
+    },
+    bundle.campaign.published_at
+      ? {
+          title: "Published",
+          detail: "The campaign was pushed live to Meta.",
+          timestamp: bundle.campaign.published_at,
+        }
+      : null,
+    lastSyncedAt
+      ? {
+          title: "Meta sync",
+          detail: syncState === "error" ? "Meta sync needs attention." : "Campaign status refreshed from Meta.",
+          timestamp: lastSyncedAt,
+        }
+      : null,
+    bundle.campaign.archived_at
+      ? {
+          title: "Archived",
+          detail: "This campaign was moved out of active views.",
+          timestamp: bundle.campaign.archived_at,
+        }
+      : null,
+  ];
+  const timelineEntries = timelineItems.filter((item): item is TimelineItem => item !== null);
+
+  const hasLaunchWarnings = launchIssues.length > 0 || !readyToPublish;
+  const baseDescription =
+    isDraft
+      ? "Review what is configured, see what is still missing, and jump back into the editor when you are ready to launch."
+      : isPublished
+        ? "This campaign is live. Use the sections below to inspect setup, sync state, and the current Meta status."
+        : "Inspect the saved campaign instance, its launch state, and the current publishing details.";
+  const openInMetaHref = "https://business.facebook.com/adsmanager";
 
   return (
-    <AppShell currentPath="/dashboard">
+    <AppShell currentPath="/templates">
       {query.success ? (
         <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           {query.success}
@@ -68,221 +304,435 @@ export default async function CampaignPage({
         </div>
       ) : null}
 
-      <PageHeader
-        badge={bundle.template.name}
-        title={bundle.campaign.name}
-        description={description}
-        actions={
-          <>
-            {bundle.campaign.status === "draft" ? (
-              <Button asChild variant="outline">
-                <Link href={`/templates/new?draft=${bundle.campaign.id}`}>Continue launch wizard</Link>
-              </Button>
-            ) : (
-              <Button asChild variant="outline">
-                <Link href={`/funnels/${bundle.funnel.id}`}>Open funnel manager</Link>
-              </Button>
-            )}
-            {hasMetaIds ? (
-              <Button asChild variant="outline">
-                <Link href={openInMetaHref} target="_blank" rel="noreferrer">
-                  Open in Meta
-                  <ExternalLink className="h-4 w-4" />
-                </Link>
-              </Button>
-            ) : null}
-            {bundle.funnel.is_published ? (
-              <Button asChild>
-                <Link href={`/f/${bundle.funnel.slug}`} target="_blank">
-                  View public funnel
-                  <ExternalLink className="h-4 w-4" />
-                </Link>
-              </Button>
-            ) : (
-              <Button asChild>
-                <Link href="/templates">Choose another template</Link>
-              </Button>
-            )}
-          </>
-        }
-      />
-
-      <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card className="p-6 sm:p-7">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand)]">Primary ad text</p>
-          <p className="mt-4 text-base leading-8 text-[var(--muted-strong)]">{bundle.campaign.ad_copy_json.primary}</p>
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <div>
-              <h2 className="text-lg font-semibold text-[var(--ink)]">Headline options</h2>
-              <ul className="mt-3 space-y-3">
-                {bundle.campaign.ad_copy_json.headlines.map((headline) => (
-                  <li key={headline} className="rounded-[20px] bg-[var(--soft-panel)] px-4 py-4 text-sm text-[var(--muted-strong)]">
-                    {headline}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-[var(--ink)]">Description options</h2>
-              <ul className="mt-3 space-y-3">
-                {bundle.campaign.ad_copy_json.descriptions.map((description) => (
-                  <li key={description} className="rounded-[20px] bg-[var(--soft-panel)] px-4 py-4 text-sm text-[var(--muted-strong)]">
-                    {description}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </Card>
-
-        <div className="grid gap-5">
-          <Card className="p-6 sm:p-7">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand)]">Campaign status</p>
-                <h2 className="mt-3 text-lg font-semibold text-[var(--ink)]">{lifecycleLabel}</h2>
-              </div>
-              <span
-                className={cn(
-                  "rounded-full px-3 py-1 text-xs font-medium",
-                  lifecycleState === "active"
-                    ? "bg-emerald-50 text-emerald-700"
-                    : lifecycleState === "paused"
-                      ? "bg-amber-50 text-amber-700"
-                      : lifecycleState === "archived"
-                        ? "bg-slate-100 text-slate-600"
-                        : "bg-[var(--soft-panel)] text-[var(--ink)]",
+      <div className="space-y-8">
+        <div className="space-y-4">
+          <PageHeader
+            badge={bundle.template.name}
+            title={bundle.campaign.name}
+            description={baseDescription}
+            variant="plain"
+            actions={
+              <>
+                {isDraft ? (
+                  <>
+                    <Button asChild className="h-11 rounded-[18px] px-5">
+                      <Link href={`/templates/new?draft=${bundle.campaign.id}`}>
+                        Launch Campaign
+                        <Rocket className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                    <Button asChild variant="outline" className="h-11 rounded-[18px] px-5">
+                      <Link href={`/templates/new?draft=${bundle.campaign.id}`}>
+                        Continue Editing
+                        <SquarePen className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                    <Button asChild variant="secondary" className="h-11 rounded-[18px] px-5">
+                      <Link href={`/templates/new?draft=${bundle.campaign.id}`}>
+                        Save Draft
+                        <Sparkles className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    {bundle.funnel.is_published ? (
+                      <Button asChild variant="outline" className="h-11 rounded-[18px] px-5">
+                        <Link href={`/f/${bundle.funnel.slug}`} target="_blank">
+                          View Public Funnel
+                          <ExternalLink className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                    ) : (
+                      <Button asChild variant="outline" className="h-11 rounded-[18px] px-5">
+                        <Link href={`/funnels/${bundle.funnel.id}`}>Open Funnel Manager</Link>
+                      </Button>
+                    )}
+                    <Button asChild variant="outline" className="h-11 rounded-[18px] px-5">
+                      <a href={openInMetaHref} target="_blank" rel="noreferrer">
+                        Open in Meta
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </Button>
+                  </>
                 )}
-              >
-                {lifecycleLabel}
+                {canPause ? (
+                  <form action={pauseCampaignAction}>
+                    <input type="hidden" name="campaignId" value={bundle.campaign.id} />
+                    <input type="hidden" name="redirectTo" value={redirectTo} />
+                    <Button type="submit" variant="outline" className="h-11 rounded-[18px] px-5">
+                      Pause
+                    </Button>
+                  </form>
+                ) : null}
+                {canResume ? (
+                  <form action={resumeCampaignAction}>
+                    <input type="hidden" name="campaignId" value={bundle.campaign.id} />
+                    <input type="hidden" name="redirectTo" value={redirectTo} />
+                    <Button type="submit" variant="outline" className="h-11 rounded-[18px] px-5">
+                      Resume
+                    </Button>
+                  </form>
+                ) : null}
+                {canArchive ? (
+                  <form action={archiveCampaignAction}>
+                    <input type="hidden" name="campaignId" value={bundle.campaign.id} />
+                    <input type="hidden" name="redirectTo" value={redirectTo} />
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      className="h-11 rounded-[18px] border-rose-200 px-5 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                    >
+                      Archive
+                      <Archive className="h-4 w-4" />
+                    </Button>
+                  </form>
+                ) : null}
+              </>
+            }
+          />
+
+          <div className="flex flex-wrap gap-2">
+            <span className={cn("inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium", lifecycleTone(lifecycleState))}>
+              {lifecycleLabel}
+            </span>
+            <span className="inline-flex items-center rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--muted-strong)]">
+              {currentStep ? currentStep.label : "Launch state not saved"}
+            </span>
+            <span className="inline-flex items-center rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--muted-strong)]">
+              {adTypeLabel}
+            </span>
+            {isDraft ? (
+              <span className="inline-flex items-center rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--muted-strong)]">
+                Not published yet
               </span>
-            </div>
+            ) : null}
+            {isPublished ? (
+              <span className="inline-flex items-center rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--muted-strong)]">
+                Last synced {lastSyncedAt ? formatDateTime(lastSyncedAt) : "—"}
+              </span>
+            ) : null}
+          </div>
+        </div>
 
-            <div className="mt-5 space-y-2 text-sm text-[var(--muted-strong)]">
-              <p>
-                <span className="font-medium text-[var(--ink)]">Published:</span>{" "}
-                {bundle.campaign.published_at ? new Date(bundle.campaign.published_at).toLocaleString() : "Not yet"}
-              </p>
-              <p>
-                <span className="font-medium text-[var(--ink)]">Archived:</span>{" "}
-                {bundle.campaign.archived_at ? new Date(bundle.campaign.archived_at).toLocaleString() : "Not archived"}
-              </p>
-              <p>
-                <span className="font-medium text-[var(--ink)]">External status:</span>{" "}
-                {bundle.campaign.external_publish_status || "Not started"}
-              </p>
-              <p>
-                <span className="font-medium text-[var(--ink)]">Meta effective status:</span>{" "}
-                {bundle.campaign.meta_effective_status || "Unknown"}
-              </p>
-              <p>
-                <span className="font-medium text-[var(--ink)]">Last synced:</span>{" "}
-                {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : "Not synced yet"}
-              </p>
-              <p>
-                <span className="font-medium text-[var(--ink)]">Sync state:</span>{" "}
-                {syncState === "synced"
-                  ? "Synced"
-                  : syncState === "stale"
-                    ? "Stale"
-                    : syncState === "error"
-                      ? "Sync error"
-                      : syncState === "unknown"
-                        ? "Unknown"
-                        : "Not live"}
-              </p>
-              <p>
-                <span className="font-medium text-[var(--ink)]">Workspace:</span> {bundle.campaign.workspace_id || "No workspace"}
-              </p>
+        {launchIssues.length ? (
+          <div className="rounded-[24px] border border-amber-200 bg-amber-50/60 p-5">
+            <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
+              <AlertTriangle className="h-4 w-4" />
+              Missing items from the editor
             </div>
+            <ul className="mt-3 space-y-2 text-sm leading-6 text-amber-900">
+              {launchIssues.slice(0, 6).map((issue) => (
+                <li key={`${issue.code}:${issue.field || ""}`} className="flex gap-2">
+                  <span className="mt-2 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  <span>{issue.message}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
-            <div className="mt-6 flex flex-wrap gap-2">
-              {bundle.campaign.status === "published" ? (
+        <div className="grid gap-5 xl:grid-cols-2">
+          <Card className="p-6 sm:p-7">
+            <SectionTitle
+              title="Campaign configuration"
+              description="A concise summary of how this instance is currently configured."
+              icon={LayoutTemplate}
+            />
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <InfoRow label="Campaign name" value={bundle.campaign.name} />
+              <InfoRow label="Template" value={bundle.template.name} detail={bundle.template.description} />
+              <InfoRow label="Stage" value={currentStep ? currentStep.label : "Launch state not saved"} detail={currentStep?.description || null} />
+              <InfoRow label="Campaign goal" value={objectiveLabel} />
+              <InfoRow
+                label="Audience"
+                value={
+                  launchView
+                    ? `${launchView.targeting.ageMin || "18"}–${launchView.targeting.ageMax || "65"} • ${
+                        launchView.targeting.gender === "all"
+                          ? "All genders"
+                          : launchView.targeting.gender === "male"
+                            ? "Men"
+                            : "Women"
+                      }`
+                    : "Not configured"
+                }
+                detail={
+                  launchView
+                    ? [
+                        launchView.targeting.interests.trim() || null,
+                        launchView.targeting.customAudiences.trim() ? `Audiences: ${launchView.targeting.customAudiences.trim()}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" • ") || "No interests or custom audiences saved."
+                    : null
+                }
+              />
+              <InfoRow
+                label="Budget"
+                value={budgetLabel === "—" ? "—" : `${budgetLabel} / day`}
+                detail={launchView ? "Daily budget from the launch state." : bundle.campaign.ad_copy_json.budget}
+              />
+              <InfoRow
+                label="Target location"
+                value={
+                  launchView?.targetLocations.length
+                    ? launchView.targetLocations.map((location) => location.label).join(", ")
+                    : "Not configured"
+                }
+                detail={
+                  launchView?.targetLocations.length
+                    ? `${launchView.targetLocations.length} location${launchView.targetLocations.length === 1 ? "" : "s"} configured`
+                    : "Add a location in the editor."
+                }
+              />
+              <InfoRow
+                label="Destination"
+                value={destinationSummary.value}
+                detail={destinationSummary.detail}
+              />
+              <InfoRow
+                label="Publish settings"
+                value={
+                  metaIntegration?.selected.adAccountId
+                    ? "Meta ad account selected"
+                    : "Meta ad account not selected"
+                }
+                detail={
+                  metaIntegration?.selected.pageId
+                    ? `Page: ${pageIdentity.pageName}`
+                    : "No Facebook Page selected yet."
+                }
+              />
+            </div>
+          </Card>
+
+          <Card className="p-6 sm:p-7">
+            <SectionTitle
+              title="Creative summary"
+              description="The ad copy and preview that are tied to this saved campaign instance."
+              icon={FileText}
+            />
+
+            <div className="mt-6 space-y-5">
+              <FacebookAdPreview
+                template={bundle.template}
+                pageName={pageIdentity.pageName}
+                pageAvatarUrl={pageIdentity.pageAvatarUrl}
+                primaryText={bundle.campaign.ad_copy_json.primary || bundle.campaign.business_description}
+                headline={bundle.campaign.headline || bundle.campaign.ad_copy_json.headlines[0] || bundle.campaign.name}
+                description={
+                  bundle.campaign.subheadline ||
+                  bundle.campaign.ad_copy_json.descriptions[0] ||
+                  bundle.template.description
+                }
+                ctaLabel={bundle.campaign.cta_text || getMetaCompatibleCtaLabel(launchView?.adType || bundle.template.defaultAdType || "lead_form")}
+                imageUrl={bundle.template.previewImage || null}
+                compact
+                showMetaBar={false}
+                showReactionsBar={false}
+                showActionsRow={false}
+                interactiveControls={false}
+                className="border-0 bg-transparent p-0 shadow-none"
+              />
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[20px] bg-[var(--soft-panel)] px-4 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Primary ad text</p>
+                  <p className="mt-2 text-sm leading-7 text-[var(--muted-strong)]">
+                    {bundle.campaign.ad_copy_json.primary || "No primary ad text saved yet."}
+                  </p>
+                </div>
+                <div className="rounded-[20px] bg-[var(--soft-panel)] px-4 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Headline options</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {bundle.campaign.ad_copy_json.headlines.length ? (
+                      bundle.campaign.ad_copy_json.headlines.map((headline) => (
+                        <span key={headline} className="rounded-full border border-[var(--line)] bg-white px-3 py-1.5 text-xs text-[var(--muted-strong)]">
+                          {headline}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-sm text-[var(--muted)]">No headline options saved yet.</span>
+                    )}
+                  </div>
+                </div>
+                <div className="rounded-[20px] bg-[var(--soft-panel)] px-4 py-4 sm:col-span-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Description options</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {bundle.campaign.ad_copy_json.descriptions.length ? (
+                      bundle.campaign.ad_copy_json.descriptions.map((description) => (
+                        <span key={description} className="rounded-full border border-[var(--line)] bg-white px-3 py-1.5 text-xs text-[var(--muted-strong)]">
+                          {description}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-sm text-[var(--muted)]">No description options saved yet.</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        <div className="grid gap-5 xl:grid-cols-2">
+          <Card className="p-6 sm:p-7">
+            <SectionTitle
+              title="Publishing status"
+              description="How this instance is currently represented in SideKick and in Meta."
+              icon={Rocket}
+            />
+
+            <div className="mt-6 space-y-4">
+              <div className="rounded-[24px] border border-[var(--line)] bg-[var(--soft-panel)] p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--ink)]">
+                      {isDraft ? "Draft saved" : lifecycleLabel}
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+                      {isDraft
+                        ? "This campaign has not been published yet."
+                        : "This campaign has already been pushed live and can be paused, resumed, or archived."}
+                    </p>
+                  </div>
+                  <span className={cn("rounded-full border px-3 py-1 text-xs font-medium", lifecycleTone(lifecycleState))}>
+                    {lifecycleLabel}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <InfoRow
+                  label="External status"
+                  value={bundle.campaign.external_publish_status || "Not started"}
+                  detail={bundle.campaign.meta_effective_status ? `Meta effective: ${bundle.campaign.meta_effective_status}` : null}
+                />
+                <InfoRow
+                  label="Sync state"
+                  value={syncState === "synced" ? "Synced" : syncState === "stale" ? "Stale" : syncState === "error" ? "Sync issue" : "Not live"}
+                  detail={lastSyncedAt ? `Last synced ${formatDateTime(lastSyncedAt)}` : "No Meta sync yet."}
+                />
+                <InfoRow
+                  label="Published"
+                  value={formatDateTime(bundle.campaign.published_at)}
+                  detail={isDraft ? "Not published yet." : null}
+                />
+                <InfoRow
+                  label="Archived"
+                  value={formatDateTime(bundle.campaign.archived_at)}
+                  detail={bundle.campaign.archived_at ? "Moved out of active views." : "Still available in the workspace."}
+                />
+              </div>
+
+              {isPublished ? (
+                <div className="rounded-[24px] border border-[var(--line)] bg-white p-5">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-[var(--ink)]">
+                    <Globe className="h-4 w-4 text-[var(--brand)]" />
+                    Public funnel
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                    {bundle.funnel.is_published ? (
+                      <Link href={`/f/${bundle.funnel.slug}`} target="_blank" className="text-[var(--brand)] hover:underline">
+                        /f/{bundle.funnel.slug}
+                      </Link>
+                    ) : (
+                      "This funnel is still private."
+                    )}
+                  </p>
+                </div>
+              ) : null}
+
+              {isPublished ? (
                 <form action={syncCampaignStatusAction}>
                   <input type="hidden" name="campaignId" value={bundle.campaign.id} />
                   <input type="hidden" name="redirectTo" value={redirectTo} />
-                  <Button type="submit" variant="outline">
+                  <Button type="submit" variant="outline" className="rounded-[18px] px-5">
                     Refresh Meta status
                   </Button>
                 </form>
               ) : null}
-              {canPause ? (
-                <form action={pauseCampaignAction}>
-                  <input type="hidden" name="campaignId" value={bundle.campaign.id} />
-                  <input type="hidden" name="redirectTo" value={redirectTo} />
-                  <Button type="submit" variant="outline">
-                    Pause campaign
-                  </Button>
-                </form>
-              ) : null}
-              {canResume ? (
-                <form action={resumeCampaignAction}>
-                  <input type="hidden" name="campaignId" value={bundle.campaign.id} />
-                  <input type="hidden" name="redirectTo" value={redirectTo} />
-                  <Button type="submit">
-                    Resume campaign
-                  </Button>
-                </form>
-              ) : null}
-              {canArchive ? (
-                <form action={archiveCampaignAction}>
-                  <input type="hidden" name="campaignId" value={bundle.campaign.id} />
-                  <input type="hidden" name="redirectTo" value={redirectTo} />
-                  <Button
-                    type="submit"
-                    variant="outline"
-                    className="border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
-                  >
-                    Archive campaign
-                  </Button>
-                </form>
+
+              {canPause || canResume ? (
+                <div className="flex flex-wrap gap-3">
+                  {canPause ? (
+                    <form action={pauseCampaignAction}>
+                      <input type="hidden" name="campaignId" value={bundle.campaign.id} />
+                      <input type="hidden" name="redirectTo" value={redirectTo} />
+                      <Button type="submit" variant="outline" className="rounded-[18px] px-5">
+                        Pause campaign
+                      </Button>
+                    </form>
+                  ) : null}
+                  {canResume ? (
+                    <form action={resumeCampaignAction}>
+                      <input type="hidden" name="campaignId" value={bundle.campaign.id} />
+                      <input type="hidden" name="redirectTo" value={redirectTo} />
+                      <Button type="submit" className="rounded-[18px] px-5">
+                        Resume campaign
+                      </Button>
+                    </form>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           </Card>
 
           <Card className="p-6 sm:p-7">
-            <h2 className="text-lg font-semibold text-[var(--ink)]">Funnel link</h2>
-            <p className="mt-3 rounded-[20px] bg-[var(--soft-panel)] px-4 py-4 text-sm text-[var(--muted-strong)]">
-              {bundle.funnel.is_published ? `/f/${bundle.funnel.slug}` : "This funnel is still in draft mode."}
-            </p>
-          </Card>
-          <Card className="p-6 sm:p-7">
-            <h2 className="text-lg font-semibold text-[var(--ink)]">Targeting suggestion</h2>
-            <p className="mt-3 text-sm leading-7 text-[var(--muted-strong)]">{bundle.campaign.ad_copy_json.targeting}</p>
-          </Card>
-          <Card className="p-6 sm:p-7">
-            <h2 className="text-lg font-semibold text-[var(--ink)]">Recommended budget</h2>
-            <p className="mt-3 text-sm leading-7 text-[var(--muted-strong)]">{bundle.campaign.ad_copy_json.budget}</p>
-          </Card>
-          <Card className="p-6 sm:p-7">
-            <h2 className="text-lg font-semibold text-[var(--ink)]">Creative guidance</h2>
-            <ul className="mt-3 space-y-3">
-              {bundle.campaign.ad_copy_json.creativeGuidance.map((item) => (
-                <li key={item} className="rounded-[20px] bg-[var(--soft-panel)] px-4 py-4 text-sm text-[var(--muted-strong)]">
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </Card>
+            <SectionTitle
+              title="Activity / timeline"
+              description="A compact history of the campaign instance from draft to the latest sync."
+              icon={Clock3}
+            />
 
-          <Card className="p-6 sm:p-7">
-            <h2 className="text-lg font-semibold text-[var(--ink)]">Meta IDs</h2>
-            <div className="mt-4 space-y-3 text-sm text-[var(--muted-strong)]">
-              <p>
-                <span className="font-medium text-[var(--ink)]">Campaign:</span> {metaIds.campaignId || "Not saved"}
-              </p>
-              <p>
-                <span className="font-medium text-[var(--ink)]">Ad set:</span> {metaIds.adSetId || "Not saved"}
-              </p>
-              <p>
-                <span className="font-medium text-[var(--ink)]">Ad:</span> {metaIds.adId || "Not saved"}
-              </p>
-              <p>
-                <span className="font-medium text-[var(--ink)]">Lead form:</span> {metaIds.leadFormId || "Not saved"}
-              </p>
+            <div className="mt-6 space-y-4">
+              {timelineEntries.map((item) => (
+                <div key={`${item.title}-${item.timestamp || item.detail}`} className="flex gap-4 rounded-[22px] border border-[var(--line)] bg-white p-4">
+                  <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--soft-panel)] text-[var(--brand)]">
+                    <Clock3 className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-[var(--ink)]">{item.title}</p>
+                      <span className="text-xs text-[var(--muted)]">{formatDateTime(item.timestamp)}</span>
+                    </div>
+                    <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{item.detail}</p>
+                  </div>
+                </div>
+              ))}
+              {!timelineEntries.length ? (
+                <div className="rounded-[22px] border border-dashed border-[var(--line)] px-5 py-8 text-center text-sm text-[var(--muted)]">
+                  No timeline events are available yet.
+                </div>
+              ) : null}
             </div>
           </Card>
         </div>
+
+        <Card className="p-6 sm:p-7">
+          <SectionTitle
+            title="Technical details"
+            description="Secondary identifiers and internal references that help with debugging or Meta support."
+            icon={SquarePen}
+          />
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <InfoRow label="Campaign ID" value={bundle.campaign.id} />
+            <InfoRow label="Template ID" value={bundle.template.id} />
+            <InfoRow label="Campaign slug" value={bundle.campaign.slug} />
+            <InfoRow label="Funnel ID" value={bundle.funnel.id} />
+            <InfoRow label="Funnel slug" value={bundle.funnel.slug} />
+            <InfoRow label="Workspace ID" value={bundle.campaign.workspace_id || "—"} />
+            <InfoRow label="Meta campaign ID" value={metaIds.campaignId || "Not saved"} />
+            <InfoRow label="Meta ad set ID" value={metaIds.adSetId || "Not saved"} />
+            <InfoRow label="Meta ad ID" value={metaIds.adId || "Not saved"} />
+            <InfoRow label="Meta lead form ID" value={metaIds.leadFormId || "Not saved"} />
+            <InfoRow label="Last edited" value={formatDateTime(bundle.campaign.updated_at)} />
+            <InfoRow label="Published date" value={formatDateTime(bundle.campaign.published_at)} />
+          </div>
+        </Card>
       </div>
     </AppShell>
   );

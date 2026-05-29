@@ -22,6 +22,7 @@ type FacebookAdPreviewProps = {
   showActionsRow?: boolean;
   compact?: boolean;
   interactiveControls?: boolean;
+  mediaFit?: "cover" | "contain";
 };
 
 const HEADLINE_MAX_LENGTH = 25;
@@ -150,6 +151,7 @@ export function FacebookAdPreview({
   showActionsRow = true,
   compact = false,
   interactiveControls = true,
+  mediaFit = "cover",
 }: FacebookAdPreviewProps) {
   const resolvedMedia = resolveMedia(template, imageUrl, videoUrl);
   const resolvedCarouselImages = resolveCarouselImages(template, imageUrl);
@@ -173,6 +175,7 @@ export function FacebookAdPreview({
   const resolvedDisplayLink = resolveDisplayLink(template);
   const metrics = compact ? { likes: 29, comments: 4, shares: 2 } : { likes: 129, comments: 12, shares: 8 };
   const [avatarFailed, setAvatarFailed] = useState(false);
+  const mediaFitClass = mediaFit === "contain" ? "object-contain bg-[#f7f8fb]" : "object-cover";
 
   useEffect(() => {
     setAvatarFailed(false);
@@ -263,7 +266,7 @@ export function FacebookAdPreview({
       <div className="relative overflow-hidden border border-[rgba(17,18,22,0.08)] bg-[#eef1f6]">
         {resolvedMedia ? (
           resolvedMedia.kind === "video" ? (
-            <video className={cn("w-full object-cover", compact ? "aspect-[0.92/1]" : "aspect-[1/1]")} controls playsInline muted>
+            <video className={cn("w-full", mediaFitClass, compact ? "aspect-[0.92/1]" : "aspect-[1/1]")} controls playsInline muted>
               <source src={resolvedMedia.url} />
               Your browser does not support the video tag.
             </video>
@@ -282,7 +285,7 @@ export function FacebookAdPreview({
                     <img
                       src={url}
                       alt={template ? `${template.name} preview ${index + 1}` : `Template preview ${index + 1}`}
-                      className="h-full w-full object-cover"
+                      className={cn("h-full w-full", mediaFitClass)}
                     />
                   </div>
                 ))}
@@ -293,7 +296,7 @@ export function FacebookAdPreview({
             <img
               src={resolvedMedia.url}
               alt={template ? `${template.name} preview` : "Template preview"}
-              className={cn("w-full object-cover", compact ? "aspect-[0.92/1]" : "aspect-[1/1]")}
+              className={cn("w-full", mediaFitClass, compact ? "aspect-[0.92/1]" : "aspect-[1/1]")}
             />
           )
         ) : (
