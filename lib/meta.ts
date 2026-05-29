@@ -13,13 +13,9 @@ const defaultMetaScopes = [
 ] as const;
 
 const leadFormManagementMetaScopes = ["pages_manage_ads"] as const;
-const leadRetrievalMetaScopes = ["leads_retrieval"] as const;
-const pageWebhookManagementMetaScopes = ["pages_manage_metadata"] as const;
 const allowedMetaScopes = new Set<string>([
   ...defaultMetaScopes,
   ...leadFormManagementMetaScopes,
-  ...leadRetrievalMetaScopes,
-  ...pageWebhookManagementMetaScopes,
 ]);
 
 export type MetaAdAccount = {
@@ -286,12 +282,6 @@ function filterMetaScopesByOptions(
     if (scope === "pages_manage_ads") {
       return Boolean(options?.includeLeadFormManagement);
     }
-    if (scope === "leads_retrieval") {
-      return Boolean(options?.includeLeadRetrieval);
-    }
-    if (scope === "pages_manage_metadata") {
-      return Boolean(options?.includePageWebhookManagement);
-    }
     return true;
   });
 }
@@ -304,11 +294,7 @@ export function getMetaScopes(options?: {
   const raw = readMetaEnv("META_SCOPES") || env.metaScopes;
   const fallback = [...defaultMetaScopes];
   if (!raw) {
-    const extraScopes = [
-      ...(options?.includeLeadFormManagement ? [...leadFormManagementMetaScopes] : []),
-      ...(options?.includeLeadRetrieval ? [...leadRetrievalMetaScopes] : []),
-      ...(options?.includePageWebhookManagement ? [...pageWebhookManagementMetaScopes] : []),
-    ];
+    const extraScopes = [...(options?.includeLeadFormManagement ? [...leadFormManagementMetaScopes] : [])];
     return extraScopes.length ? dedupeScopes([...fallback, ...extraScopes]) : fallback;
   }
 
@@ -547,7 +533,7 @@ export async function fetchMetaCampaignStatus(accessToken: string, campaignId: s
 
 function extractMissingMetaPermissions(message: string) {
   const normalized = message.toLowerCase();
-  const known = ["pages_manage_ads", "leads_retrieval", "pages_manage_metadata"];
+  const known = ["pages_manage_ads"];
   return known.filter((permission) => normalized.includes(permission.toLowerCase()));
 }
 

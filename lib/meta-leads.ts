@@ -17,8 +17,8 @@ import { CampaignAdType, LeadRecord } from "@/types";
 
 type SupabaseAdmin = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
 
-const requiredLeadSyncScopes = ["pages_manage_ads", "leads_retrieval"] as const;
-const optionalLeadSyncScopes = ["pages_manage_metadata"] as const;
+const requiredLeadSyncScopes = ["pages_manage_ads"] as const;
+const optionalLeadSyncScopes: readonly string[] = [];
 const leadStatusIds = ["new", "contacted", "qualified", "closed", "archived"] as const;
 const insertOptionalLeadColumns = new Set([
   "meta_lead_id",
@@ -145,8 +145,8 @@ function readConnectionLeadSyncMetadata(connection: WorkspaceProviderConnectionR
 function buildLeadReconnectHint() {
   const requiredScopes = getMetaScopes({
     includeLeadFormManagement: true,
-    includeLeadRetrieval: true,
-    includePageWebhookManagement: true,
+    includeLeadRetrieval: false,
+    includePageWebhookManagement: false,
   });
   return `Reconnect Meta from the Leads page so the active workspace token includes: ${requiredScopes.join(", ")}.`;
 }
@@ -908,7 +908,7 @@ export async function ingestMetaLeadWebhookPayload({
 }
 
 export function buildLeadSyncReconnectUrl(next = "/leads") {
-  return `/api/meta/connect?reconnect=1&scopeSet=leads&next=${encodeURIComponent(next)}`;
+  return `/api/meta/connect?reconnect=1&scopeSet=lead_forms&next=${encodeURIComponent(next)}`;
 }
 
 export function getLeadInboxSearchMatch(lead: LeadRecord, query: string) {

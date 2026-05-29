@@ -44,10 +44,10 @@ export async function GET(request: NextRequest) {
   const scopeSet = request.nextUrl.searchParams.get("scopeSet");
   const reconnectRequested = request.nextUrl.searchParams.get("reconnect") === "1";
   const includeLeadFormManagement = scopeSet === "lead_forms" || scopeSet === "leads";
-  const includeLeadRetrieval = scopeSet === "leads";
-  const includePageWebhookManagement = scopeSet === "leads";
+  const includeLeadRetrieval = false;
+  const includePageWebhookManagement = false;
   const resolvedScopeSet: MetaOAuthScopeSet =
-    scopeSet === "leads" ? "leads" : includeLeadFormManagement ? "lead_forms" : "default";
+    includeLeadFormManagement ? "lead_forms" : "default";
   const safeNext = next?.startsWith("/") ? next : "/workspace/settings?section=integrations";
   const requestedScopes = getMetaScopes({
     includeLeadFormManagement,
