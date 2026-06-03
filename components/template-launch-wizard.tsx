@@ -2383,11 +2383,11 @@ export function TemplateLaunchWizard({
 
                 <div className="rounded-[28px] bg-[var(--soft-panel)] px-5 py-5">
                   <WizardDisclosure
-                    label="Thank-You Page"
+                    label="Thank-You Destination"
                     value={launchState.adTypeConfig.leadForm.thankYou.enabled ? "Enabled" : "Disabled"}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-[var(--ink)]">Enable thank-you page</p>
+                      <p className="text-sm font-medium text-[var(--ink)]">Enable thank-you destination</p>
                       <label className="flex items-center gap-2 text-sm text-[var(--muted-strong)]">
                         <input
                           type="checkbox"
@@ -2415,6 +2415,60 @@ export function TemplateLaunchWizard({
 
                     {launchState.adTypeConfig.leadForm.thankYou.enabled ? (
                       <div className="mt-4 grid gap-4">
+                        <div className="rounded-[20px] border border-[var(--line)] bg-white p-4">
+                          <p className="text-sm font-semibold text-[var(--ink)]">Choose destination</p>
+                          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                            Send people to Facebook’s built-in thank-you page or to your website after they submit the form.
+                          </p>
+                          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                            {[
+                              {
+                                value: "facebook",
+                                label: "Facebook thank-you page",
+                                description: "Keep the submission flow inside Meta.",
+                              },
+                              {
+                                value: "website",
+                                label: "Website",
+                                description: "Send people to your own page after submit.",
+                              },
+                            ].map((option) => {
+                              const selected =
+                                launchState.adTypeConfig.leadForm.thankYou.destinationMode === option.value;
+                              return (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  onClick={() =>
+                                    updateLaunchState((current) => ({
+                                      ...current,
+                                      adTypeConfig: {
+                                        ...current.adTypeConfig,
+                                        leadForm: {
+                                          ...current.adTypeConfig.leadForm,
+                                          thankYou: {
+                                            ...current.adTypeConfig.leadForm.thankYou,
+                                            destinationMode: option.value as CampaignLaunchState["adTypeConfig"]["leadForm"]["thankYou"]["destinationMode"],
+                                          },
+                                        },
+                                      },
+                                    }))
+                                  }
+                                  className={cn(
+                                    "rounded-[18px] border px-4 py-4 text-left transition-colors",
+                                    selected
+                                      ? "border-[var(--brand)] bg-[rgba(109,94,248,0.08)]"
+                                      : "border-[var(--line)] bg-white",
+                                  )}
+                                >
+                                  <p className="text-sm font-semibold text-[var(--ink)]">{option.label}</p>
+                                  <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{option.description}</p>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
                         <div className="grid gap-4 lg:grid-cols-2">
                           <Input
                             value={launchState.adTypeConfig.leadForm.thankYou.headline}
@@ -2475,33 +2529,10 @@ export function TemplateLaunchWizard({
                           rows={3}
                           placeholder="Thank-you description"
                         />
-                        <div className="grid gap-4 lg:grid-cols-[12rem_minmax(0,1fr)]">
-                          <select
-                            value={launchState.adTypeConfig.leadForm.thankYou.buttonAction}
-                            onChange={(event) =>
-                              updateLaunchState((current) => ({
-                                ...current,
-                                adTypeConfig: {
-                                  ...current.adTypeConfig,
-                                  leadForm: {
-                                    ...current.adTypeConfig.leadForm,
-                                    thankYou: {
-                                      ...current.adTypeConfig.leadForm.thankYou,
-                                      buttonAction: event.target.value as CampaignLaunchState["adTypeConfig"]["leadForm"]["thankYou"]["buttonAction"],
-                                    },
-                                  },
-                                },
-                              }))
-                            }
-                            className="h-11 rounded-[16px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)]"
-                          >
-                            <option value="OPEN_WEBSITE">Website</option>
-                            <option value="DOWNLOAD">Download</option>
-                            <option value="CALL_BUSINESS">Call Business</option>
-                          </select>
-                          {launchState.adTypeConfig.leadForm.thankYou.buttonAction === "CALL_BUSINESS" ? (
-                            <Input
-                              value={launchState.adTypeConfig.leadForm.thankYou.completionPhone}
+                        {launchState.adTypeConfig.leadForm.thankYou.destinationMode === "facebook" ? (
+                          <div className="grid gap-4 lg:grid-cols-[12rem_minmax(0,1fr)]">
+                            <select
+                              value={launchState.adTypeConfig.leadForm.thankYou.buttonAction}
                               onChange={(event) =>
                                 updateLaunchState((current) => ({
                                   ...current,
@@ -2511,15 +2542,63 @@ export function TemplateLaunchWizard({
                                       ...current.adTypeConfig.leadForm,
                                       thankYou: {
                                         ...current.adTypeConfig.leadForm.thankYou,
-                                        completionPhone: event.target.value,
+                                        buttonAction: event.target.value as CampaignLaunchState["adTypeConfig"]["leadForm"]["thankYou"]["buttonAction"],
                                       },
                                     },
                                   },
                                 }))
                               }
-                              placeholder="Phone number used by the thank-you button"
-                            />
-                          ) : (
+                              className="h-11 rounded-[16px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)]"
+                            >
+                              <option value="OPEN_WEBSITE">Website</option>
+                              <option value="DOWNLOAD">Download</option>
+                              <option value="CALL_BUSINESS">Call Business</option>
+                            </select>
+                            {launchState.adTypeConfig.leadForm.thankYou.buttonAction === "CALL_BUSINESS" ? (
+                              <Input
+                                value={launchState.adTypeConfig.leadForm.thankYou.completionPhone}
+                                onChange={(event) =>
+                                  updateLaunchState((current) => ({
+                                    ...current,
+                                    adTypeConfig: {
+                                      ...current.adTypeConfig,
+                                      leadForm: {
+                                        ...current.adTypeConfig.leadForm,
+                                        thankYou: {
+                                          ...current.adTypeConfig.leadForm.thankYou,
+                                          completionPhone: event.target.value,
+                                        },
+                                      },
+                                    },
+                                  }))
+                                }
+                                placeholder="Phone number used by the thank-you button"
+                              />
+                            ) : (
+                              <Input
+                                value={launchState.adTypeConfig.leadForm.thankYou.websiteUrl}
+                                onChange={(event) =>
+                                  updateLaunchState((current) => ({
+                                    ...current,
+                                    adTypeConfig: {
+                                      ...current.adTypeConfig,
+                                      leadForm: {
+                                        ...current.adTypeConfig.leadForm,
+                                        thankYou: {
+                                          ...current.adTypeConfig.leadForm.thankYou,
+                                          websiteUrl: event.target.value,
+                                        },
+                                      },
+                                    },
+                                  }))
+                                }
+                                placeholder="Optional destination URL"
+                              />
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <label className="block text-sm font-medium text-[var(--ink)]">Website URL</label>
                             <Input
                               value={launchState.adTypeConfig.leadForm.thankYou.websiteUrl}
                               onChange={(event) =>
@@ -2537,10 +2616,13 @@ export function TemplateLaunchWizard({
                                   },
                                 }))
                               }
-                              placeholder="Optional destination URL"
+                              placeholder="https://yourwebsite.com/thank-you"
                             />
-                          )}
-                        </div>
+                            <p className="text-xs leading-5 text-[var(--muted)]">
+                              Use your own website as the post-submit destination instead of Meta’s built-in page.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     ) : null}
                   </WizardDisclosure>
