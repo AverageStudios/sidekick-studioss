@@ -269,17 +269,6 @@ function normalizeQuestionKey(value: string) {
     .slice(0, 40);
 }
 
-function getLeadFormCustomQuestionKeyMode(question: CampaignLeadFormCustomQuestion) {
-  if (question.keyMode === "manual") return "manual";
-  if (question.keyMode === "auto") return "auto";
-
-  const normalizedLabel = normalizeQuestionKey(question.label);
-  const normalizedKey = normalizeQuestionKey(question.key);
-  if (!normalizedKey) return "auto";
-  if (normalizedLabel && normalizedKey === normalizedLabel) return "auto";
-  return "manual";
-}
-
 function createCustomLeadFormQuestion(
   type: CampaignLeadFormCustomQuestion["type"],
 ): CampaignLeadFormCustomQuestion {
@@ -2326,7 +2315,7 @@ export function TemplateLaunchWizard({
                                     </div>
                                   </div>
 
-                                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                                  <div className="mt-4 space-y-4">
                                     <div className="space-y-2">
                                       <label className="block text-sm font-medium text-[var(--ink)]">Question label</label>
                                       <Input
@@ -2334,38 +2323,16 @@ export function TemplateLaunchWizard({
                                         onChange={(event) =>
                                           updateLeadFormCustomQuestion(question.id, (currentQuestion) => {
                                             const nextLabel = event.target.value;
-                                            const keyMode = getLeadFormCustomQuestionKeyMode(currentQuestion);
-                                            const nextKey =
-                                              keyMode === "manual"
-                                                ? currentQuestion.key
-                                                : normalizeQuestionKey(nextLabel);
                                             return {
                                               ...currentQuestion,
                                               label: nextLabel,
-                                              key: nextKey,
-                                              keyMode,
+                                              key: normalizeQuestionKey(nextLabel),
+                                              keyMode: "auto",
                                             };
                                           })
                                         }
                                         placeholder="What service are you interested in?"
                                       />
-                                    </div>
-                                    <div className="space-y-2">
-                                      <label className="block text-sm font-medium text-[var(--ink)]">Internal key</label>
-                                      <Input
-                                        value={question.key}
-                                        onChange={(event) =>
-                                          updateLeadFormCustomQuestion(question.id, (currentQuestion) => ({
-                                            ...currentQuestion,
-                                            key: normalizeQuestionKey(event.target.value),
-                                            keyMode: normalizeQuestionKey(event.target.value) ? "manual" : "auto",
-                                          }))
-                                        }
-                                        placeholder="service_interest"
-                                      />
-                                      <p className="text-xs leading-5 text-[var(--muted)]">
-                                        Used for a stable Meta payload key. Letters, numbers, and underscores only.
-                                      </p>
                                     </div>
                                   </div>
 
