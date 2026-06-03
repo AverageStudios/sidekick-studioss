@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Globe, MessageCircle, MoreHorizontal, PlayCircle, Share2, ThumbsUp, X } from "lucide-react";
 import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
+import { buildResolvedPlaceholderMap, replacePlaceholdersInString } from "@/lib/template-placeholders";
 import { cn } from "@/lib/utils";
 import { TemplateSeed } from "@/types";
 
@@ -25,6 +26,7 @@ type FacebookAdPreviewProps = {
   interactiveControls?: boolean;
   mediaFit?: "cover" | "contain";
   mediaAspectMode?: "uniform" | "adaptive";
+  placeholderValues?: Record<string, string>;
 };
 
 type MediaAspectBucket = "portrait" | "square" | "landscape" | "wide";
@@ -61,6 +63,13 @@ function normalizePreviewText(value?: string | null, fallback?: string) {
     .trim();
 
   return normalized || fallback || "";
+}
+
+function normalizeCollapsedPreviewText(value: string) {
+  return value
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
 }
 
 function normalizeSingleLine(value?: string | null, fallback?: string) {
@@ -184,27 +193,45 @@ export function FacebookAdPreview({
   interactiveControls = true,
   mediaFit = "cover",
   mediaAspectMode = compact ? "uniform" : "adaptive",
+  placeholderValues,
 }: FacebookAdPreviewProps) {
   const resolvedMedia = resolveMedia(template, imageUrl, videoUrl);
   const resolvedCarouselImages = resolveCarouselImages(template, imageUrl);
+  const resolvedPlaceholderValues = useMemo(
+    () => buildResolvedPlaceholderMap(placeholderValues || {}),
+    [placeholderValues],
+  );
+  const hasResolvedPlaceholderValues = Object.keys(resolvedPlaceholderValues).length > 0;
+  const applyPreviewPlaceholderValues = (value: string) =>
+    hasResolvedPlaceholderValues
+      ? replacePlaceholdersInString(value, resolvedPlaceholderValues)
+      : value;
   const resolvedPageName = normalizeSingleLine(
-    pageName || template?.name,
+    applyPreviewPlaceholderValues(pageName || template?.name || ""),
     previewLayoutContract.pageNameFallback,
   );
   const resolvedPageBadge = getPageBadge(resolvedPageName);
   const resolvedPrimaryText = normalizePreviewText(
-    primaryText || template?.adCopy.primary || template?.description,
+    applyPreviewPlaceholderValues(primaryText || template?.adCopy.primary || template?.description || ""),
     previewLayoutContract.primaryTextFallback,
   );
+  const collapsedPrimaryText = useMemo(
+    () => normalizeCollapsedPreviewText(resolvedPrimaryText),
+    [resolvedPrimaryText],
+  );
   const resolvedHeadline = normalizeHeadlineText(
-    headline || template?.adCopy.headlines?.[0] || template?.name,
+    applyPreviewPlaceholderValues(headline || template?.adCopy.headlines?.[0] || template?.name || ""),
     previewLayoutContract.headlineFallback,
   );
   const resolvedDescription = normalizePreviewText(
-    description || template?.promoDetails,
+    applyPreviewPlaceholderValues(description || template?.promoDetails || ""),
   );
   const resolvedCta = normalizeSingleLine(
-    ctaLabel ||
+    applyPreviewPlaceholderValues(
+      ctaLabel ||
+        template?.ctaLabel ||
+        resolveTemplateCtaLabel(template, previewLayoutContract.ctaFallback),
+    ) ||
       template?.ctaLabel ||
       resolveTemplateCtaLabel(template, previewLayoutContract.ctaFallback),
     previewLayoutContract.ctaFallback,
@@ -257,17 +284,31 @@ export function FacebookAdPreview({
   }, [resolvedPrimaryText, compact, template?.id]);
 
   useLayoutEffect(() => {
-    if (isPrimaryExpanded) {
-      return;
-    }
-
     const element = primaryTextRef.current;
     if (!element) {
       return;
     }
 
-    setIsPrimaryTruncated(element.scrollHeight > element.clientHeight + 1);
-  }, [isPrimaryExpanded, resolvedPrimaryText, compact]);
+    const measure = () => {
+      setIsPrimaryTruncated(element.scrollHeight > element.clientHeight + 1);
+    };
+
+    measure();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => {
+        window.removeEventListener("resize", measure);
+      };
+    }
+
+    const observer = new ResizeObserver(() => measure());
+    observer.observe(element);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isPrimaryExpanded, collapsedPrimaryText, compact, resolvedPrimaryText]);
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production") return;
@@ -385,12 +426,12 @@ export function FacebookAdPreview({
                 isPrimaryExpanded
                   ? "min-h-0 overflow-visible"
                   : compact
-                    ? `${previewLayoutContract.compactPrimaryLines} min-h-[3.2rem]`
-                    : `${previewLayoutContract.regularPrimaryLines} min-h-[8rem]`,
+                    ? "min-h-[3.2rem] max-h-[4.05rem] overflow-hidden"
+                    : "min-h-[8rem] max-h-[8rem] overflow-hidden",
               )}
               style={isPrimaryExpanded ? { display: "block" } : undefined}
             >
-              {resolvedPrimaryText}
+              {isPrimaryExpanded ? resolvedPrimaryText : collapsedPrimaryText}
             </p>
             {isPrimaryTruncated ? (
               <div className={cn("flex", compact ? "mt-0.5 justify-end" : "mt-2 justify-start")}>

@@ -28,6 +28,7 @@ import {
 } from "@/data/template-taxonomy";
 import { FacebookAdPreview } from "@/components/facebook-ad-preview";
 import { resolveMetaPagePreviewIdentity } from "@/lib/meta-page-identity";
+import { buildResolvedPlaceholderMap } from "@/lib/template-placeholders";
 import { cn } from "@/lib/utils";
 import {
   createInitialCampaignLaunchState,
@@ -929,6 +930,26 @@ export function TemplateLaunchWizard({
           afterImageUrls: [],
         })
       : null;
+  const previewPlaceholderValues = useMemo(
+    () =>
+      buildResolvedPlaceholderMap(launchState.placeholders.values, {
+        businessName: setupValues?.businessName || businessProfile?.business_name || "",
+        city: setupValues?.city || "",
+        ctaText: launchState.review.ctaText || setupValues?.ctaText || "",
+        offerPrice: setupValues?.offerPrice || "",
+        regularPrice: setupValues?.regularPrice || "",
+      }),
+    [
+      businessProfile?.business_name,
+      launchState.placeholders.values,
+      launchState.review.ctaText,
+      setupValues?.businessName,
+      setupValues?.city,
+      setupValues?.ctaText,
+      setupValues?.offerPrice,
+      setupValues?.regularPrice,
+    ],
+  );
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production" || !selectedTemplate) return;
@@ -3009,6 +3030,7 @@ export function TemplateLaunchWizard({
                       resolveTemplateCtaLabel(selectedTemplate, "Learn more")
                     }
                     imageUrl={selectedTemplate?.previewImage || null}
+                    placeholderValues={previewPlaceholderValues}
                     compact
                     mediaFit="contain"
                     mediaAspectMode="uniform"
