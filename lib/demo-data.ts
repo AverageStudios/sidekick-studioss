@@ -133,4 +133,10 @@ export const demoBundle: CampaignBundle = {
 export const demoUser = {
   id: "demo-user",
   email: "demo@sidekickstudioss.com",
+  user_metadata: {
+    avatar_url: "/sidekick-logo.png",
+    first_name: "Demo",
+    last_name: "User",
+    full_name: "Demo User",
+  },
 };

@@ -1,10 +1,11 @@
 import { AppShell } from "@/components/app-shell";
 import { InitialsAvatar } from "@/components/initials-avatar";
+import { ProfilePictureField } from "@/components/profile-picture-field";
 import Link from "next/link";
 import { signOutAction, updateProfileSettingsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getCurrentProfile, requireUser } from "@/lib/auth";
+import { getCurrentProfile, getUserAvatarUrl, requireUser } from "@/lib/auth";
 import { getCurrentWorkspaceContext, getUserDisplayNameFromProfile, getUserInitialsFromProfile } from "@/lib/workspaces";
 
 export default async function SettingsPage({
@@ -28,6 +29,7 @@ export default async function SettingsPage({
     workspaceContext?.userInitials ||
     "U";
   const resolvedEmail = user.email || workspaceContext?.userEmail || "";
+  const resolvedAvatarUrl = getUserAvatarUrl(resolvedProfile, user);
 
   return (
     <AppShell currentPath="/settings">
@@ -67,24 +69,21 @@ export default async function SettingsPage({
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
             <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] px-3.5 py-3">
-              <InitialsAvatar initials={resolvedInitials} label={resolvedName} size="lg" />
+              <InitialsAvatar initials={resolvedInitials} label={resolvedName} src={resolvedAvatarUrl} size="lg" />
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-[var(--ink)]">{resolvedName}</p>
                 <p className="truncate text-xs text-[var(--muted)]">{resolvedEmail || "Signed-in user"}</p>
               </div>
             </div>
             <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Profile info</p>
-            <form action={updateProfileSettingsAction}>
-              <div className="grid gap-3 sm:grid-cols-2">
+            <form action={updateProfileSettingsAction} encType="multipart/form-data">
+              <ProfilePictureField currentAvatarUrl={resolvedAvatarUrl} initials={resolvedInitials} label={resolvedName} />
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 <Input name="firstName" defaultValue={resolvedProfile?.first_name || ""} placeholder="First name" />
                 <Input name="lastName" defaultValue={resolvedProfile?.last_name || ""} placeholder="Last name" />
                 <div className="sm:col-span-2">
                   <Input value={resolvedEmail} placeholder="Email" readOnly disabled />
                 </div>
-              </div>
-
-              <div className="mt-5 flex flex-wrap gap-3">
-                <Button type="submit">Save profile</Button>
               </div>
             </form>
             <div className="mt-3">

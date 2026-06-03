@@ -2,6 +2,7 @@
 
 import {
   useActionState,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -37,7 +38,6 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FacebookAdPreview } from "@/components/facebook-ad-preview";
-import { supportedIndustries } from "@/data/template-taxonomy";
 import {
   AdminTemplateActionState,
   AdminTemplateFormData,
@@ -47,6 +47,17 @@ import {
   type LeadFormSettings,
 } from "@/lib/admin-template-form";
 import { cn, slugify } from "@/lib/utils";
+
+type IndustryOption = {
+  id: string;
+  name: string;
+};
+
+type CategoryOption = {
+  id: string;
+  name: string;
+  industryId: string;
+};
 
 type MediaAssetKind = "image" | "video";
 
@@ -454,6 +465,8 @@ export function AdminTemplateForm({
   mode,
   initialValues,
   action,
+  industryOptions,
+  categoryOptions,
 }: {
   mode: "create" | "edit";
   initialValues: AdminTemplateFormData;
@@ -461,6 +474,8 @@ export function AdminTemplateForm({
     state: AdminTemplateActionState,
     formData: FormData,
   ) => Promise<AdminTemplateActionState>;
+  industryOptions: IndustryOption[];
+  categoryOptions: CategoryOption[];
 }) {
   const [state, formAction, isPending] = useActionState(
     action,
@@ -469,12 +484,19 @@ export function AdminTemplateForm({
   const [values, setValues] = useState(initialValues);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [mediaUploadError, setMediaUploadError] = useState<string | null>(null);
-  const [slugTouched, setSlugTouched] = useState(Boolean(initialValues.slug));
+  const [slugTouched] = useState(Boolean(initialValues.slug));
   const [currentStep, setCurrentStep] = useState<StepId>("basics");
   const [leadFormSettings, setLeadFormSettings] = useState<LeadFormSettings>(() =>
     parseLeadFormSettingsJson(initialValues.leadFormSettingsJson),
   );
   const currentStepIndex = steps.findIndex((step) => step.id === currentStep);
+  const availableCategoryOptions = useMemo(
+    () =>
+      categoryOptions.filter((option) =>
+        values.industryId ? option.industryId === values.industryId : true,
+      ),
+    [categoryOptions, values.industryId],
+  );
   const stepValidation = useMemo(() => {
     const fieldErrors: Partial<Record<AdminTemplateFieldName, string>> = {};
 
@@ -503,6 +525,36 @@ export function AdminTemplateForm({
     values.headline,
     values.name,
   ]);
+
+  useEffect(() => {
+    if (values.industryId && values.categoryId) {
+      return;
+    }
+
+    if (!industryOptions.length || !categoryOptions.length) {
+      return;
+    }
+
+    const industryMatch =
+      industryOptions.find((option) => option.name === values.industry) ||
+      industryOptions[0];
+    const categoryMatch =
+      categoryOptions.find(
+        (option) =>
+          option.name === values.category &&
+          (!industryMatch || option.industryId === industryMatch.id),
+      ) ||
+      categoryOptions.find((option) => option.industryId === industryMatch?.id) ||
+      categoryOptions[0];
+
+    setValues((current) => ({
+      ...current,
+      industryId: industryMatch?.id || "",
+      industry: industryMatch?.name || current.industry,
+      categoryId: categoryMatch?.id || "",
+      category: categoryMatch?.name || current.category,
+    }));
+  }, [categoryOptions, industryOptions, values.category, values.categoryId, values.industry, values.industryId]);
 
   const preview = useMemo(() => {
     const parseLines = (value: string) =>
@@ -538,6 +590,33 @@ export function AdminTemplateForm({
       }
       return next;
     });
+  }
+
+  function syncIndustrySelection(nextIndustryId: string) {
+    const industry = industryOptions.find((option) => option.id === nextIndustryId);
+    const nextCategories = categoryOptions.filter((option) => option.industryId === nextIndustryId);
+    const nextCategory = nextCategories[0];
+
+    setValues((current) => ({
+      ...current,
+      industryId: nextIndustryId,
+      industry: industry?.name || "",
+      categoryId: nextCategory?.id || "",
+      category: nextCategory?.name || "",
+    }));
+  }
+
+  function syncCategorySelection(nextCategoryId: string) {
+    const category = categoryOptions.find((option) => option.id === nextCategoryId);
+    const industry = industryOptions.find((option) => option.id === category?.industryId);
+
+    setValues((current) => ({
+      ...current,
+      categoryId: nextCategoryId,
+      category: category?.name || "",
+      industryId: industry?.id || current.industryId,
+      industry: industry?.name || current.industry,
+    }));
   }
 
   function appendMediaAssets(kind: MediaAssetKind, urls: string[]) {
@@ -811,6 +890,10 @@ export function AdminTemplateForm({
 
   return (
     <form action={formAction} className="space-y-6">
+      <input type="hidden" name="industryId" value={values.industryId} />
+      <input type="hidden" name="categoryId" value={values.categoryId} />
+      <input type="hidden" name="industry" value={values.industry} />
+      <input type="hidden" name="category" value={values.category} />
       <div className="rounded-[30px] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] p-6 shadow-[var(--shadow-soft)]">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -958,25 +1041,38 @@ export function AdminTemplateForm({
               </div>
 
               <div>
-                <FieldLabel required invalid={Boolean(stepValidation.fieldErrors.category)}>Category</FieldLabel>
+                <FieldLabel required invalid={Boolean(stepValidation.fieldErrors.industry)}>Industry</FieldLabel>
                 <Select
-                  name="category"
-                  value={values.category}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    update("category", next);
-                    update("industry", next);
-                  }}
-                  aria-invalid={Boolean(stepValidation.fieldErrors.category)}
+                  value={values.industryId}
+                  onChange={(event) => syncIndustrySelection(event.target.value)}
+                  aria-invalid={Boolean(stepValidation.fieldErrors.industry)}
                 >
-                  <option value="">Select a category</option>
-                  {supportedIndustries.map((industry) => (
-                    <option key={industry} value={industry}>
-                      {industry}
+                  <option value="">Select an industry</option>
+                  {industryOptions.map((industry) => (
+                    <option key={industry.id} value={industry.id}>
+                      {industry.name}
                     </option>
                   ))}
                 </Select>
-                <FieldError message={stepValidation.fieldErrors.category || state.fieldErrors.industry} />
+                <FieldError message={stepValidation.fieldErrors.industry || state.fieldErrors.industry} />
+              </div>
+
+              <div>
+                <FieldLabel required invalid={Boolean(stepValidation.fieldErrors.category)}>Category</FieldLabel>
+                <Select
+                  value={values.categoryId}
+                  onChange={(event) => syncCategorySelection(event.target.value)}
+                  aria-invalid={Boolean(stepValidation.fieldErrors.category)}
+                  disabled={!values.industryId}
+                >
+                  <option value="">{values.industryId ? "Select a category" : "Select an industry first"}</option>
+                  {availableCategoryOptions.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </Select>
+                <FieldError message={stepValidation.fieldErrors.category || state.fieldErrors.category} />
               </div>
 
               <div className="sm:col-span-2">
@@ -1290,7 +1386,7 @@ export function AdminTemplateForm({
                         ))}
                       </Select>
                       <p className="mt-3 text-sm leading-6 text-[var(--muted-strong)]">
-                        Tell Facebook what event you want it to optimize for (e.g., purchases, leads, sign-ups). This helps Facebook understand what success looks like for your ads. This is part of your pixel setup when using a landing page, don't worry we will show the needed codes and how to install them when you launch your campaign.
+                        Tell Facebook what event you want it to optimize for (e.g., purchases, leads, sign-ups). This helps Facebook understand what success looks like for your ads. This is part of your pixel setup when using a landing page, do not worry, we will show the needed codes and how to install them when you launch your campaign.
                       </p>
                     </div>
                   </details>

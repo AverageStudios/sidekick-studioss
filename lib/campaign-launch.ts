@@ -274,7 +274,7 @@ export function getMetaCompatibleCtaLabel(adType: CampaignAdType) {
       return "Send Message";
     case "lead_form":
     default:
-      return "Sign Up";
+      return "Learn More";
   }
 }
 

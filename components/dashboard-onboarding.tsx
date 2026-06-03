@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FacebookAdPreview } from "@/components/facebook-ad-preview";
+import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
 import { Input } from "@/components/ui/input";
 import { TemplateSeed } from "@/types";
 import { cn } from "@/lib/utils";
@@ -159,13 +160,13 @@ export function DashboardOnboarding({
                       : "border-[var(--line)] bg-white/82 shadow-[var(--shadow-soft)] hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--brand)_18%,white)] hover:bg-white active:translate-y-px",
                   )}
                 >
-                  <FacebookAdPreview
-                    template={template}
-                    primaryText={template.adCopy.primary}
-                    headline={template.adCopy.headlines[0] || template.name}
-                    description={template.promoDetails}
-                    ctaLabel={template.ctaDefault}
-                    imageUrl={template.previewImage}
+                <FacebookAdPreview
+                  template={template}
+                  primaryText={template.adCopy.primary}
+                  headline={template.adCopy.headlines[0] || template.name}
+                  description={template.promoDetails}
+                  ctaLabel={resolveTemplateCtaLabel(template, "Learn more")}
+                  imageUrl={template.previewImage}
                     compact
                     showMetaBar={false}
                     className="rounded-[20px]"

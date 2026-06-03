@@ -3,7 +3,7 @@ import { BarChart3, Building2, ChevronDown, CircleHelp, LayoutDashboard, LayoutG
 import { ConfigNotice } from "@/components/config-notice";
 import { InitialsAvatar } from "@/components/initials-avatar";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
-import { getCurrentProfile, getCurrentRole, getCurrentUser } from "@/lib/auth";
+import { getCurrentProfile, getCurrentRole, getCurrentUser, getUserAvatarUrl } from "@/lib/auth";
 import { getSupabaseFallbackMessage } from "@/lib/env";
 import { cn } from "@/lib/utils";
 import {
@@ -51,6 +51,10 @@ export async function AppShell({
   const workspaceName =
     workspaceContext?.activeWorkspace.name ||
     getWorkspaceDisplayName(undefined, userDisplayName);
+  const workspaceAvatarUrl =
+    workspaceContext?.activeWorkspace.logo_url ||
+    workspaceContext?.businessProfile?.logo_url ||
+    null;
   const workspaceInitial =
     workspaceContext?.workspaceInitial ||
     workspaceName.trim().slice(0, 1).toUpperCase() ||
@@ -60,6 +64,7 @@ export async function AppShell({
     workspaceContext?.userInitials ||
     "U";
   const userEmail = identityUser.email || workspaceContext?.userEmail || "";
+  const userAvatarUrl = getUserAvatarUrl(identityProfile, identityUser);
 
   const autoAdminItems = role === "admin" ? [{ href: "/admin", label: "Admin", icon: Shield }] : [];
   const resolvedNavItems = [...navItems, ...autoAdminItems, ...extraNavItems].filter(
@@ -77,9 +82,13 @@ export async function AppShell({
         <div className="mx-auto flex h-[68px] w-full max-w-[76rem] items-center gap-4 px-4 sm:px-6 lg:px-8">
           <details name="shell-dropdown" className="group relative w-[17rem] min-w-0 shrink-0">
             <summary className="flex cursor-pointer list-none items-center gap-3 rounded-2xl px-2.5 py-2 transition-colors hover:bg-[var(--soft-panel)] group-open:bg-[var(--soft-panel)]">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--brand)] text-[11px] font-bold text-white shadow-[0_10px_20px_rgba(109,94,248,0.18)]">
-                {workspaceInitial}
-              </span>
+              <InitialsAvatar
+                initials={workspaceInitial}
+                label={workspaceName}
+                src={workspaceAvatarUrl}
+                size="md"
+                tone="brand"
+              />
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">Workspace</p>
                 <div className="mt-0.5 flex items-center gap-1.5">
@@ -124,17 +133,21 @@ export async function AppShell({
 
                 {currentWorkspace ? (
                   <div key={currentWorkspace.id} className="flex items-center gap-3 rounded-2xl bg-[var(--soft-panel)] px-3 py-3">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-[#ff6fb5] text-xs font-bold text-white">
-                        {currentWorkspace.name.charAt(0).toUpperCase()}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-[var(--ink)]">{currentWorkspace.name}</p>
-                        <p className="truncate text-xs text-[var(--muted)]">
-                          {currentWorkspace.business_name || "Current workspace"}
-                        </p>
-                      </div>
-                      <Building2 className="h-4 w-4 text-[var(--ink)]" />
+                    <InitialsAvatar
+                      initials={currentWorkspace.name.charAt(0).toUpperCase()}
+                      label={currentWorkspace.name}
+                      src={currentWorkspace.logo_url || null}
+                      size="sm"
+                      tone="brand"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-[var(--ink)]">{currentWorkspace.name}</p>
+                      <p className="truncate text-xs text-[var(--muted)]">
+                        {currentWorkspace.business_name || "Current workspace"}
+                      </p>
                     </div>
+                    <Building2 className="h-4 w-4 text-[var(--ink)]" />
+                  </div>
                 ) : null}
 
                 {recentWorkspaces.map((workspace) => (
@@ -145,9 +158,12 @@ export async function AppShell({
                         type="submit"
                         className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
                       >
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-[var(--soft-panel)] text-xs font-bold text-[var(--ink)]">
-                          {workspace.name.charAt(0).toUpperCase()}
-                        </span>
+                        <InitialsAvatar
+                          initials={workspace.name.charAt(0).toUpperCase()}
+                          label={workspace.name}
+                          src={workspace.logo_url || null}
+                          size="sm"
+                        />
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-medium text-[var(--ink)]">{workspace.name}</p>
                           <p className="truncate text-xs text-[var(--muted)]">
@@ -210,13 +226,14 @@ export async function AppShell({
               <InitialsAvatar
                 initials={userInitials}
                 label={userDisplayName}
+                src={userAvatarUrl}
                 tone={currentPath.startsWith("/settings") ? "brand" : "subtle"}
               />
             </summary>
 
             <div className="absolute right-0 top-[calc(100%+10px)] z-40 hidden w-[20rem] rounded-[1.35rem] border border-[var(--line)] bg-white p-2 shadow-[0_18px_50px_rgba(15,23,42,0.12)] group-open:block">
               <div className="flex items-start gap-3 rounded-2xl px-3 py-3">
-                <InitialsAvatar initials={userInitials} label={userDisplayName} size="lg" />
+                <InitialsAvatar initials={userInitials} label={userDisplayName} src={userAvatarUrl} size="lg" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-base font-semibold text-[var(--ink)]">{userDisplayName}</p>
                   <p className="mt-1 truncate text-sm text-[var(--muted)]">{userEmail || "Workspace member"}</p>

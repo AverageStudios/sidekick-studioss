@@ -18,6 +18,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  carDetailingLaunchCategories,
+  normalizeIndustryLabel,
+  normalizeTemplateCategoryKey,
+  resolveTemplateCtaLabel,
+  resolveTemplateLaunchCategory,
+  supportedIndustries,
+} from "@/data/template-taxonomy";
 import { FacebookAdPreview } from "@/components/facebook-ad-preview";
 import { resolveMetaPagePreviewIdentity } from "@/lib/meta-page-identity";
 import { cn } from "@/lib/utils";
@@ -26,7 +34,6 @@ import {
   evaluateLaunchReadiness,
   getAdTypeLabel,
   getCampaignGoalForAdType,
-  getMetaCompatibleCtaLabel,
   getNextWizardStep,
   getPreviousWizardStep,
   getWizardSectionForStep,
@@ -37,7 +44,6 @@ import {
   normalizeCampaignLaunchState,
   validateWizardStep,
 } from "@/lib/campaign-launch";
-import { supportedIndustries } from "@/data/template-taxonomy";
 import { createCampaignBlueprint } from "@/lib/template-engine";
 import {
   BusinessProfile,
@@ -670,6 +676,7 @@ export function TemplateLaunchWizard({
   const [isSearchingLocations, setIsSearchingLocations] = useState(false);
   const [budgetGuidance, setBudgetGuidance] = useState<BudgetGuidanceResponse | null>(null);
   const [budgetGuidanceError, setBudgetGuidanceError] = useState<string | null>(null);
+  const [templateCategoryFilter, setTemplateCategoryFilter] = useState("all");
   const locationSuggestionCacheRef = useRef<Map<string, CachedLocationLookup>>(new Map());
   const locationSearchAbortRef = useRef<AbortController | null>(null);
   const budgetGuidanceAbortRef = useRef<AbortController | null>(null);
@@ -829,6 +836,85 @@ export function TemplateLaunchWizard({
         : templates,
     [launchState.selection.industry, templates],
   );
+  function getTemplateLaunchCategory(template: TemplateSeed) {
+    const resolvedCategory = resolveTemplateLaunchCategory(template);
+    const fallbackCategory =
+      template.category && template.category.trim().toLowerCase() !== template.industry?.trim().toLowerCase()
+        ? template.category.trim()
+        : "";
+    return resolvedCategory || fallbackCategory || "Uncategorized";
+  }
+  const templateCategoryOptions = useMemo(() => {
+    const categoryCounts = new Map<string, number>();
+    const normalizedTemplates = filteredTemplates.map((template) => ({
+      template,
+      category: getTemplateLaunchCategory(template),
+    }));
+
+    normalizedTemplates.forEach(({ category }) => {
+      const key = normalizeTemplateCategoryKey(category);
+      categoryCounts.set(key, (categoryCounts.get(key) || 0) + 1);
+    });
+
+    if (launchState.selection.industry === "Car Detailing") {
+      return carDetailingLaunchCategories
+        .filter((label) => label !== "All")
+        .map((label) => ({
+          key: normalizeTemplateCategoryKey(label),
+          label,
+          count: categoryCounts.get(normalizeTemplateCategoryKey(label)) || 0,
+        }));
+    }
+
+    return Array.from(
+      new Map(
+        normalizedTemplates.map(({ category }) => {
+          const key = normalizeTemplateCategoryKey(category);
+          return [key, { key, label: category, count: categoryCounts.get(key) || 0 }];
+        }),
+      ).values(),
+    ).sort((left, right) => {
+      if (right.count !== left.count) {
+        return right.count - left.count;
+      }
+      return left.label.localeCompare(right.label);
+    });
+  }, [filteredTemplates, launchState.selection.industry]);
+  const visibleTemplates = useMemo(() => {
+    if (templateCategoryFilter === "all") {
+      return filteredTemplates;
+    }
+
+    return filteredTemplates.filter((template) => {
+      const category = normalizeTemplateCategoryKey(getTemplateLaunchCategory(template));
+      return category === templateCategoryFilter;
+    });
+  }, [filteredTemplates, templateCategoryFilter]);
+  const availableIndustries = useMemo(() => {
+    const dynamicIndustries = Array.from(
+      new Set(
+        templates
+          .map((template) => normalizeIndustryLabel(template.industry || template.category || ""))
+          .filter(Boolean),
+      ),
+    );
+
+    return dynamicIndustries.length ? dynamicIndustries : supportedIndustries;
+  }, [templates]);
+
+  useEffect(() => {
+    setTemplateCategoryFilter("all");
+  }, [launchState.selection.industry]);
+
+  useEffect(() => {
+    if (templateCategoryFilter === "all") {
+      return;
+    }
+
+    if (!templateCategoryOptions.some((option) => option.key === templateCategoryFilter)) {
+      setTemplateCategoryFilter("all");
+    }
+  }, [templateCategoryFilter, templateCategoryOptions]);
 
   const placeholderFields = selectedTemplate ? getTemplatePlaceholderFields(selectedTemplate) : [];
   const setupValues = selectedTemplate
@@ -842,6 +928,19 @@ export function TemplateLaunchWizard({
           afterImageUrls: [],
         })
       : null;
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production" || !selectedTemplate) return;
+    console.debug("[launch preview CTA]", {
+      templateSlug: selectedTemplate.slug,
+      rawTemplateCta: selectedTemplate.ctaDefault,
+      templateCtaType: selectedTemplate.ctaType || null,
+      templateCtaLabel: selectedTemplate.ctaLabel || null,
+      funnelFinalCta: previewBlueprint?.funnelConfig.ctaText || null,
+      reviewCta: launchState.review.ctaText || null,
+      resolved: launchState.review.ctaText || previewBlueprint?.funnelConfig.ctaText || selectedTemplate.ctaDefault || null,
+    });
+  }, [launchState.review.ctaText, previewBlueprint?.funnelConfig.ctaText, selectedTemplate]);
   const pagePreviewIdentity = resolveMetaPagePreviewIdentity({
     integration: metaIntegration,
     preferredPageId: launchState.integrationSelections.pageId,
@@ -890,7 +989,7 @@ export function TemplateLaunchWizard({
         selection: {
           ...launchState.selection,
           industry: template.industry,
-          category: template.category,
+          category: getTemplateLaunchCategory(template),
           offerType: template.offerType,
           templateSlug: template.slug,
           adType: launchState.selection.adType || template.defaultAdType || "lead_form",
@@ -907,7 +1006,6 @@ export function TemplateLaunchWizard({
     );
 
     updateLaunchState(() => nextState);
-    void persistDraft(nextState);
   }
 
   function applyAdType(adType: CampaignLaunchState["selection"]["adType"]) {
@@ -1074,9 +1172,6 @@ export function TemplateLaunchWizard({
       businessProfile,
     );
     updateLaunchState(() => nextState);
-    if (selectedTemplate) {
-      await persistDraft(nextState);
-    }
   }
 
   function handleBack() {
@@ -1390,7 +1485,7 @@ export function TemplateLaunchWizard({
       case "industry":
         return (
           <div className="lf-industry-grid lf-fade">
-            {supportedIndustries.map((industry) => {
+            {availableIndustries.map((industry) => {
               const visuals = industryVisuals[industry] || { emoji: "🏢", color: "#6D5EF8", bg: "#EFECFF" };
               const active = launchState.selection.industry === industry;
               return (
@@ -1407,7 +1502,7 @@ export function TemplateLaunchWizard({
                           selection: {
                             ...current.selection,
                             industry,
-                            category: industry,
+                            category: "",
                           },
                         },
                         selectedTemplate || templates[0],
@@ -1428,15 +1523,50 @@ export function TemplateLaunchWizard({
       case "template":
         return (
           <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setTemplateCategoryFilter("all")}
+                className={cn(
+                  "rounded-full border px-4 py-2 text-sm font-semibold transition",
+                  templateCategoryFilter === "all"
+                    ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_10px_20px_rgba(109,94,248,0.18)]"
+                    : "border-[var(--line)] bg-white text-[var(--muted-strong)] hover:border-[color-mix(in_oklab,var(--brand)_18%,white)] hover:text-[var(--ink)]",
+                )}
+              >
+                All
+              </button>
+              {templateCategoryOptions.map((category) => {
+                const active = templateCategoryFilter === category.key;
+                return (
+                  <button
+                    key={category.key}
+                    type="button"
+                    onClick={() => setTemplateCategoryFilter(category.key)}
+                    className={cn(
+                      "rounded-full border px-4 py-2 text-sm font-semibold transition",
+                      active
+                        ? "border-[var(--brand)] bg-[color-mix(in_oklab,var(--brand)_12%,white)] text-[var(--brand)] shadow-[0_10px_20px_rgba(109,94,248,0.10)]"
+                        : "border-[var(--line)] bg-white text-[var(--muted-strong)] hover:border-[color-mix(in_oklab,var(--brand)_18%,white)] hover:text-[var(--ink)]",
+                    )}
+                  >
+                    {category.label}
+                    <span className="ml-2 text-[11px] font-medium opacity-70">{category.count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {filteredTemplates.map((template) => {
+              {visibleTemplates.map((template) => {
                 const previewPrimaryText =
                   template.adCopy.primary || template.description || template.promoDetails || "Template preview";
                 const previewHeadline = template.adCopy.headlines?.[0] || template.name;
                 const previewDescription = template.promoDetails || template.adCopy.descriptions?.[0] || "";
-                const previewCta = getMetaCompatibleCtaLabel(
-                  launchState.selection.adType || template.defaultAdType || "lead_form",
-                );
+                const previewCta =
+                  template.ctaLabel ||
+                  previewBlueprint?.funnelConfig.ctaText ||
+                  resolveTemplateCtaLabel(template, "Learn more");
                 return (
                   <button
                     key={template.id}
@@ -1455,18 +1585,23 @@ export function TemplateLaunchWizard({
                       headline={previewHeadline}
                       description={previewDescription}
                       ctaLabel={previewCta}
-                      imageUrl={template.previewImage || null}
-                      compact
-                      showMetaBar={false}
-                      showReactionsBar={false}
-                      showActionsRow={false}
-                      interactiveControls={false}
+                    imageUrl={template.previewImage || null}
+                    compact
+                    showMetaBar
+                    showReactionsBar={false}
+                    showActionsRow={false}
+                    interactiveControls={false}
                       className="border-0 bg-transparent p-0 shadow-none"
                     />
                   </button>
                 );
               })}
             </div>
+            {!visibleTemplates.length ? (
+              <div className="rounded-[24px] border border-dashed border-[var(--line)] bg-white px-6 py-10 text-center text-sm text-[var(--muted-strong)]">
+                No templates match this category yet. Try another category or switch back to All.
+              </div>
+            ) : null}
           </div>
         );
       case "ad-type":
@@ -2563,10 +2698,9 @@ export function TemplateLaunchWizard({
           selectedTemplate?.promoDetails ||
           "";
         const placeholderPreviewCta =
+          selectedTemplate?.ctaLabel ||
           previewBlueprint?.funnelConfig.ctaText ||
-          launchState.review.ctaText ||
-          selectedTemplate?.ctaDefault ||
-          "Learn more";
+          resolveTemplateCtaLabel(selectedTemplate, "Learn more");
 
         return (
           <div className="grid gap-5">
@@ -2819,10 +2953,15 @@ export function TemplateLaunchWizard({
                     primaryText={previewBlueprint?.adCopy.primary}
                     headline={previewBlueprint?.adCopy.headlines[0]}
                     description={previewBlueprint?.adCopy.descriptions[0]}
-                    ctaLabel={launchState.review.ctaText || selectedTemplate?.ctaDefault}
+                    ctaLabel={
+                      selectedTemplate?.ctaLabel ||
+                      previewBlueprint?.funnelConfig.ctaText ||
+                      resolveTemplateCtaLabel(selectedTemplate, "Learn more")
+                    }
                     imageUrl={selectedTemplate?.previewImage || null}
                     compact
                     mediaFit="contain"
+                    mediaAspectMode="uniform"
                     className="w-full rounded-none border-0 bg-transparent p-0 shadow-none"
                   />
                 </div>

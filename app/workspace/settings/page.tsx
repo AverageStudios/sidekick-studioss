@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { InitialsAvatar } from "@/components/initials-avatar";
+import { WorkspaceLogoField } from "@/components/workspace-logo-field";
 import {
   inviteWorkspaceMemberAction,
   removeWorkspaceMemberAction,
@@ -325,42 +326,15 @@ export default async function WorkspaceSettingsPage({
                 <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Icon</p>
                 <h2 className="mt-3 text-[2.2rem] font-semibold tracking-[-0.05em] text-[var(--ink)]">Icon</h2>
                 <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-                  Update the workspace logo and accent color used across your campaign setup.
+                  Update the workspace image and accent color used across your campaign setup.
                 </p>
 
                 <form action={updateWorkspaceIconAction} className="mt-8 space-y-6">
-                  <div className="rounded-2xl border border-[var(--line)] bg-[var(--soft-panel)] p-5">
-                    <p className="text-sm font-medium text-[var(--ink)]">Current logo</p>
-                    <div className="mt-4 flex items-center gap-4">
-                      <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-[var(--line)] bg-white">
-                        {businessProfile?.logo_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={businessProfile.logo_url} alt={`${workspaceName} logo`} className="h-full w-full object-cover" />
-                        ) : (
-                          <span className="text-lg font-semibold text-[var(--muted)]">
-                            {workspaceName.charAt(0).toUpperCase()}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-sm text-[var(--muted)]">
-                        Upload a logo for this workspace, or remove the current one.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="logo">
-                      Upload logo
-                    </label>
-                    <Input id="logo" name="logo" type="file" accept="image/*" />
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <input id="removeLogo" name="removeLogo" type="checkbox" value="1" className="h-4 w-4 rounded border-[var(--line)]" />
-                    <label htmlFor="removeLogo" className="text-sm text-[var(--muted-strong)]">
-                      Remove current logo
-                    </label>
-                  </div>
+                  <WorkspaceLogoField
+                    currentLogoUrl={businessProfile?.logo_url || null}
+                    initials={workspaceName.charAt(0).toUpperCase()}
+                    label={workspaceName}
+                  />
 
                   <div className="max-w-[12rem]">
                     <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="brandColor">
@@ -811,6 +785,7 @@ export default async function WorkspaceSettingsPage({
                         <InitialsAvatar
                           initials={member.initials}
                           label={member.displayName}
+                          src={member.avatarUrl}
                           size="lg"
                           tone={member.isCurrentUser ? "brand" : "subtle"}
                         />

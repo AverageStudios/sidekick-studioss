@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { FacebookAdPreview } from "@/components/facebook-ad-preview";
+import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
@@ -28,7 +29,6 @@ import {
   getStepDefinition,
   getTemplatePlaceholderFields,
   getTemplateSetupValuesFromLaunchState,
-  getMetaCompatibleCtaLabel,
   resolvePlaceholderValue,
   campaignGoalOptions,
 } from "@/lib/campaign-launch";
@@ -516,19 +516,19 @@ export default async function CampaignPage({
             />
 
             <div className="mt-6 space-y-5">
-              <FacebookAdPreview
-                template={bundle.template}
-                pageName={pageIdentity.pageName}
-                pageAvatarUrl={pageIdentity.pageAvatarUrl}
-                primaryText={bundle.campaign.ad_copy_json.primary || bundle.campaign.business_description}
-                headline={bundle.campaign.headline || bundle.campaign.ad_copy_json.headlines[0] || bundle.campaign.name}
-                description={
-                  bundle.campaign.subheadline ||
-                  bundle.campaign.ad_copy_json.descriptions[0] ||
-                  bundle.template.description
-                }
-                ctaLabel={bundle.campaign.cta_text || getMetaCompatibleCtaLabel(launchView?.adType || bundle.template.defaultAdType || "lead_form")}
-                imageUrl={bundle.template.previewImage || null}
+                <FacebookAdPreview
+                  template={bundle.template}
+                  pageName={pageIdentity.pageName}
+                  pageAvatarUrl={pageIdentity.pageAvatarUrl}
+                  primaryText={bundle.campaign.ad_copy_json.primary || bundle.campaign.business_description}
+                  headline={bundle.campaign.headline || bundle.campaign.ad_copy_json.headlines[0] || bundle.campaign.name}
+                  description={
+                    bundle.campaign.subheadline ||
+                    bundle.campaign.ad_copy_json.descriptions[0] ||
+                    bundle.template.description
+                  }
+                  ctaLabel={bundle.campaign.cta_text || resolveTemplateCtaLabel(bundle.template, "Learn More")}
+                  imageUrl={bundle.template.previewImage || null}
                 compact
                 showMetaBar={false}
                 showReactionsBar={false}

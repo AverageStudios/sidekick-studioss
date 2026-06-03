@@ -1,5 +1,10 @@
 import { TemplateRecord } from "@/types";
-import { normalizeIndustryLabel, normalizeOfferTypeLabel } from "@/data/template-taxonomy";
+import {
+  formatTemplateCtaLabel,
+  normalizeIndustryLabel,
+  normalizeOfferTypeLabel,
+  normalizeTemplateCtaType,
+} from "@/data/template-taxonomy";
 
 export type LeadFormSettings = {
   formType: "higher_intent" | "more_volume";
@@ -50,6 +55,8 @@ export function getEmptyLeadFormSettings(): LeadFormSettings {
 export type AdminTemplateFormData = {
   templateId?: string;
   currentVersion?: number;
+  industryId: string;
+  categoryId: string;
   name: string;
   slug: string;
   category: string;
@@ -84,6 +91,8 @@ export type AdminTemplateFormData = {
   promoDetails: string;
   headline: string;
   subheadline: string;
+  ctaType: string;
+  ctaLabel: string;
   ctaDefault: string;
   offerLabel: string;
   offerStructure: string;
@@ -130,6 +139,8 @@ export const emptyAdminTemplateActionState: AdminTemplateActionState = {
 
 export function getEmptyAdminTemplateFormData(): AdminTemplateFormData {
   return {
+    industryId: "",
+    categoryId: "",
     name: "",
     slug: "",
     category: "",
@@ -165,6 +176,8 @@ export function getEmptyAdminTemplateFormData(): AdminTemplateFormData {
     promoDetails: "",
     headline: "",
     subheadline: "",
+    ctaType: "",
+    ctaLabel: "",
     ctaDefault: "Get Started",
     offerLabel: "Limited-time offer",
     offerStructure: "",
@@ -212,10 +225,27 @@ export function getAdminTemplateFormData(record: TemplateRecord): AdminTemplateF
   const adTypeConfig = config.adTypeConfig || {};
   const additionalSettings = config.additionalSettings || {};
   const defaultAdType = (config.defaultAdType || (config.supportedAdTypes || [])[0] || "lead_form") as string;
+  const resolvedCtaType =
+    normalizeTemplateCtaType(
+      config.ctaType ||
+        (config as { root_cta?: string | null }).root_cta ||
+        (config as { creative_cta?: string | null }).creative_cta ||
+        (config as { recommended_cta?: string | null }).recommended_cta ||
+        (config as { cta?: string | null }).cta ||
+        (config as { creative?: { cta?: string | null } | null }).creative?.cta ||
+        config.ctaDefault ||
+        "",
+    ) || "";
+  const resolvedCtaLabel =
+    config.ctaLabel ||
+    ((config as { ctaPolicy?: { displayLabel?: string | null } | null }).ctaPolicy?.displayLabel || "") ||
+    formatTemplateCtaLabel(resolvedCtaType || config.ctaDefault || "Get Started", "Get Started");
 
   return {
     templateId: record.id,
     currentVersion: record.version || 1,
+    industryId: record.industry_id || "",
+    categoryId: record.category_id || "",
     name: record.name,
     slug: record.slug,
     category: record.category || config.industry || "",
@@ -252,7 +282,9 @@ export function getAdminTemplateFormData(record: TemplateRecord): AdminTemplateF
     promoDetails: config.promoDetails || "",
     headline: funnel?.heroHeadline || "",
     subheadline: funnel?.heroSubheadline || "",
-    ctaDefault: config.ctaDefault || funnel?.finalCta || "Get Started",
+    ctaType: resolvedCtaType,
+    ctaLabel: resolvedCtaLabel,
+    ctaDefault: resolvedCtaLabel,
     offerLabel: funnel?.offerLabel || "Limited-time offer",
     offerStructure: offerStructure.join("\n"),
     benefits: benefits.join("\n"),
@@ -265,7 +297,7 @@ export function getAdminTemplateFormData(record: TemplateRecord): AdminTemplateF
     budget: adCopy?.budget || "",
     creativeGuidance: (adCopy?.creativeGuidance || []).join("\n"),
     landingIntro: leadFlowDefaults?.pageIntro || "",
-    formCta: leadFlowDefaults?.formCta || config.ctaDefault || funnel?.finalCta || "Request details",
+    formCta: leadFlowDefaults?.formCta || resolvedCtaLabel || funnel?.finalCta || "Request details",
     formFields: (leadFlowDefaults?.formFields || []).join("\n"),
     nextStepFlow: (leadFlowDefaults?.nextStepFlow || []).join("\n"),
     landingPageUrl: adTypeConfig.landing_page?.landingPageUrl || "",

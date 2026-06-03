@@ -1,5 +1,11 @@
 import { TemplateIndustry, TemplateOfferType, TemplateRecord, TemplateSeed } from "@/types";
-import { normalizeIndustryLabel, normalizeOfferTypeLabel } from "@/data/template-taxonomy";
+import {
+  formatTemplateCtaLabel,
+  normalizeIndustryLabel,
+  normalizeOfferTypeLabel,
+  normalizeTemplateCtaType,
+  resolveTemplateLaunchCategory,
+} from "@/data/template-taxonomy";
 import { extractTemplatePlaceholderFields } from "@/lib/template-placeholders";
 
 // Dev fallback only. The real source of truth for customer-facing template browsing
@@ -10,7 +16,7 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     slug: "full-detail-promo",
     name: "Full Detail Promo",
     description: "A fast-launch offer for drivers who want the full interior and exterior reset.",
-    category: "Car Detailing",
+    category: "Full Details",
     industry: "Car Detailing",
     offerType: "Service Booking",
     positioning: "Best for shops pushing a flagship full detail with a clean entry offer.",
@@ -75,7 +81,7 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     slug: "interior-detail-promo",
     name: "Interior Detail Promo",
     description: "A focused funnel for detailers selling interior recovery, stain removal, and refresh jobs.",
-    category: "Car Detailing",
+    category: "Interior Only",
     industry: "Car Detailing",
     offerType: "Quote Request",
     positioning: "Best for shops booking family vehicles, work trucks, or rideshare interiors.",
@@ -140,7 +146,7 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     slug: "ceramic-coating-promo",
     name: "Ceramic Coating Promo",
     description: "A premium-feeling campaign for high-ticket coating jobs and paint protection offers.",
-    category: "Car Detailing",
+    category: "Paint Correction & Protection",
     industry: "Car Detailing",
     offerType: "High-Ticket Offer",
     positioning: "Best for detailers selling higher-ticket paint protection with a premium brand feel.",
@@ -205,7 +211,7 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     slug: "paint-correction-promo",
     name: "Paint Correction Promo",
     description: "A polished campaign for swirl removal, gloss restoration, and paint correction leads.",
-    category: "Car Detailing",
+    category: "Paint Correction & Protection",
     industry: "Car Detailing",
     offerType: "Inspection",
     positioning: "Best for detailers selling transformation-focused correction work.",
@@ -270,7 +276,7 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     slug: "monthly-maintenance-promo",
     name: "Monthly Maintenance Promo",
     description: "A recurring-revenue funnel for maintenance washes and simple monthly membership style offers.",
-    category: "Car Detailing",
+    category: "Maintenance / Membership",
     industry: "Car Detailing",
     offerType: "Recurring Maintenance",
     positioning: "Best for detailers wanting steadier repeat business with a lightweight offer.",
@@ -344,13 +350,31 @@ export function hydrateTemplateRecord(record: TemplateRecord): TemplateSeed {
   const fallback = getTemplateById(record.id) || getTemplateBySlug(record.slug);
   const config = record.config_json || {};
   const industry = normalizeIndustryLabel(record.industry || config.industry || fallback?.industry || record.category) as TemplateIndustry;
+  const category = (record.category || config.category || fallback?.category || industry || "Uncategorized").trim();
   const offerType = normalizeOfferTypeLabel(record.offer_type || config.offerType || fallback?.offerType || "") as TemplateOfferType;
+  const resolvedCtaType =
+    normalizeTemplateCtaType(
+      config.ctaType ||
+        (config as { root_cta?: string | null }).root_cta ||
+        (config as { creative_cta?: string | null }).creative_cta ||
+        (config as { recommended_cta?: string | null }).recommended_cta ||
+        (config as { cta?: string | null }).cta ||
+        (config as { creative?: { cta?: string | null } | null }).creative?.cta ||
+        config.ctaDefault ||
+        fallback?.ctaType ||
+        fallback?.ctaDefault ||
+        undefined,
+    ) || "";
+  const resolvedCtaLabel =
+    config.ctaLabel ||
+    ((config as { ctaPolicy?: { displayLabel?: string | null } | null }).ctaPolicy?.displayLabel || "") ||
+    formatTemplateCtaLabel(resolvedCtaType || config.ctaDefault || fallback?.ctaDefault || undefined, "Learn more");
   const hydratedSeed: TemplateSeed = {
     id: record.id,
     slug: record.slug,
     name: record.name,
     description: record.description,
-    category: normalizeIndustryLabel(record.category || industry) as TemplateIndustry,
+    category,
     industry: industry || "Car Detailing",
     offerType: offerType || fallback?.offerType || "Quote Request",
     supportedAdTypes: config.supportedAdTypes || fallback?.supportedAdTypes || ["lead_form"],
@@ -363,7 +387,21 @@ export function hydrateTemplateRecord(record: TemplateRecord): TemplateSeed {
         (record.preview_image_url ? [record.preview_image_url] : fallback?.creativeAssets?.imageUrls || []),
       videoUrls: (config.creativeAssets as { videoUrls?: string[] } | undefined)?.videoUrls || fallback?.creativeAssets?.videoUrls || [],
     },
-    ctaDefault: config.ctaDefault || fallback?.ctaDefault || "Get Started",
+    launchCategory: resolveTemplateLaunchCategory({
+      slug: record.slug,
+      name: record.name,
+      description: record.description,
+      positioning: config.positioning || fallback?.positioning || record.description,
+      category: record.category,
+      industry: record.industry || config.industry || fallback?.industry || null,
+      config_json: {
+        launchCategory: (config as { launchCategory?: string | null }).launchCategory || undefined,
+        template: (config as { template?: { category?: string | null; categoryLabel?: string | null; slug?: string | null } | null }).template || null,
+      },
+    }),
+    ctaType: resolvedCtaType,
+    ctaLabel: resolvedCtaLabel,
+    ctaDefault: resolvedCtaLabel,
     promoDetails: config.promoDetails || fallback?.promoDetails || "",
     offerStructure: config.offerStructure || fallback?.offerStructure || [],
     benefits: config.benefits || fallback?.benefits || [],
@@ -385,6 +423,26 @@ export function hydrateTemplateRecord(record: TemplateRecord): TemplateSeed {
     },
     adTypeConfig: config.adTypeConfig || fallback?.adTypeConfig || {},
   };
+
+  if (process.env.NODE_ENV !== "production") {
+    console.debug("[template hydration CTA]", {
+      slug: record.slug,
+      raw: {
+        ctaType: (config as { ctaType?: string | null }).ctaType || null,
+        root_cta: (config as { root_cta?: string | null }).root_cta || null,
+        creative_cta: (config as { creative_cta?: string | null }).creative_cta || null,
+        recommended_cta: (config as { recommended_cta?: string | null }).recommended_cta || null,
+        ctaLabel: (config as { ctaLabel?: string | null }).ctaLabel || null,
+        ctaPolicyDisplayLabel: (config as { ctaPolicy?: { displayLabel?: string | null } | null }).ctaPolicy?.displayLabel || null,
+        cta: (config as { cta?: string | null }).cta || null,
+        creative: (config as { creative?: { cta?: string | null } | null }).creative?.cta || null,
+        ctaDefault: config.ctaDefault || null,
+        funnelFinalCta: config.funnel?.finalCta || null,
+      },
+      resolvedType: hydratedSeed.ctaType,
+      resolvedLabel: hydratedSeed.ctaLabel,
+    });
+  }
 
   return {
     ...hydratedSeed,

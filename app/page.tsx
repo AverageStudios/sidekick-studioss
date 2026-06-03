@@ -10,6 +10,7 @@ import { InteractiveGlowCard } from "@/components/ui/interactive-glow-card";
 import { HeroGeometric } from "@/components/ui/shape-landing-hero";
 import { Button } from "@/components/ui/button";
 import { publicFaqs } from "@/data/public-faqs";
+import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
 import { getTemplates } from "@/lib/data";
 
 const featureCards = [
@@ -179,7 +180,7 @@ export default async function HomePage() {
                   primaryText={template.adCopy.primary}
                   headline={template.adCopy.headlines[0] || template.name}
                   description={template.adCopy.descriptions[0] || template.positioning}
-                  ctaLabel={template.ctaDefault}
+                  ctaLabel={resolveTemplateCtaLabel(template, "Learn more")}
                   imageUrl={template.previewImage}
                   compact
                   showMetaBar={false}

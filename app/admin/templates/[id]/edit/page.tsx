@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { requireAdmin } from "@/lib/auth";
 import { getAdminTemplateById } from "@/lib/admin-templates";
 import { getAdminTemplateFormData } from "@/lib/admin-template-form";
+import { listAdminTemplateLibrary } from "@/lib/template-library";
 
 export default async function AdminEditTemplatePage({
   params,
@@ -19,11 +20,23 @@ export default async function AdminEditTemplatePage({
 }) {
   await requireAdmin();
   const [{ id }, { error }] = await Promise.all([params, searchParams]);
-  const template = await getAdminTemplateById(id);
+  const [template, library] = await Promise.all([getAdminTemplateById(id), listAdminTemplateLibrary()]);
 
   if (!template) {
     notFound();
   }
+
+  const industryOptions = library.industries.map((industry) => ({
+    id: industry.id,
+    name: industry.name,
+  }));
+  const categoryOptions = library.industries.flatMap((industry) =>
+    industry.categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      industryId: industry.id,
+    })),
+  );
 
   return (
     <AdminShell currentPath="/admin/templates">
@@ -51,6 +64,8 @@ export default async function AdminEditTemplatePage({
         mode="edit"
         initialValues={getAdminTemplateFormData(template)}
         action={updateAdminTemplateAction}
+        industryOptions={industryOptions}
+        categoryOptions={categoryOptions}
       />
     </AdminShell>
   );

@@ -23,7 +23,11 @@ import {
   userHasWorkspaceAccess,
 } from "@/lib/workspaces";
 import { isMetaConfigured, updateMetaObjectStatus } from "@/lib/meta";
-import { normalizeIndustryLabel } from "@/data/template-taxonomy";
+import {
+  formatTemplateCtaLabel,
+  normalizeIndustryLabel,
+  normalizeTemplateCtaType,
+} from "@/data/template-taxonomy";
 import { CampaignRecord } from "@/types";
 import { getCanonicalLeadStatus } from "@/lib/leads";
 import {
@@ -43,6 +47,7 @@ import {
   AdminTemplateActionState,
   AdminTemplateFieldName,
   emptyAdminTemplateActionState,
+  getEmptyAdminTemplateFormData,
   getEmptyLeadFormSettings,
 } from "@/lib/admin-template-form";
 
@@ -56,6 +61,44 @@ const signUpSchema = authSchema.extend({
   lastName: z.string().trim().min(1, "Last name is required."),
 });
 
+const profileAvatarMaxBytes = 5 * 1024 * 1024;
+const allowedProfileAvatarTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const allowedWorkspaceLogoTypes = allowedProfileAvatarTypes;
+
+function createImageFileFromDataUrl(dataUrl: string, fileBaseName: string, errorLabel: string) {
+  const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) {
+    throw new Error(`Use a JPG, PNG, WEBP, or GIF image for your ${errorLabel}.`);
+  }
+
+  const [, mimeType, encoded] = match;
+  if (!allowedProfileAvatarTypes.has(mimeType)) {
+    throw new Error(`Use a JPG, PNG, WEBP, or GIF image for your ${errorLabel}.`);
+  }
+
+  const buffer = Buffer.from(encoded, "base64");
+  if (!buffer.byteLength) {
+    throw new Error(`${errorLabel.charAt(0).toUpperCase() + errorLabel.slice(1)} crop could not be processed.`);
+  }
+
+  if (buffer.byteLength > profileAvatarMaxBytes) {
+    throw new Error(`${errorLabel.charAt(0).toUpperCase() + errorLabel.slice(1)} must be 5 MB or smaller.`);
+  }
+
+  const extension =
+    mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : mimeType === "image/gif" ? "gif" : "jpg";
+
+  return new File([buffer], `${fileBaseName}.${extension}`, { type: mimeType });
+}
+
+function createAvatarFileFromDataUrl(dataUrl: string) {
+  return createImageFileFromDataUrl(dataUrl, "profile-avatar", "profile picture");
+}
+
+function createWorkspaceLogoFileFromDataUrl(dataUrl: string) {
+  return createImageFileFromDataUrl(dataUrl, "workspace-logo", "workspace logo");
+}
+
 const optionalText = z.string().trim().optional().default("");
 const headlineText = z
   .string()
@@ -68,6 +111,8 @@ const optionalUrl = z.union([z.literal(""), z.string().url("Enter a valid previe
 const templateAdminSchema = z.object({
   name: z.string().min(2, "Template name is required."),
   slug: optionalText,
+  industryId: optionalText,
+  categoryId: optionalText,
   category: optionalText,
   industry: optionalText,
   description: z.string().min(8, "Short description is required."),
@@ -164,6 +209,8 @@ function buildTemplateAdminValues(formData: FormData) {
   return templateAdminSchema.safeParse({
     name,
     slug: slugify(String(formData.get("slug") || name || "")),
+    industryId: String(formData.get("industryId") || ""),
+    categoryId: String(formData.get("categoryId") || ""),
     category,
     industry,
     description: String(formData.get("description") || ""),
@@ -289,6 +336,8 @@ function buildAdminTemplateConfig(values: z.infer<typeof templateAdminSchema>) {
   const resolvedOfferLabel = values.offerLabel || values.offerType || "Limited-time offer";
   const normalizedIndustry = normalizeIndustryLabel(values.industry);
   const supportedAdTypes = values.supportedAdTypes.length ? values.supportedAdTypes : ["lead_form"];
+  const resolvedCtaType = normalizeTemplateCtaType(values.ctaDefault) || "LEARN_MORE";
+  const resolvedCtaLabel = formatTemplateCtaLabel(values.ctaDefault, "Learn more");
   let leadFormSettings = getEmptyLeadFormSettings();
 
   try {
@@ -312,6 +361,7 @@ function buildAdminTemplateConfig(values: z.infer<typeof templateAdminSchema>) {
 
   return {
     industry: normalizedIndustry || values.industry,
+    launchCategory: values.category,
     positioning: values.positioning,
     campaignType: values.campaignType,
     audienceType: values.audienceType,
@@ -340,7 +390,22 @@ function buildAdminTemplateConfig(values: z.infer<typeof templateAdminSchema>) {
     supportedAdTypes,
     defaultAdType: supportedAdTypes.includes(values.defaultAdType) ? values.defaultAdType : supportedAdTypes[0] || "lead_form",
     promoDetails: values.promoDetails,
-    ctaDefault: values.ctaDefault,
+    ctaType: resolvedCtaType,
+    ctaLabel: resolvedCtaLabel,
+    ctaDefault: resolvedCtaLabel,
+    cta: resolvedCtaType,
+    root_cta: resolvedCtaType,
+    creative_cta: resolvedCtaType,
+    recommended_cta: resolvedCtaType,
+    ctaPolicy: {
+      displayLabel: resolvedCtaLabel,
+    },
+    template: {
+      slug: values.slug,
+      category: values.category,
+      categoryLabel: values.category,
+      internalName: values.name,
+    },
     offerStructure: values.offerStructure,
     benefits: values.benefits,
     faq: values.faq,
@@ -358,9 +423,9 @@ function buildAdminTemplateConfig(values: z.infer<typeof templateAdminSchema>) {
       heroSubheadline: values.subheadline,
       offerLabel: resolvedOfferLabel,
       whyChooseUs: values.benefits,
-      finalCta: values.ctaDefault || "Get Started",
+      finalCta: resolvedCtaLabel || "Get Started",
       pageIntro: values.landingIntro,
-      formCta: values.formCta || values.ctaDefault || "Request details",
+      formCta: values.formCta || resolvedCtaLabel || "Request details",
       formFields: values.formFields,
       nextStepFlow: values.nextStepFlow,
     },
@@ -368,9 +433,12 @@ function buildAdminTemplateConfig(values: z.infer<typeof templateAdminSchema>) {
       imageUrls: values.mediaImageUrls,
       videoUrls: values.mediaVideoUrls,
     },
+    creative: {
+      cta: resolvedCtaType,
+    },
     leadFlowDefaults: {
       pageIntro: values.landingIntro,
-      formCta: values.formCta || values.ctaDefault || "Request details",
+      formCta: values.formCta || resolvedCtaLabel || "Request details",
       formFields: values.formFields,
       nextStepFlow: values.nextStepFlow,
     },
@@ -416,6 +484,141 @@ async function requireAdminActionUser() {
   }
 
   return user;
+}
+
+type AdminSupabaseClient = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
+
+function createAdminLibraryRedirect({
+  industryId,
+  categoryId,
+  templateId,
+  success,
+  error,
+}: {
+  industryId?: string | null;
+  categoryId?: string | null;
+  templateId?: string | null;
+  success?: string | null;
+  error?: string | null;
+}) {
+  const params = new URLSearchParams();
+  if (industryId) params.set("industryId", industryId);
+  if (categoryId) params.set("categoryId", categoryId);
+  if (templateId) params.set("templateId", templateId);
+  if (success) params.set("success", success);
+  if (error) params.set("error", error);
+  const query = params.toString();
+  return query ? `/admin/templates?${query}` : "/admin/templates";
+}
+
+function revalidateTemplateLibraryPaths(templateId?: string | null) {
+  revalidatePath("/admin");
+  revalidatePath("/admin/templates");
+  if (templateId) {
+    revalidatePath(`/admin/templates/${templateId}/edit`);
+  }
+  revalidatePath("/templates");
+  revalidatePath("/templates/new");
+  revalidatePath("/product/templates");
+}
+
+async function resolveTemplatePlacement(
+  admin: AdminSupabaseClient,
+  {
+    industryId,
+    categoryId,
+    fallbackIndustry,
+    fallbackCategory,
+  }: {
+    industryId?: string | null;
+    categoryId?: string | null;
+    fallbackIndustry?: string | null;
+    fallbackCategory?: string | null;
+  },
+) {
+  let resolvedIndustryId = industryId?.trim() || null;
+  let resolvedCategoryId = categoryId?.trim() || null;
+  let resolvedIndustryName = fallbackIndustry?.trim() || "";
+  let resolvedCategoryName = fallbackCategory?.trim() || "";
+
+  if (resolvedCategoryId) {
+    const { data: category, error } = await admin
+      .from("template_categories")
+      .select("id, name, industry_id")
+      .eq("id", resolvedCategoryId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (category) {
+      resolvedCategoryId = category.id;
+      resolvedCategoryName = category.name;
+      resolvedIndustryId = category.industry_id;
+    }
+  }
+
+  if (resolvedIndustryId) {
+    const { data: industry, error } = await admin
+      .from("template_industries")
+      .select("id, name")
+      .eq("id", resolvedIndustryId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (industry) {
+      resolvedIndustryId = industry.id;
+      resolvedIndustryName = industry.name;
+    }
+  }
+
+  return {
+    industryId: resolvedIndustryId,
+    categoryId: resolvedCategoryId,
+    industryName: resolvedIndustryName,
+    categoryName: resolvedCategoryName,
+  };
+}
+
+async function buildUniqueTemplateLibrarySlug(
+  admin: AdminSupabaseClient,
+  table: "template_industries" | "template_categories" | "templates",
+  baseValue: string,
+  {
+    industryId,
+    ignoreId,
+  }: {
+    industryId?: string | null;
+    ignoreId?: string | null;
+  } = {},
+) {
+  const baseSlug = slugify(baseValue) || `item-${Date.now()}`;
+  let attempt = 0;
+
+  while (attempt < 50) {
+    const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
+    let query = admin.from(table).select("id").eq("slug", slug).limit(1);
+    if (table === "template_categories" && industryId) {
+      query = query.eq("industry_id", industryId);
+    }
+    if (ignoreId) {
+      query = query.neq("id", ignoreId);
+    }
+    const { data, error } = await query;
+    if (error) {
+      throw new Error(error.message);
+    }
+    if (!data || data.length === 0) {
+      return slug;
+    }
+    attempt += 1;
+  }
+
+  return `${baseSlug}-${Date.now().toString().slice(-6)}`;
 }
 
 export async function signUpAction(formData: FormData) {
@@ -1907,9 +2110,51 @@ export async function updateWorkspaceIconAction(formData: FormData) {
     redirect("/workspace/settings?section=icon&saved=1");
   }
 
-  const logoFile = formData.get("logo") as File;
-  const logoUrl = await uploadAsset(logoFile, "logos");
-  const removeLogo = String(formData.get("removeLogo") || "") === "1";
+  const logoFile = formData.get("workspaceLogo");
+  const croppedLogoDataUrl = String(formData.get("workspaceLogoCroppedDataUrl") || "").trim();
+  const removeLogo = String(formData.get("removeWorkspaceLogo") || formData.get("removeLogo") || "") === "1";
+  const existingLogoUrl = workspaceContext.businessProfile?.logo_url || "";
+  let nextLogoUrl = removeLogo ? "" : existingLogoUrl;
+  let logoUploadFile: File | null = null;
+
+  if (!removeLogo && croppedLogoDataUrl) {
+    try {
+      logoUploadFile = createWorkspaceLogoFileFromDataUrl(croppedLogoDataUrl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Workspace logo crop could not be processed.";
+      redirect(`/workspace/settings?section=icon&error=${encodeURIComponent(message)}`);
+    }
+  } else if (logoFile instanceof File && logoFile.size > 0) {
+    logoUploadFile = logoFile;
+  }
+
+  if (logoUploadFile instanceof File && logoUploadFile.size > 0) {
+    if (!allowedWorkspaceLogoTypes.has(logoUploadFile.type)) {
+      redirect(
+        `/workspace/settings?section=icon&error=${encodeURIComponent(
+          "Use a JPG, PNG, WEBP, or GIF image for your workspace logo.",
+        )}`,
+      );
+    }
+
+    if (logoUploadFile.size > profileAvatarMaxBytes) {
+      redirect(
+        `/workspace/settings?section=icon&error=${encodeURIComponent(
+          "Workspace logos must be 5 MB or smaller.",
+        )}`,
+      );
+    }
+
+    try {
+      nextLogoUrl = (await uploadAsset(logoUploadFile, `logos/workspaces/${workspaceContext.activeWorkspace.id}`)) || "";
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : `Workspace logo upload failed. Check Supabase storage bucket "${storageBucketName}".`;
+      redirect(`/workspace/settings?section=icon&error=${encodeURIComponent(message)}`);
+    }
+  }
 
   await upsertWorkspaceBusinessProfile(admin, {
     user_id: user.id,
@@ -1919,7 +2164,7 @@ export async function updateWorkspaceIconAction(formData: FormData) {
     phone: workspaceContext.businessProfile?.phone || "",
     email: workspaceContext.businessProfile?.email || user.email || "",
     description: workspaceContext.businessProfile?.description || "",
-    logo_url: removeLogo ? null : logoUrl || workspaceContext.businessProfile?.logo_url || null,
+    logo_url: nextLogoUrl || null,
     brand_color: String(formData.get("brandColor") || workspaceContext.businessProfile?.brand_color || "#6D5EF8"),
     default_cta: workspaceContext.businessProfile?.default_cta || "Get My Quote",
   });
@@ -2040,10 +2285,51 @@ export async function updateProfileSettingsAction(formData: FormData) {
   const firstName = String(formData.get("firstName") || "").trim();
   const lastName = String(formData.get("lastName") || "").trim();
   const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+  const avatarFile = formData.get("profilePicture");
+  const croppedAvatarDataUrl = String(formData.get("profilePictureCroppedDataUrl") || "").trim();
+  const removeAvatar = String(formData.get("removeProfilePicture") || "") === "1";
   const existingUserMetadata =
     "user_metadata" in user && user.user_metadata && typeof user.user_metadata === "object"
       ? user.user_metadata
       : {};
+  const existingAvatarUrl =
+    typeof existingUserMetadata.avatar_url === "string" && existingUserMetadata.avatar_url.trim().length
+      ? existingUserMetadata.avatar_url.trim()
+      : "";
+
+  let nextAvatarUrl = removeAvatar ? "" : existingAvatarUrl;
+  let avatarUploadFile: File | null = null;
+
+  if (!removeAvatar && croppedAvatarDataUrl) {
+    try {
+      avatarUploadFile = createAvatarFileFromDataUrl(croppedAvatarDataUrl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Profile picture crop could not be processed.";
+      redirect(`/settings?error=${encodeURIComponent(message)}#account`);
+    }
+  } else if (avatarFile instanceof File && avatarFile.size > 0) {
+    avatarUploadFile = avatarFile;
+  }
+
+  if (avatarUploadFile instanceof File && avatarUploadFile.size > 0) {
+    if (!allowedProfileAvatarTypes.has(avatarUploadFile.type)) {
+      redirect(`/settings?error=${encodeURIComponent("Use a JPG, PNG, WEBP, or GIF image for your profile picture.")}#account`);
+    }
+
+    if (avatarUploadFile.size > profileAvatarMaxBytes) {
+      redirect(`/settings?error=${encodeURIComponent("Profile pictures must be 5 MB or smaller.")}#account`);
+    }
+
+    try {
+      nextAvatarUrl = (await uploadAsset(avatarUploadFile, `profiles/${user.id}`)) || "";
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : `Profile picture upload failed. Check Supabase storage bucket "${storageBucketName}".`;
+      redirect(`/settings?error=${encodeURIComponent(message)}#account`);
+    }
+  }
 
   await admin.auth.admin.updateUserById(user.id, {
     user_metadata: {
@@ -2051,22 +2337,38 @@ export async function updateProfileSettingsAction(formData: FormData) {
       first_name: firstName || null,
       last_name: lastName || null,
       full_name: fullName || null,
+      avatar_url: nextAvatarUrl || null,
     },
   });
 
   const existingProfile = await admin.from("profiles").select("role").eq("user_id", user.id).maybeSingle();
 
-  const { error: profileError } = await admin
+  const profilePayload = {
+    user_id: user.id,
+    role: existingProfile.data?.role || "user",
+    first_name: firstName || null,
+    last_name: lastName || null,
+    avatar_url: nextAvatarUrl || null,
+  };
+
+  const fullProfileUpsert = await admin
     .from("profiles")
-    .upsert(
-      {
-        user_id: user.id,
-        role: existingProfile.data?.role || "user",
-        first_name: firstName || null,
-        last_name: lastName || null,
-      },
-      { onConflict: "user_id" },
-    );
+    .upsert(profilePayload, { onConflict: "user_id" });
+
+  const profileError =
+    fullProfileUpsert.error && fullProfileUpsert.error.message.includes("avatar_url")
+      ? (
+          await admin.from("profiles").upsert(
+            {
+              user_id: user.id,
+              role: existingProfile.data?.role || "user",
+              first_name: firstName || null,
+              last_name: lastName || null,
+            },
+            { onConflict: "user_id" },
+          )
+        ).error
+      : fullProfileUpsert.error;
 
   if (profileError) {
     redirect(`/settings?error=${encodeURIComponent(formatAuthErrorMessage(profileError.message))}#account`);
@@ -2076,6 +2378,7 @@ export async function updateProfileSettingsAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/workspaces");
   revalidatePath("/workspace/settings");
+  revalidatePath("/", "layout");
   redirect("/settings?saved=1#account");
 }
 
@@ -2299,6 +2602,18 @@ export async function createAdminTemplateAction(
     return getTemplateDbErrorState(error instanceof Error ? error.message : "Preview image upload failed.");
   }
 
+  let placement;
+  try {
+    placement = await resolveTemplatePlacement(admin, {
+      industryId: values.data.industryId,
+      categoryId: values.data.categoryId,
+      fallbackIndustry: values.data.industry,
+      fallbackCategory: values.data.category,
+    });
+  } catch (error) {
+    return getTemplateDbErrorState(error instanceof Error ? error.message : "Template placement could not be resolved.");
+  }
+
   const templateId = `tpl-${randomUUID()}`;
   const now = new Date().toISOString();
   const resolvedStatus =
@@ -2311,7 +2626,11 @@ export async function createAdminTemplateAction(
       slug: values.data.slug,
       name: values.data.name,
       description: values.data.description,
-      category: values.data.category || values.data.industry || "",
+      industry: placement.industryName || values.data.industry || values.data.category || "",
+      industry_id: placement.industryId,
+      category: placement.categoryName || values.data.category || values.data.industry || "",
+      category_id: placement.categoryId,
+      offer_type: values.data.offerType || null,
       preview_image_url: previewImageUrl || null,
       status: resolvedStatus,
       is_featured: values.data.isFeatured,
@@ -2381,6 +2700,18 @@ export async function updateAdminTemplateAction(
     return getTemplateDbErrorState(error instanceof Error ? error.message : "Preview image upload failed.");
   }
 
+  let placement;
+  try {
+    placement = await resolveTemplatePlacement(admin, {
+      industryId: values.data.industryId,
+      categoryId: values.data.categoryId,
+      fallbackIndustry: values.data.industry,
+      fallbackCategory: values.data.category,
+    });
+  } catch (error) {
+    return getTemplateDbErrorState(error instanceof Error ? error.message : "Template placement could not be resolved.");
+  }
+
   const now = new Date().toISOString();
   const resolvedStatus =
     intent === "publish" ? "published" : intent === "archive" ? "archived" : intent === "draft" ? "draft" : values.data.status;
@@ -2390,7 +2721,11 @@ export async function updateAdminTemplateAction(
       slug: values.data.slug,
       name: values.data.name,
       description: values.data.description,
-      category: values.data.category || values.data.industry || "",
+      industry: placement.industryName || values.data.industry || values.data.category || "",
+      industry_id: placement.industryId,
+      category: placement.categoryName || values.data.category || values.data.industry || "",
+      category_id: placement.categoryId,
+      offer_type: values.data.offerType || null,
       preview_image_url: previewImageUrl || null,
       status: resolvedStatus,
       is_featured: values.data.isFeatured,
@@ -2475,6 +2810,415 @@ export async function duplicateAdminTemplateAction(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/admin/templates");
   redirect(`/admin/templates?success=${encodeURIComponent("Template duplicated as a draft.")}`);
+}
+
+export async function createTemplateIndustryAction(formData: FormData) {
+  await requireAdminActionUser();
+  const name = String(formData.get("name") || "").trim();
+  const description = String(formData.get("description") || "").trim();
+
+  if (!name) {
+    redirect(createAdminLibraryRedirect({ error: "Industry name is required." }));
+  }
+
+  if (!isSupabaseServerConfigured()) {
+    redirect(createAdminLibraryRedirect({ error: "Supabase server config is required for template library management." }));
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(createAdminLibraryRedirect({ error: "Supabase admin access is not available." }));
+  }
+
+  const slug = await buildUniqueTemplateLibrarySlug(admin, "template_industries", name);
+  const { data, error } = await admin
+    .from("template_industries")
+    .insert({
+      name,
+      slug,
+      description: description || null,
+      status: "active",
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (error || !data) {
+    redirect(createAdminLibraryRedirect({ error: error?.message || "Industry could not be created." }));
+  }
+
+  revalidateTemplateLibraryPaths();
+  redirect(createAdminLibraryRedirect({ industryId: data.id, success: "Industry created." }));
+}
+
+export async function updateTemplateIndustryAction(formData: FormData) {
+  await requireAdminActionUser();
+  const industryId = String(formData.get("industryId") || "").trim();
+  const name = String(formData.get("name") || "").trim();
+  const description = String(formData.get("description") || "").trim();
+
+  if (!industryId || !name) {
+    redirect(createAdminLibraryRedirect({ error: "Industry could not be updated." }));
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(createAdminLibraryRedirect({ error: "Supabase admin access is not available." }));
+  }
+
+  const slug = await buildUniqueTemplateLibrarySlug(admin, "template_industries", name, { ignoreId: industryId });
+  const { error } = await admin.from("template_industries").update({
+    name,
+    slug,
+    description: description || null,
+  }).eq("id", industryId);
+
+  if (error) {
+    redirect(createAdminLibraryRedirect({ industryId, error: error.message }));
+  }
+
+  const { error: templateError } = await admin
+    .from("templates")
+    .update({ industry: name })
+    .eq("industry_id", industryId);
+
+  if (templateError) {
+    redirect(createAdminLibraryRedirect({ industryId, error: templateError.message }));
+  }
+
+  revalidateTemplateLibraryPaths();
+  redirect(createAdminLibraryRedirect({ industryId, success: "Industry updated." }));
+}
+
+export async function deleteTemplateIndustryAction(formData: FormData) {
+  await requireAdminActionUser();
+  const industryId = String(formData.get("industryId") || "").trim();
+  if (!industryId) {
+    redirect(createAdminLibraryRedirect({ error: "Industry could not be removed." }));
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(createAdminLibraryRedirect({ error: "Supabase admin access is not available." }));
+  }
+
+  const [{ count: categoryCount, error: categoryError }, { count: templateCount, error: templateError }] = await Promise.all([
+    admin.from("template_categories").select("id", { count: "exact", head: true }).eq("industry_id", industryId),
+    admin.from("templates").select("id", { count: "exact", head: true }).eq("industry_id", industryId),
+  ]);
+
+  if (categoryError || templateError) {
+    redirect(createAdminLibraryRedirect({ industryId, error: categoryError?.message || templateError?.message || "Industry could not be removed." }));
+  }
+
+  if ((categoryCount || 0) > 0 || (templateCount || 0) > 0) {
+    const now = new Date().toISOString();
+    const [{ error: industryError }, { error: categoriesError }, { error: templatesError }] = await Promise.all([
+      admin.from("template_industries").update({ status: "archived" }).eq("id", industryId),
+      admin.from("template_categories").update({ status: "archived" }).eq("industry_id", industryId),
+      admin.from("templates").update({ status: "archived", archived_at: now }).eq("industry_id", industryId),
+    ]);
+
+    if (industryError || categoriesError || templatesError) {
+      redirect(createAdminLibraryRedirect({ industryId, error: industryError?.message || categoriesError?.message || templatesError?.message || "Industry could not be archived." }));
+    }
+
+    revalidateTemplateLibraryPaths();
+    redirect(createAdminLibraryRedirect({ success: "Industry archived with its child library items." }));
+  }
+
+  const { error } = await admin.from("template_industries").delete().eq("id", industryId);
+  if (error) {
+    redirect(createAdminLibraryRedirect({ error: error.message }));
+  }
+
+  revalidateTemplateLibraryPaths();
+  redirect(createAdminLibraryRedirect({ success: "Industry deleted." }));
+}
+
+export async function createTemplateCategoryAction(formData: FormData) {
+  await requireAdminActionUser();
+  const industryId = String(formData.get("industryId") || "").trim();
+  const name = String(formData.get("name") || "").trim();
+  const description = String(formData.get("description") || "").trim();
+
+  if (!industryId || !name) {
+    redirect(createAdminLibraryRedirect({ industryId, error: "Category name is required." }));
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(createAdminLibraryRedirect({ error: "Supabase admin access is not available." }));
+  }
+
+  const slug = await buildUniqueTemplateLibrarySlug(admin, "template_categories", name, { industryId });
+  const { data, error } = await admin
+    .from("template_categories")
+    .insert({
+      industry_id: industryId,
+      name,
+      slug,
+      description: description || null,
+      status: "active",
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (error || !data) {
+    redirect(createAdminLibraryRedirect({ industryId, error: error?.message || "Category could not be created." }));
+  }
+
+  revalidateTemplateLibraryPaths();
+  redirect(createAdminLibraryRedirect({ industryId, categoryId: data.id, success: "Category created." }));
+}
+
+export async function updateTemplateCategoryAction(formData: FormData) {
+  await requireAdminActionUser();
+  const categoryId = String(formData.get("categoryId") || "").trim();
+  const industryId = String(formData.get("industryId") || "").trim();
+  const name = String(formData.get("name") || "").trim();
+  const description = String(formData.get("description") || "").trim();
+
+  if (!categoryId || !industryId || !name) {
+    redirect(createAdminLibraryRedirect({ categoryId, error: "Category could not be updated." }));
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(createAdminLibraryRedirect({ error: "Supabase admin access is not available." }));
+  }
+
+  const placement = await resolveTemplatePlacement(admin, {
+    industryId,
+    categoryId,
+  });
+  const slug = await buildUniqueTemplateLibrarySlug(admin, "template_categories", name, {
+    industryId,
+    ignoreId: categoryId,
+  });
+
+  const { error } = await admin.from("template_categories").update({
+    industry_id: industryId,
+    name,
+    slug,
+    description: description || null,
+  }).eq("id", categoryId);
+
+  if (error) {
+    redirect(createAdminLibraryRedirect({ industryId, categoryId, error: error.message }));
+  }
+
+  const { error: templateError } = await admin
+    .from("templates")
+    .update({
+      industry_id: placement.industryId,
+      industry: placement.industryName || "",
+      category_id: categoryId,
+      category: name,
+    })
+    .eq("category_id", categoryId);
+
+  if (templateError) {
+    redirect(createAdminLibraryRedirect({ industryId, categoryId, error: templateError.message }));
+  }
+
+  revalidateTemplateLibraryPaths();
+  redirect(createAdminLibraryRedirect({ industryId, categoryId, success: "Category updated." }));
+}
+
+export async function deleteTemplateCategoryAction(formData: FormData) {
+  await requireAdminActionUser();
+  const categoryId = String(formData.get("categoryId") || "").trim();
+  const industryId = String(formData.get("industryId") || "").trim();
+  if (!categoryId) {
+    redirect(createAdminLibraryRedirect({ industryId, error: "Category could not be removed." }));
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(createAdminLibraryRedirect({ error: "Supabase admin access is not available." }));
+  }
+
+  const { count, error: countError } = await admin
+    .from("templates")
+    .select("id", { count: "exact", head: true })
+    .eq("category_id", categoryId);
+
+  if (countError) {
+    redirect(createAdminLibraryRedirect({ industryId, categoryId, error: countError.message }));
+  }
+
+  if ((count || 0) > 0) {
+    const now = new Date().toISOString();
+    const [{ error: categoryError }, { error: templateError }] = await Promise.all([
+      admin.from("template_categories").update({ status: "archived" }).eq("id", categoryId),
+      admin.from("templates").update({ status: "archived", archived_at: now }).eq("category_id", categoryId),
+    ]);
+
+    if (categoryError || templateError) {
+      redirect(createAdminLibraryRedirect({ industryId, categoryId, error: categoryError?.message || templateError?.message || "Category could not be archived." }));
+    }
+
+    revalidateTemplateLibraryPaths();
+    redirect(createAdminLibraryRedirect({ industryId, success: "Category archived with its templates." }));
+  }
+
+  const { error } = await admin.from("template_categories").delete().eq("id", categoryId);
+  if (error) {
+    redirect(createAdminLibraryRedirect({ industryId, categoryId, error: error.message }));
+  }
+
+  revalidateTemplateLibraryPaths();
+  redirect(createAdminLibraryRedirect({ industryId, success: "Category deleted." }));
+}
+
+export async function createTemplateFromCategoryAction(formData: FormData) {
+  const user = await requireAdminActionUser();
+  const categoryId = String(formData.get("categoryId") || "").trim();
+  const name = String(formData.get("name") || "").trim();
+  const description = String(formData.get("description") || "").trim();
+
+  if (!categoryId || !name) {
+    redirect(createAdminLibraryRedirect({ categoryId, error: "Template name is required." }));
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(createAdminLibraryRedirect({ error: "Supabase admin access is not available." }));
+  }
+
+  const placement = await resolveTemplatePlacement(admin, { categoryId });
+  const slug = await buildUniqueTemplateLibrarySlug(admin, "templates", name);
+  const templateId = `tpl-${randomUUID()}`;
+  const defaults = getEmptyAdminTemplateFormData();
+  const quickTemplateValues = templateAdminSchema.parse({
+    ...defaults,
+    name,
+    slug,
+    industryId: placement.industryId || "",
+    categoryId: placement.categoryId || "",
+    industry: placement.industryName || "",
+    category: placement.categoryName || "",
+    description: description || `${name} template`,
+    headline: name.slice(0, 25),
+    adPrimary: `${name} primary text`,
+  });
+  const config = buildAdminTemplateConfig(quickTemplateValues);
+
+  const { error } = await admin.from("templates").insert({
+    id: templateId,
+    slug,
+    name,
+    description: description || `${name} template`,
+    industry: placement.industryName || "",
+    industry_id: placement.industryId,
+    category: placement.categoryName || "",
+    category_id: placement.categoryId,
+    offer_type: defaults.offerType,
+    preview_image_url: null,
+    status: "draft",
+    is_featured: false,
+    version: 1,
+    created_by: user.id,
+    config_json: config,
+  });
+
+  if (error) {
+    redirect(createAdminLibraryRedirect({ categoryId, error: error.message }));
+  }
+
+  revalidateTemplateLibraryPaths(templateId);
+  redirect(`/admin/templates/${templateId}/edit?success=${encodeURIComponent("Template created. Fill in the full content next.")}`);
+}
+
+export async function updateTemplateLibraryTemplateAction(formData: FormData) {
+  await requireAdminActionUser();
+  const templateId = String(formData.get("templateId") || "").trim();
+  const name = String(formData.get("name") || "").trim();
+  const categoryId = String(formData.get("categoryId") || "").trim();
+  const status = String(formData.get("status") || "draft").trim();
+  const isFeatured = String(formData.get("isFeatured") || "") === "1";
+
+  if (!templateId || !name || !categoryId) {
+    redirect(createAdminLibraryRedirect({ templateId, error: "Template could not be updated." }));
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(createAdminLibraryRedirect({ error: "Supabase admin access is not available." }));
+  }
+
+  const placement = await resolveTemplatePlacement(admin, { categoryId });
+  const now = new Date().toISOString();
+  const { error } = await admin.from("templates").update({
+    name,
+    category_id: placement.categoryId,
+    category: placement.categoryName || "",
+    industry_id: placement.industryId,
+    industry: placement.industryName || "",
+    status: status === "published" || status === "archived" ? status : "draft",
+    is_featured: isFeatured,
+    published_at: status === "published" ? now : null,
+    archived_at: status === "archived" ? now : null,
+  }).eq("id", templateId);
+
+  if (error) {
+    redirect(createAdminLibraryRedirect({ templateId, error: error.message }));
+  }
+
+  revalidateTemplateLibraryPaths(templateId);
+  redirect(createAdminLibraryRedirect({
+    industryId: placement.industryId,
+    categoryId: placement.categoryId,
+    templateId,
+    success: "Template updated.",
+  }));
+}
+
+export async function deleteTemplateLibraryTemplateAction(formData: FormData) {
+  await requireAdminActionUser();
+  const templateId = String(formData.get("templateId") || "").trim();
+  const categoryId = String(formData.get("categoryId") || "").trim();
+  const industryId = String(formData.get("industryId") || "").trim();
+
+  if (!templateId) {
+    redirect(createAdminLibraryRedirect({ industryId, categoryId, error: "Template could not be removed." }));
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(createAdminLibraryRedirect({ error: "Supabase admin access is not available." }));
+  }
+
+  const { count, error: countError } = await admin
+    .from("campaigns")
+    .select("id", { count: "exact", head: true })
+    .eq("template_id", templateId);
+
+  if (countError) {
+    redirect(createAdminLibraryRedirect({ industryId, categoryId, templateId, error: countError.message }));
+  }
+
+  if ((count || 0) > 0) {
+    const { error } = await admin
+      .from("templates")
+      .update({ status: "archived", archived_at: new Date().toISOString() })
+      .eq("id", templateId);
+
+    if (error) {
+      redirect(createAdminLibraryRedirect({ industryId, categoryId, templateId, error: error.message }));
+    }
+
+    revalidateTemplateLibraryPaths(templateId);
+    redirect(createAdminLibraryRedirect({ industryId, categoryId, success: "Template archived because campaigns already reference it." }));
+  }
+
+  const { error } = await admin.from("templates").delete().eq("id", templateId);
+  if (error) {
+    redirect(createAdminLibraryRedirect({ industryId, categoryId, templateId, error: error.message }));
+  }
+
+  revalidateTemplateLibraryPaths();
+  redirect(createAdminLibraryRedirect({ industryId, categoryId, success: "Template deleted." }));
 }
 
 export async function publishFunnelAction(formData: FormData) {

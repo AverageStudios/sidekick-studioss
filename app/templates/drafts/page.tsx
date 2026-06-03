@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { FacebookAdPreview } from "@/components/facebook-ad-preview";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
 import { deleteDraftCampaignAction } from "@/app/actions";
 import { requireUser } from "@/lib/auth";
 import { getDashboardSnapshot, getTemplates, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
@@ -60,7 +61,7 @@ export default async function DraftCampaignsPage() {
                       primaryText={template?.adCopy.primary || campaign.name}
                       headline={template?.adCopy.headlines?.[0] || campaign.name}
                       description={template?.adCopy.descriptions?.[0] || template?.description || "Draft preview"}
-                      ctaLabel={template?.ctaDefault || "Continue"}
+                      ctaLabel={resolveTemplateCtaLabel(template, "Continue")}
                       imageUrl={template?.previewImage || null}
                       compact
                       showMetaBar={false}

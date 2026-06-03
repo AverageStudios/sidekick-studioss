@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { createAdminTemplateAction } from "@/app/actions";
 import { requireAdmin } from "@/lib/auth";
 import { getEmptyAdminTemplateFormData } from "@/lib/admin-template-form";
+import { listAdminTemplateLibrary } from "@/lib/template-library";
 
 export default async function AdminNewTemplatePage({
   searchParams,
@@ -14,6 +15,26 @@ export default async function AdminNewTemplatePage({
 }) {
   await requireAdmin();
   const { error } = await searchParams;
+  const library = await listAdminTemplateLibrary();
+  const industryOptions = library.industries.map((industry) => ({
+    id: industry.id,
+    name: industry.name,
+  }));
+  const categoryOptions = library.industries.flatMap((industry) =>
+    industry.categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      industryId: industry.id,
+    })),
+  );
+  const initialValues = getEmptyAdminTemplateFormData();
+
+  if (industryOptions[0] && categoryOptions[0]) {
+    initialValues.industryId = industryOptions[0].id;
+    initialValues.industry = industryOptions[0].name;
+    initialValues.categoryId = categoryOptions.find((option) => option.industryId === industryOptions[0].id)?.id || categoryOptions[0].id;
+    initialValues.category = categoryOptions.find((option) => option.id === initialValues.categoryId)?.name || "";
+  }
 
   return (
     <AdminShell currentPath="/admin/templates">
@@ -36,8 +57,10 @@ export default async function AdminNewTemplatePage({
 
       <AdminTemplateForm
         mode="create"
-        initialValues={getEmptyAdminTemplateFormData()}
+        initialValues={initialValues}
         action={createAdminTemplateAction}
+        industryOptions={industryOptions}
+        categoryOptions={categoryOptions}
       />
     </AdminShell>
   );

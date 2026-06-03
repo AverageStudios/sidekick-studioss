@@ -39,7 +39,7 @@ export function createCampaignBlueprint(
       subheadline:
         values.subheadline || replace(template.funnel.heroSubheadline),
       offerLabel: replace(template.funnel.offerLabel),
-      ctaText: values.ctaText || replace(template.ctaDefault),
+      ctaText: values.ctaText || replace(template.ctaLabel || template.ctaDefault),
       benefits: template.benefits.map(replace),
       whyChooseUs: template.funnel.whyChooseUs.map(replace),
       finalCta: replace(template.funnel.finalCta),

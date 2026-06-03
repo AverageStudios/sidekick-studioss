@@ -12,6 +12,12 @@ type UserWithOptionalMetadata = {
   user_metadata?: User["user_metadata"];
 };
 
+function getAvatarUrlFromMetadata(user: UserWithOptionalMetadata) {
+  const rawMeta = (user.user_metadata || {}) as Record<string, unknown>;
+  const avatarUrl = typeof rawMeta.avatar_url === "string" ? rawMeta.avatar_url.trim() : "";
+  return avatarUrl || null;
+}
+
 function deriveProfileNameFields(user: UserWithOptionalMetadata, profile?: Partial<ProfileRecord> | null) {
   const rawMeta = (user.user_metadata || {}) as Record<string, unknown>;
   const metadataFirst = typeof rawMeta.first_name === "string" ? rawMeta.first_name.trim() : "";
@@ -34,6 +40,7 @@ function buildDemoProfile(userId?: string | null): ProfileRecord {
     role: "user",
     first_name: "Demo",
     last_name: "User",
+    avatar_url: "/sidekick-logo.png",
     selected_industry: "auto-detailing",
     starting_template_id: "tpl-full-detail",
     active_workspace_id: "workspace-demo",
@@ -41,6 +48,11 @@ function buildDemoProfile(userId?: string | null): ProfileRecord {
     created_at: now,
     updated_at: now,
   };
+}
+
+export function getUserAvatarUrl(profile: Partial<ProfileRecord> | null, user: UserWithOptionalMetadata) {
+  const profileAvatar = typeof profile?.avatar_url === "string" ? profile.avatar_url.trim() : "";
+  return profileAvatar || getAvatarUrlFromMetadata(user);
 }
 
 export async function getCurrentUser() {
@@ -75,6 +87,7 @@ export const getCurrentProfile = cache(async () => {
       const { data: rawProfile } = await admin.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
       const existingProfile = (rawProfile as ProfileRecord | null) || null;
       const derivedFields = deriveProfileNameFields(user, existingProfile);
+      const metadataAvatarUrl = getAvatarUrlFromMetadata(user);
 
       if (
         !existingProfile ||
@@ -95,10 +108,24 @@ export const getCurrentProfile = cache(async () => {
           .select("*")
           .single();
 
-        return (upsertedProfile as ProfileRecord | null) || existingProfile;
+        const resolvedProfile = ((upsertedProfile as ProfileRecord | null) || existingProfile) as ProfileRecord | null;
+        if (!resolvedProfile) {
+          return null;
+        }
+        return {
+          ...resolvedProfile,
+          avatar_url: resolvedProfile.avatar_url || metadataAvatarUrl,
+        } satisfies ProfileRecord;
       }
 
-      return existingProfile;
+      if (!existingProfile) {
+        return null;
+      }
+
+      return {
+        ...existingProfile,
+        avatar_url: existingProfile.avatar_url || metadataAvatarUrl,
+      } satisfies ProfileRecord;
     }
   }
 
@@ -113,7 +140,15 @@ export const getCurrentProfile = cache(async () => {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  return (data as ProfileRecord | null) || null;
+  const profile = (data as ProfileRecord | null) || null;
+  if (!profile) {
+    return null;
+  }
+
+  return {
+    ...profile,
+    avatar_url: profile.avatar_url || getAvatarUrlFromMetadata(user),
+  } satisfies ProfileRecord;
 });
 
 export const getCurrentRole = cache(async (): Promise<UserRole> => {

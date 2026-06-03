@@ -55,7 +55,11 @@ export function TemplateSetupForm({
         <div className="grid gap-4 sm:grid-cols-2">
           <Input name="offerPrice" placeholder="Offer price" defaultValue="179" />
           <Input name="regularPrice" placeholder="Regular price" defaultValue="249" />
-          <Input name="ctaText" placeholder="CTA text" defaultValue={profile?.default_cta || template.ctaDefault} />
+          <Input
+            name="ctaText"
+            placeholder="CTA text"
+            defaultValue={profile?.default_cta || template.ctaLabel || template.ctaDefault}
+          />
           <Input name="headline" maxLength={25} placeholder="Headline override (optional)" />
         </div>
         <div className="mt-4">

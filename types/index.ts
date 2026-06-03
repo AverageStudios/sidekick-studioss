@@ -25,7 +25,8 @@ export type TemplateOfferType =
   | "Seasonal Promotion"
   | "Reactivation / Follow-Up";
 
-export type TemplateCategory = TemplateIndustry;
+export type TemplateCategory = string;
+export type TemplateLibraryStatus = "active" | "archived";
 
 export type UserRole = "admin" | "user";
 export type TemplateStatus = "draft" | "published" | "archived";
@@ -256,6 +257,9 @@ export type TemplateSeed = {
     imageUrls?: string[];
     videoUrls?: string[];
   };
+  launchCategory?: string;
+  ctaType?: string;
+  ctaLabel?: string;
   ctaDefault: string;
   offerStructure?: string[];
   placeholderFields?: TemplatePlaceholderField[];
@@ -308,6 +312,15 @@ export type TemplateConfigJson = Partial<{
   audienceType: string;
   offerFramework: string;
   displayLink: string;
+  launchCategory: string;
+  ctaType: string;
+  ctaLabel: string;
+  ctaPolicy?: {
+    displayLabel?: string;
+  };
+  root_cta: string;
+  creative_cta: string;
+  recommended_cta: string;
   adFormat: string;
   mediaType: string;
   campaignSettings: TemplateSeed["campaignSettings"];
@@ -366,8 +379,10 @@ export type TemplateRecord = {
   slug: string;
   name: string;
   description: string;
-  category: TemplateCategory;
+  category: string;
   industry?: TemplateIndustry | string | null;
+  category_id?: string | null;
+  industry_id?: string | null;
   offer_type?: TemplateOfferType | string | null;
   preview_image_url: string | null;
   config_json: TemplateConfigJson | null;
@@ -378,6 +393,42 @@ export type TemplateRecord = {
   published_at?: string | null;
   created_at?: string;
   updated_at?: string;
+};
+
+export type TemplateIndustryRecord = {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  status: TemplateLibraryStatus;
+  sort_order?: number | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type TemplateCategoryRecord = {
+  id: string;
+  industry_id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  status: TemplateLibraryStatus;
+  sort_order?: number | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type TemplateCategoryNode = TemplateCategoryRecord & {
+  industry_name: string;
+  templates: TemplateRecord[];
+  template_count: number;
+  published_count: number;
+};
+
+export type TemplateIndustryNode = TemplateIndustryRecord & {
+  categories: TemplateCategoryNode[];
+  template_count: number;
+  published_count: number;
 };
 
 export type TemplateSetupValues = {
@@ -439,6 +490,7 @@ export type ProfileRecord = {
   role: UserRole;
   first_name: string | null;
   last_name: string | null;
+  avatar_url?: string | null;
   selected_industry: string | null;
   starting_template_id: string | null;
   active_workspace_id: string | null;
@@ -458,6 +510,7 @@ export type WorkspaceRecord = {
   business_phone?: string | null;
   website?: string | null;
   industry?: string | null;
+  logo_url?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -493,6 +546,7 @@ export type WorkspaceMember = {
   displayName: string;
   email: string;
   initials: string;
+  avatarUrl?: string | null;
   isCurrentUser: boolean;
 };
 

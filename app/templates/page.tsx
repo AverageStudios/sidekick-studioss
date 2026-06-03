@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FacebookAdPreview } from "@/components/facebook-ad-preview";
+import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
 import { requireUser } from "@/lib/auth";
 import { getDashboardSnapshot, getTemplates, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
 import { resolveMetaPagePreviewIdentity } from "@/lib/meta-page-identity";
@@ -74,10 +75,11 @@ export default async function TemplatesPage() {
                       primaryText={template?.adCopy.primary || campaign.name}
                       headline={template?.adCopy.headlines?.[0] || campaign.name}
                       description={template?.adCopy.descriptions?.[0] || template?.description || "Campaign preview"}
-                      ctaLabel={template?.ctaDefault || "Open"}
+                      ctaLabel={resolveTemplateCtaLabel(template, "Open")}
                       imageUrl={template?.previewImage || null}
                       compact
-                      showMetaBar={false}
+                      showMetaBar
+                      mediaAspectMode="uniform"
                       className="rounded-none border-0 shadow-none"
                     />
 

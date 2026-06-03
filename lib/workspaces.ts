@@ -3,7 +3,7 @@ import type { User } from "@supabase/supabase-js";
 import { demoUser } from "@/lib/demo-data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isDemoModeEnabled, isSupabaseServerConfigured } from "@/lib/env";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, getUserAvatarUrl } from "@/lib/auth";
 import { BusinessProfile, ProfileRecord, WorkspaceContext, WorkspaceMember, WorkspaceRecord, WorkspaceSummary } from "@/types";
 
 const WORKSPACE_PROFILE_META_PREFIX = "<!--sidekick-workspace-meta:";
@@ -688,6 +688,7 @@ async function ensureWorkspaceContextResolved(user: UserIdentityLike): Promise<W
       business_name: workspaceBusinessProfilesById.get(workspace.id)?.business_name || workspace.business_name || workspace.name,
       website: workspaceBusinessProfilesById.get(workspace.id)?.website || workspace.website || null,
       industry: workspaceBusinessProfilesById.get(workspace.id)?.industry || workspace.industry || null,
+      logo_url: workspaceBusinessProfilesById.get(workspace.id)?.logo_url || workspace.logo_url || null,
       name:
         workspace.owner_user_id === user.id
           ? getWorkspaceDisplayName(workspace.name, resolvedNames.displayName)
@@ -698,6 +699,7 @@ async function ensureWorkspaceContextResolved(user: UserIdentityLike): Promise<W
       business_name: businessProfile?.business_name || activeWorkspace.business_name || activeWorkspace.name,
       website: businessProfile?.website || activeWorkspace.website || null,
       industry: businessProfile?.industry || activeWorkspace.industry || null,
+      logo_url: businessProfile?.logo_url || activeWorkspace.logo_url || null,
       name: resolvedWorkspaceName,
     },
     businessProfile,
@@ -858,6 +860,7 @@ export async function getCurrentWorkspaceMembers(): Promise<WorkspaceMember[]> {
             displayName: context.userDisplayName,
             email: context.userEmail,
             initials: context.userInitials,
+            avatarUrl: getUserAvatarUrl(context.profile, demoUser),
             isCurrentUser: true,
           },
         ]
@@ -893,6 +896,7 @@ export async function getCurrentWorkspaceMembers(): Promise<WorkspaceMember[]> {
         : [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim() || "Workspace member";
       const email = authUser?.email || "";
       const initials = authUser ? getUserInitialsFromProfile(profile, authUser) : displayName.slice(0, 2).toUpperCase();
+      const avatarUrl = authUser ? getUserAvatarUrl(profile, authUser) : null;
 
       return {
         membershipId: membership.id,
@@ -901,6 +905,7 @@ export async function getCurrentWorkspaceMembers(): Promise<WorkspaceMember[]> {
         displayName,
         email,
         initials,
+        avatarUrl,
         isCurrentUser: membership.user_id === context.profile.user_id,
       } satisfies WorkspaceMember;
     }),

@@ -16,6 +16,7 @@ import { MarketingNav } from "@/components/marketing-nav";
 import { PublicSiteFooter } from "@/components/public-site-footer";
 import { InteractiveGlowCard } from "@/components/ui/interactive-glow-card";
 import { FacebookAdPreview } from "@/components/facebook-ad-preview";
+import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
 import { Button } from "@/components/ui/button";
 import { TemplateSeed } from "@/types";
 
@@ -93,7 +94,7 @@ export function PublicTemplatesPage({ templates }: { templates: TemplateSeed[] }
   const [templateQuery, setTemplateQuery] = useState("");
   const featuredTemplates = useMemo(() => {
     const query = templateQuery.trim().toLowerCase();
-    const source = templates.slice(0, 6);
+    const source = templates;
     if (!query) return source;
     return source.filter((template) =>
       [template.name, template.description, template.offerType, template.industry]
@@ -387,7 +388,7 @@ export function PublicTemplatesPage({ templates }: { templates: TemplateSeed[] }
                   primaryText={template.adCopy.primary}
                   headline={template.adCopy.headlines[0] || template.name}
                   description={template.promoDetails}
-                  ctaLabel={template.ctaDefault}
+                  ctaLabel={resolveTemplateCtaLabel(template, "Learn more")}
                   imageUrl={template.previewImage}
                   compact
                   showMetaBar={false}

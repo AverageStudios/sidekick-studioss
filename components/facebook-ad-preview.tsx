@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Globe, MessageCircle, MoreHorizontal, PlayCircle, Share2, ThumbsUp, X } from "lucide-react";
+import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
 import { cn } from "@/lib/utils";
 import { TemplateSeed } from "@/types";
 
@@ -23,6 +24,13 @@ type FacebookAdPreviewProps = {
   compact?: boolean;
   interactiveControls?: boolean;
   mediaFit?: "cover" | "contain";
+  mediaAspectMode?: "uniform" | "adaptive";
+};
+
+type MediaAspectBucket = "portrait" | "square" | "landscape" | "wide";
+type ResolvedMediaAspect = {
+  bucket: MediaAspectBucket;
+  ratio: number;
 };
 
 const HEADLINE_MAX_LENGTH = 25;
@@ -134,6 +142,29 @@ function resolveDisplayLink(template?: TemplateSeed | null) {
   return normalized || "sidekickstudioss.com";
 }
 
+function normalizeFeedMediaAspectRatio(rawRatio?: number | null): ResolvedMediaAspect {
+  if (!rawRatio || !Number.isFinite(rawRatio) || rawRatio <= 0) {
+    return { bucket: "square", ratio: 1 };
+  }
+
+  if (rawRatio <= 0.9) {
+    return { bucket: "portrait", ratio: 4 / 5 };
+  }
+
+  if (rawRatio <= 1.08) {
+    return { bucket: "square", ratio: 1 };
+  }
+
+  if (rawRatio >= 1.7) {
+    return { bucket: "wide", ratio: 1.91 };
+  }
+
+  return {
+    bucket: "landscape",
+    ratio: Math.min(Math.max(rawRatio, 1.18), 1.6),
+  };
+}
+
 export function FacebookAdPreview({
   template,
   pageName,
@@ -152,6 +183,7 @@ export function FacebookAdPreview({
   compact = false,
   interactiveControls = true,
   mediaFit = "cover",
+  mediaAspectMode = compact ? "uniform" : "adaptive",
 }: FacebookAdPreviewProps) {
   const resolvedMedia = resolveMedia(template, imageUrl, videoUrl);
   const resolvedCarouselImages = resolveCarouselImages(template, imageUrl);
@@ -171,15 +203,114 @@ export function FacebookAdPreview({
   const resolvedDescription = normalizePreviewText(
     description || template?.promoDetails,
   );
-  const resolvedCta = normalizeSingleLine(ctaLabel || template?.ctaDefault, previewLayoutContract.ctaFallback);
+  const resolvedCta = normalizeSingleLine(
+    ctaLabel ||
+      template?.ctaLabel ||
+      resolveTemplateCtaLabel(template, previewLayoutContract.ctaFallback),
+    previewLayoutContract.ctaFallback,
+  );
   const resolvedDisplayLink = resolveDisplayLink(template);
   const metrics = compact ? { likes: 29, comments: 4, shares: 2 } : { likes: 129, comments: 12, shares: 8 };
-  const [avatarFailed, setAvatarFailed] = useState(false);
+  const [avatarErrorKey, setAvatarErrorKey] = useState("");
+  const [isPrimaryExpanded, setIsPrimaryExpanded] = useState(false);
+  const [isPrimaryTruncated, setIsPrimaryTruncated] = useState(false);
+  const [loadedMediaAspectByUrl, setLoadedMediaAspectByUrl] = useState<{
+    url: string;
+    aspect: ResolvedMediaAspect;
+  } | null>(null);
+  const primaryTextRef = useRef<HTMLParagraphElement | null>(null);
+  const avatarImageKey = `${pageAvatarUrl || ""}:${resolvedPageName}`;
+  const avatarFailed = avatarErrorKey === avatarImageKey;
   const mediaFitClass = mediaFit === "contain" ? "object-contain bg-[#f7f8fb]" : "object-cover";
+  const resolvedMediaAspect = useMemo(() => {
+    if (mediaAspectMode === "uniform") {
+      return compact
+        ? { bucket: "square" as const, ratio: 1 }
+        : { bucket: "square" as const, ratio: 1 };
+    }
+
+    if (
+      resolvedMedia?.kind === "image" &&
+      loadedMediaAspectByUrl &&
+      loadedMediaAspectByUrl.url === resolvedMedia.url
+    ) {
+      return loadedMediaAspectByUrl.aspect;
+    }
+
+    if (resolvedMedia?.kind === "video") {
+      return compact
+        ? { bucket: "portrait" as const, ratio: 4 / 5 }
+        : { bucket: "square" as const, ratio: 1 };
+    }
+
+    return compact
+      ? { bucket: "portrait" as const, ratio: 4 / 5 }
+      : { bucket: "square" as const, ratio: 1 };
+  }, [compact, loadedMediaAspectByUrl, mediaAspectMode, resolvedMedia]);
+  const mediaFrameStyle = useMemo(
+    () => ({ aspectRatio: `${resolvedMediaAspect.ratio}` }),
+    [resolvedMediaAspect.ratio],
+  );
 
   useEffect(() => {
-    setAvatarFailed(false);
-  }, [pageAvatarUrl, resolvedPageName]);
+    setIsPrimaryExpanded(false);
+  }, [resolvedPrimaryText, compact, template?.id]);
+
+  useLayoutEffect(() => {
+    if (isPrimaryExpanded) {
+      return;
+    }
+
+    const element = primaryTextRef.current;
+    if (!element) {
+      return;
+    }
+
+    setIsPrimaryTruncated(element.scrollHeight > element.clientHeight + 1);
+  }, [isPrimaryExpanded, resolvedPrimaryText, compact]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    console.debug("[FacebookAdPreview CTA]", {
+      pageName: resolvedPageName,
+      rawCtaLabel: ctaLabel,
+      templateCtaType: template?.ctaType,
+      templateCtaLabel: template?.ctaLabel,
+      templateCtaDefault: template?.ctaDefault,
+      resolvedCta,
+    });
+  }, [ctaLabel, resolvedCta, resolvedPageName, template?.ctaDefault, template?.ctaLabel, template?.ctaType]);
+
+  const handlePrimaryToggle = (event: import("react").MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsPrimaryExpanded((current) => !current);
+  };
+
+  useEffect(() => {
+    if (mediaAspectMode !== "adaptive" || resolvedMedia?.kind !== "image" || !resolvedMedia.url) {
+      return;
+    }
+
+    let cancelled = false;
+    const image = new Image();
+    image.onload = () => {
+      if (cancelled) return;
+      setLoadedMediaAspectByUrl({
+        url: resolvedMedia.url,
+        aspect: normalizeFeedMediaAspectRatio(image.naturalWidth / image.naturalHeight),
+      });
+    };
+    image.onerror = () => {
+      if (cancelled) return;
+      setLoadedMediaAspectByUrl(null);
+    };
+    image.src = resolvedMedia.url;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mediaAspectMode, resolvedMedia]);
 
   return (
     <div
@@ -199,10 +330,11 @@ export function FacebookAdPreview({
                 {pageAvatarUrl && !avatarFailed ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
+                    key={avatarImageKey}
                     src={pageAvatarUrl}
                     alt={resolvedPageName}
                     className="h-full w-full object-cover"
-                    onError={() => setAvatarFailed(true)}
+                    onError={() => setAvatarErrorKey(avatarImageKey)}
                   />
                 ) : (
                   resolvedPageBadge
@@ -246,32 +378,51 @@ export function FacebookAdPreview({
 
           <div className={cn("bg-white px-4", compact ? "pb-2.5 pt-1.5" : "pb-4 pt-2")}>
             <p
+              ref={primaryTextRef}
               className={cn(
                 "whitespace-pre-line break-words [overflow-wrap:anywhere] text-[var(--ink)]",
                 compact ? "text-[0.88rem] leading-[1.35]" : "text-[1.04rem] leading-[1.6]",
-                compact
-                  ? `${previewLayoutContract.compactPrimaryLines} min-h-[3.2rem]`
-                  : `${previewLayoutContract.regularPrimaryLines} min-h-[8rem]`,
+                isPrimaryExpanded
+                  ? "line-clamp-none min-h-0"
+                  : compact
+                    ? `${previewLayoutContract.compactPrimaryLines} min-h-[3.2rem]`
+                    : `${previewLayoutContract.regularPrimaryLines} min-h-[8rem]`,
               )}
             >
               {resolvedPrimaryText}
             </p>
-            <div className={cn("flex justify-end", compact ? "mt-0.5" : "mt-2")}>
-              <span className={cn("shrink-0 font-semibold text-[#1677ff]", compact ? "text-[0.76rem]" : "text-[0.98rem]")}>see more</span>
-            </div>
+            {isPrimaryTruncated ? (
+              <div className={cn("flex", compact ? "mt-0.5 justify-end" : "mt-2 justify-start")}>
+                <button
+                  type="button"
+                  className={cn(
+                    "shrink-0 font-semibold text-[#1677ff] transition hover:text-[#0f64d8]",
+                    compact ? "text-[0.76rem]" : "text-[0.92rem]",
+                  )}
+                  onClick={handlePrimaryToggle}
+                  aria-expanded={isPrimaryExpanded}
+                >
+                  {isPrimaryExpanded ? "See less" : "See more"}
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
 
-      <div className="relative overflow-hidden border border-[rgba(17,18,22,0.08)] bg-[#eef1f6]">
+      <div
+        className="relative overflow-hidden border border-[rgba(17,18,22,0.08)] bg-[#eef1f6]"
+        style={mediaFrameStyle}
+        data-media-bucket={resolvedMediaAspect.bucket}
+      >
         {resolvedMedia ? (
           resolvedMedia.kind === "video" ? (
-            <video className={cn("w-full", mediaFitClass, compact ? "aspect-[0.92/1]" : "aspect-[1/1]")} controls playsInline muted>
+            <video className={cn("h-full w-full", mediaFitClass)} controls playsInline muted>
               <source src={resolvedMedia.url} />
               Your browser does not support the video tag.
             </video>
           ) : resolvedCarouselImages.length > 1 ? (
-            <div className={cn("overflow-hidden", compact ? "aspect-[0.92/1]" : "aspect-[1/1]")}>
+            <div className="h-full overflow-hidden">
               <div className="flex h-full gap-2 px-2.5 py-2">
                 {resolvedCarouselImages.map((url, index) => (
                   <div
@@ -296,11 +447,11 @@ export function FacebookAdPreview({
             <img
               src={resolvedMedia.url}
               alt={template ? `${template.name} preview` : "Template preview"}
-              className={cn("w-full", mediaFitClass, compact ? "aspect-[0.92/1]" : "aspect-[1/1]")}
+              className={cn("h-full w-full", mediaFitClass)}
             />
           )
         ) : (
-          <div className={cn("flex items-center justify-center bg-[linear-gradient(145deg,#266cf1_0%,#2f87ff_42%,#f2f6fb_100%)] text-white", compact ? "aspect-[0.92/1]" : "aspect-[1/1]")}>
+          <div className="flex h-full items-center justify-center bg-[linear-gradient(145deg,#266cf1_0%,#2f87ff_42%,#f2f6fb_100%)] text-white">
             <div className="text-center">
               <p className={cn("font-black tracking-[-0.06em]", compact ? "text-2xl sm:text-3xl" : "text-3xl sm:text-4xl")}>Template preview</p>
               <p className={cn("mt-2 text-white/80", compact ? "text-xs" : "text-sm")}>Upload image or video assets to populate this ad.</p>
@@ -329,56 +480,58 @@ export function FacebookAdPreview({
         ) : null}
       </div>
 
-      <div
-        className={cn(
-          "border-b border-[rgba(17,18,22,0.08)] bg-[#f0f2f5] px-4 py-4",
-          "box-border w-full self-stretch",
-          compact ? "min-h-[5.1rem] flex-1 rounded-b-[28px]" : "min-h-[5.1rem]",
-        )}
-      >
-        <div className={cn("grid h-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-stretch", compact ? "gap-3" : "gap-3.5")}>
-          <div className="flex min-w-0 flex-col justify-center overflow-hidden">
-            <p className="truncate text-[0.78rem] font-medium leading-[1.05] text-[var(--muted-strong)] sm:text-[0.84rem]">
-              {resolvedDisplayLink}
-            </p>
-            <p
-              className={cn(
-                "mt-0.25 min-w-0 overflow-hidden break-words [overflow-wrap:anywhere] font-semibold tracking-[-0.05em] text-[var(--ink)]",
-                compact ? previewLayoutContract.compactHeadlineLines : "line-clamp-2",
-              )}
-              style={{
-                fontSize: getHeadlineFontSize(resolvedHeadline, compact),
-                lineHeight: compact ? 1.03 : 1.08,
-              }}
-            >
-              {resolvedHeadline}
-            </p>
-            {resolvedDescription && !compact ? (
+      {showMetaBar ? (
+        <div
+          className={cn(
+            "border-b border-[rgba(17,18,22,0.08)] bg-[#f0f2f5] px-4 py-4",
+            "box-border w-full self-stretch",
+            compact ? "min-h-[5.1rem] flex-1 rounded-b-[28px]" : "min-h-[5.1rem]",
+          )}
+        >
+          <div className={cn("grid h-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-stretch", compact ? "gap-3" : "gap-3.5")}>
+            <div className="flex min-w-0 flex-col justify-center overflow-hidden">
+              <p className="truncate text-[0.78rem] font-medium leading-[1.05] text-[var(--muted-strong)] sm:text-[0.84rem]">
+                {resolvedDisplayLink}
+              </p>
               <p
                 className={cn(
-                  "mt-0.5 break-words [overflow-wrap:anywhere] leading-[1.32] text-[var(--muted-strong)]",
-                  "text-[0.88rem] sm:text-[0.92rem]",
-                  previewLayoutContract.regularDescriptionLines,
+                  "mt-0.25 min-w-0 overflow-hidden break-words [overflow-wrap:anywhere] font-semibold tracking-[-0.05em] text-[var(--ink)]",
+                  compact ? previewLayoutContract.compactHeadlineLines : "line-clamp-2",
                 )}
+                style={{
+                  fontSize: getHeadlineFontSize(resolvedHeadline, compact),
+                  lineHeight: compact ? 1.03 : 1.08,
+                }}
               >
-                {resolvedDescription}
+                {resolvedHeadline}
               </p>
-            ) : null}
+              {resolvedDescription && !compact ? (
+                <p
+                  className={cn(
+                    "mt-0.5 break-words [overflow-wrap:anywhere] leading-[1.32] text-[var(--muted-strong)]",
+                    "text-[0.88rem] sm:text-[0.92rem]",
+                    previewLayoutContract.regularDescriptionLines,
+                  )}
+                >
+                  {resolvedDescription}
+                </p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className={cn(
+                "justify-self-end self-center inline-flex min-w-0 shrink-0 items-center justify-center overflow-hidden whitespace-nowrap rounded-[9px] bg-[#dbe1e9] px-3 text-center font-semibold leading-none text-[var(--ink)] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]",
+                compact
+                  ? "h-[2.05rem] w-fit max-w-[8rem] text-[0.56rem] tracking-[-0.02em] sm:text-[0.6rem]"
+                  : "h-[2.75rem] w-[7.1rem] text-[0.9rem] sm:text-[0.94rem]",
+              )}
+              title={resolvedCta}
+            >
+              <span className={cn("block min-w-0 overflow-hidden text-center", compact ? "whitespace-nowrap truncate" : "w-full")}>{resolvedCta}</span>
+            </button>
           </div>
-          <button
-            type="button"
-            className={cn(
-              "justify-self-end self-center inline-flex min-w-0 shrink-0 items-center justify-center overflow-hidden whitespace-nowrap rounded-[9px] bg-[#dbe1e9] px-3 text-center font-semibold leading-none text-[var(--ink)] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]",
-              compact
-                ? "h-[2.05rem] w-fit max-w-[8rem] text-[0.56rem] tracking-[-0.02em] sm:text-[0.6rem]"
-                : "h-[2.75rem] w-[7.1rem] text-[0.9rem] sm:text-[0.94rem]",
-            )}
-            title={resolvedCta}
-          >
-            <span className={cn("block min-w-0 overflow-hidden text-center", compact ? "whitespace-nowrap truncate" : "w-full")}>{resolvedCta}</span>
-          </button>
         </div>
-      </div>
+      ) : null}
 
       {showReactionsBar ? (
         <div className="flex items-center justify-between gap-4 border-b border-[rgba(17,18,22,0.08)] bg-white px-4 py-3 text-[0.88rem] text-[var(--muted-strong)] sm:text-[0.95rem]">

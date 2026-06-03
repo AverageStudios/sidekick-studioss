@@ -1,3 +1,53 @@
+insert into template_industries (
+  name,
+  slug,
+  description,
+  status,
+  sort_order
+)
+values (
+  'Car Detailing',
+  'car-detailing',
+  'Campaign templates for mobile and shop-based auto detailing businesses.',
+  'active',
+  2
+)
+on conflict (slug) do update
+set
+  name = excluded.name,
+  description = excluded.description,
+  status = excluded.status,
+  sort_order = excluded.sort_order,
+  updated_at = now();
+
+insert into template_categories (industry_id, name, slug, description, status, sort_order)
+select
+  industries.id,
+  category_definitions.name,
+  category_definitions.slug,
+  category_definitions.description,
+  'active',
+  category_definitions.sort_order
+from template_industries industries
+cross join (
+  values
+    ('Full Details', 'full-details', 'Full interior and exterior detail offers.', 1),
+    ('Interior Only', 'interior-only', 'Interior recovery, stain removal, and cabin refresh offers.', 2),
+    ('Exterior Only', 'exterior-only', 'Exterior-only wash, shine, and finish-focused offers.', 3),
+    ('Paint Correction & Protection', 'paint-correction-protection', 'Paint correction, ceramic coating, and protection services.', 4),
+    ('Seasonal Specials', 'seasonal-specials', 'Seasonal promotion and limited-time detailing offers.', 5),
+    ('Maintenance / Membership', 'maintenance-membership', 'Recurring wash plans, maintenance offers, and memberships.', 6),
+    ('Quick Offers / Lead Drivers', 'quick-offers-lead-drivers', 'Fast-converting low-friction lead generation offers.', 7)
+) as category_definitions(name, slug, description, sort_order)
+where industries.slug = 'car-detailing'
+on conflict (industry_id, slug) do update
+set
+  name = excluded.name,
+  description = excluded.description,
+  status = excluded.status,
+  sort_order = excluded.sort_order,
+  updated_at = now();
+
 insert into templates (
   id,
   slug,
@@ -14,7 +64,7 @@ insert into templates (
   updated_at
 )
 values
-  ('tpl-full-detail', 'full-detail-promo', 'Full Detail Promo', 'A fast-launch offer for drivers who want the full interior and exterior reset.', 'Car Detailing', 'Car Detailing', 'Service Booking', '/placeholders/full-detail.jpg', $${
+  ('tpl-full-detail', 'full-detail-promo', 'Full Detail Promo', 'A fast-launch offer for drivers who want the full interior and exterior reset.', 'Full Details', 'Car Detailing', 'Service Booking', '/placeholders/full-detail.jpg', $${
     "positioning": "Best for shops pushing a flagship full detail with a clean entry offer.",
     "ctaDefault": "Claim My Detail",
     "benefits": [
@@ -42,7 +92,7 @@ values
       "finalCta": "Get your detail quote"
     }
   }$$::jsonb, 'published', true, now(), now()),
-  ('tpl-interior', 'interior-detail-promo', 'Interior Detail Promo', 'A focused funnel for detailers selling interior recovery, stain removal, and refresh jobs.', 'Car Detailing', 'Car Detailing', 'Quote Request', '/placeholders/interior-detail.jpg', $${
+  ('tpl-interior', 'interior-detail-promo', 'Interior Detail Promo', 'A focused funnel for detailers selling interior recovery, stain removal, and refresh jobs.', 'Interior Only', 'Car Detailing', 'Quote Request', '/placeholders/interior-detail.jpg', $${
     "positioning": "Best for shops booking family vehicles, work trucks, or rideshare interiors.",
     "ctaDefault": "Get Interior Pricing",
     "benefits": [
@@ -70,7 +120,7 @@ values
       "finalCta": "See interior pricing"
     }
   }$$::jsonb, 'published', true, now(), now()),
-  ('tpl-ceramic', 'ceramic-coating-promo', 'Ceramic Coating Promo', 'A premium-feeling campaign for high-ticket coating jobs and paint protection offers.', 'Car Detailing', 'Car Detailing', 'High-Ticket Offer', '/placeholders/ceramic.jpg', $${
+  ('tpl-ceramic', 'ceramic-coating-promo', 'Ceramic Coating Promo', 'A premium-feeling campaign for high-ticket coating jobs and paint protection offers.', 'Paint Correction & Protection', 'Car Detailing', 'High-Ticket Offer', '/placeholders/ceramic.jpg', $${
     "positioning": "Best for detailers selling higher-ticket paint protection with a premium brand feel.",
     "ctaDefault": "Request Coating Quote",
     "benefits": [
@@ -98,7 +148,7 @@ values
       "finalCta": "Request my coating quote"
     }
   }$$::jsonb, 'published', true, now(), now()),
-  ('tpl-paint-correction', 'paint-correction-promo', 'Paint Correction Promo', 'A polished campaign for swirl removal, gloss restoration, and paint correction leads.', 'Car Detailing', 'Car Detailing', 'Inspection', '/placeholders/paint-correction.jpg', $${
+  ('tpl-paint-correction', 'paint-correction-promo', 'Paint Correction Promo', 'A polished campaign for swirl removal, gloss restoration, and paint correction leads.', 'Paint Correction & Protection', 'Car Detailing', 'Inspection', '/placeholders/paint-correction.jpg', $${
     "positioning": "Best for detailers selling transformation-focused correction work.",
     "ctaDefault": "See Correction Options",
     "benefits": [
@@ -126,7 +176,7 @@ values
       "finalCta": "Get my paint quote"
     }
   }$$::jsonb, 'published', false, now(), now()),
-  ('tpl-maintenance', 'monthly-maintenance-promo', 'Monthly Maintenance Promo', 'A recurring-revenue funnel for maintenance washes and simple monthly membership style offers.', 'Car Detailing', 'Car Detailing', 'Recurring Maintenance', '/placeholders/maintenance.jpg', $${
+  ('tpl-maintenance', 'monthly-maintenance-promo', 'Monthly Maintenance Promo', 'A recurring-revenue funnel for maintenance washes and simple monthly membership style offers.', 'Maintenance / Membership', 'Car Detailing', 'Recurring Maintenance', '/placeholders/maintenance.jpg', $${
     "positioning": "Best for detailers wanting steadier repeat business with a lightweight offer.",
     "ctaDefault": "Join The Wash Plan",
     "benefits": [
@@ -168,3 +218,14 @@ set
   is_featured = excluded.is_featured,
   published_at = excluded.published_at,
   updated_at = excluded.updated_at;
+
+update templates
+set
+  industry_id = industries.id,
+  category_id = categories.id
+from template_industries industries
+join template_categories categories
+  on categories.industry_id = industries.id
+where industries.slug = 'car-detailing'
+  and templates.industry = 'Car Detailing'
+  and categories.slug = regexp_replace(lower(trim(templates.category)), '[^a-z0-9]+', '-', 'g');
