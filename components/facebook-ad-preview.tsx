@@ -421,36 +421,37 @@ export function FacebookAdPreview({
           </div>
 
           <div className={cn("bg-white px-4", compact ? "pb-2.5 pt-1.5" : "pb-4 pt-2")}>
-            <p
-              ref={primaryTextRef}
-              className={cn(
-                "whitespace-pre-line break-words [overflow-wrap:anywhere] text-[var(--ink)]",
-                compact ? "text-[0.88rem] leading-[1.35]" : "text-[1.04rem] leading-[1.6]",
-                isPrimaryExpanded
-                  ? "min-h-0 overflow-visible"
-                  : compact
-                    ? "min-h-[3.2rem] max-h-[4.05rem] overflow-hidden"
-                    : "min-h-[8rem] max-h-[8rem] overflow-hidden",
-              )}
-              style={isPrimaryExpanded ? { display: "block" } : undefined}
-            >
-              {isPrimaryExpanded ? resolvedPrimaryText : collapsedPrimaryText}
-            </p>
-            {isPrimaryTruncated ? (
-              <div className={cn("flex", compact ? "mt-0.5 justify-end" : "mt-2 justify-start")}>
+            <div className="relative">
+              <p
+                ref={primaryTextRef}
+                className={cn(
+                  "whitespace-pre-line break-words [overflow-wrap:anywhere] text-[var(--ink)]",
+                  compact ? "text-[0.88rem] leading-[1.35]" : "text-[1.04rem] leading-[1.6]",
+                  isPrimaryTruncated ? (compact ? "pr-16 pb-5" : "pr-20 pb-6") : "",
+                  isPrimaryExpanded
+                    ? "min-h-0 overflow-visible"
+                    : compact
+                      ? "min-h-[3.2rem] max-h-[4.05rem] overflow-hidden"
+                      : "min-h-[8rem] max-h-[8rem] overflow-hidden",
+                )}
+                style={isPrimaryExpanded ? { display: "block" } : undefined}
+              >
+                {isPrimaryExpanded ? resolvedPrimaryText : collapsedPrimaryText}
+              </p>
+              {isPrimaryTruncated ? (
                 <button
                   type="button"
                   className={cn(
-                    "shrink-0 font-semibold text-[#1677ff] transition hover:text-[#0f64d8]",
-                    compact ? "text-[0.76rem]" : "text-[0.92rem]",
+                    "absolute bottom-0 right-0 z-10 rounded-sm bg-white/96 pl-2 font-semibold text-[#1677ff] transition hover:text-[#0f64d8]",
+                    compact ? "text-[0.74rem]" : "text-[0.88rem]",
                   )}
                   onClick={handlePrimaryToggle}
                   aria-expanded={isPrimaryExpanded}
                 >
                   {isPrimaryExpanded ? "See less" : "See more"}
                 </button>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
           </div>
         </div>
       ) : null}
