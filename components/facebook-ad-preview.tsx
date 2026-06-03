@@ -28,6 +28,7 @@ type FacebookAdPreviewProps = {
   mediaAspectMode?: "uniform" | "adaptive";
   placeholderValues?: Record<string, string>;
   fillHeight?: boolean;
+  collapsedPrimaryLines?: number;
 };
 
 type MediaAspectBucket = "portrait" | "square" | "landscape" | "wide";
@@ -196,6 +197,7 @@ export function FacebookAdPreview({
   mediaAspectMode = compact ? "uniform" : "adaptive",
   placeholderValues,
   fillHeight = true,
+  collapsedPrimaryLines,
 }: FacebookAdPreviewProps) {
   const resolvedMedia = resolveMedia(template, imageUrl, videoUrl);
   const resolvedCarouselImages = resolveCarouselImages(template, imageUrl);
@@ -251,6 +253,8 @@ export function FacebookAdPreview({
   const avatarImageKey = `${pageAvatarUrl || ""}:${resolvedPageName}`;
   const avatarFailed = avatarErrorKey === avatarImageKey;
   const mediaFitClass = mediaFit === "contain" ? "object-contain bg-[#f7f8fb]" : "object-cover";
+  const resolvedCollapsedPrimaryLines = collapsedPrimaryLines ?? (compact ? 3 : 5);
+  const collapsedPrimaryMaxHeight = `${resolvedCollapsedPrimaryLines * (compact ? 1.35 : 1.6)}em`;
   const resolvedMediaAspect = useMemo(() => {
     if (mediaAspectMode === "uniform") {
       return compact
@@ -425,16 +429,20 @@ export function FacebookAdPreview({
               <p
                 ref={primaryTextRef}
                 className={cn(
-                  "whitespace-pre-line break-words [overflow-wrap:anywhere] text-[var(--ink)]",
-                  compact ? "text-[0.88rem] leading-[1.35]" : "text-[1.04rem] leading-[1.6]",
-                  isPrimaryTruncated ? (compact ? "pr-16 pb-5" : "pr-20 pb-6") : "",
+                "whitespace-pre-line break-words [overflow-wrap:anywhere] text-[var(--ink)]",
+                compact ? "text-[0.88rem] leading-[1.35]" : "text-[1.04rem] leading-[1.6]",
+                isPrimaryTruncated ? (compact ? "pr-16 pb-5" : "pr-20 pb-6") : "",
+                isPrimaryExpanded
+                  ? "min-h-0 overflow-visible"
+                  : compact
+                      ? "min-h-[3.2rem] overflow-hidden"
+                      : "min-h-[8rem] overflow-hidden",
+              )}
+                style={
                   isPrimaryExpanded
-                    ? "min-h-0 overflow-visible"
-                    : compact
-                      ? "min-h-[3.2rem] max-h-[4.05rem] overflow-hidden"
-                      : "min-h-[8rem] max-h-[8rem] overflow-hidden",
-                )}
-                style={isPrimaryExpanded ? { display: "block" } : undefined}
+                    ? { display: "block" }
+                    : { maxHeight: collapsedPrimaryMaxHeight }
+                }
               >
                 {isPrimaryExpanded ? resolvedPrimaryText : collapsedPrimaryText}
               </p>
