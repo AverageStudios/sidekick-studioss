@@ -3031,6 +3031,7 @@ export function TemplateLaunchWizard({
                     }
                     imageUrl={selectedTemplate?.previewImage || null}
                     placeholderValues={previewPlaceholderValues}
+                    fillHeight={false}
                     compact
                     mediaFit="contain"
                     mediaAspectMode="uniform"

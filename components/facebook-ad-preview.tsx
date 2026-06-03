@@ -27,6 +27,7 @@ type FacebookAdPreviewProps = {
   mediaFit?: "cover" | "contain";
   mediaAspectMode?: "uniform" | "adaptive";
   placeholderValues?: Record<string, string>;
+  fillHeight?: boolean;
 };
 
 type MediaAspectBucket = "portrait" | "square" | "landscape" | "wide";
@@ -194,6 +195,7 @@ export function FacebookAdPreview({
   mediaFit = "cover",
   mediaAspectMode = compact ? "uniform" : "adaptive",
   placeholderValues,
+  fillHeight = true,
 }: FacebookAdPreviewProps) {
   const resolvedMedia = resolveMedia(template, imageUrl, videoUrl);
   const resolvedCarouselImages = resolveCarouselImages(template, imageUrl);
@@ -356,7 +358,8 @@ export function FacebookAdPreview({
   return (
     <div
       className={cn(
-        "flex h-full flex-col overflow-hidden rounded-[28px] bg-transparent p-0",
+        "flex flex-col overflow-hidden rounded-[28px] bg-transparent p-0",
+        fillHeight ? "h-full" : "h-auto",
         className,
       )}
     >
