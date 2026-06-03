@@ -269,6 +269,17 @@ function normalizeQuestionKey(value: string) {
     .slice(0, 40);
 }
 
+function getLeadFormCustomQuestionKeyMode(question: CampaignLeadFormCustomQuestion) {
+  if (question.keyMode === "manual") return "manual";
+  if (question.keyMode === "auto") return "auto";
+
+  const normalizedLabel = normalizeQuestionKey(question.label);
+  const normalizedKey = normalizeQuestionKey(question.key);
+  if (!normalizedKey) return "auto";
+  if (normalizedLabel && normalizedKey === normalizedLabel) return "auto";
+  return "manual";
+}
+
 function createCustomLeadFormQuestion(
   type: CampaignLeadFormCustomQuestion["type"],
 ): CampaignLeadFormCustomQuestion {
@@ -277,6 +288,7 @@ function createCustomLeadFormQuestion(
     key: "",
     label: "",
     type,
+    keyMode: "auto",
     options:
       type === "MULTIPLE_CHOICE"
         ? [
@@ -2322,13 +2334,16 @@ export function TemplateLaunchWizard({
                                         onChange={(event) =>
                                           updateLeadFormCustomQuestion(question.id, (currentQuestion) => {
                                             const nextLabel = event.target.value;
-                                            const nextKey = currentQuestion.key.trim()
-                                              ? currentQuestion.key
-                                              : normalizeQuestionKey(nextLabel);
+                                            const keyMode = getLeadFormCustomQuestionKeyMode(currentQuestion);
+                                            const nextKey =
+                                              keyMode === "manual"
+                                                ? currentQuestion.key
+                                                : normalizeQuestionKey(nextLabel);
                                             return {
                                               ...currentQuestion,
                                               label: nextLabel,
                                               key: nextKey,
+                                              keyMode,
                                             };
                                           })
                                         }
@@ -2343,6 +2358,7 @@ export function TemplateLaunchWizard({
                                           updateLeadFormCustomQuestion(question.id, (currentQuestion) => ({
                                             ...currentQuestion,
                                             key: normalizeQuestionKey(event.target.value),
+                                            keyMode: normalizeQuestionKey(event.target.value) ? "manual" : "auto",
                                           }))
                                         }
                                         placeholder="service_interest"

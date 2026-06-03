@@ -103,6 +103,7 @@ export type CampaignLeadFormField =
   | "COMPANY_NAME"
   | "JOB_TITLE";
 export type CampaignLeadFormCustomQuestionType = "SHORT_ANSWER" | "MULTIPLE_CHOICE";
+export type CampaignLeadFormCustomQuestionKeyMode = "auto" | "manual";
 export type CampaignLeadFormCustomQuestionOption = {
   id: string;
   value: string;
@@ -113,6 +114,7 @@ export type CampaignLeadFormCustomQuestion = {
   label: string;
   type: CampaignLeadFormCustomQuestionType;
   options: CampaignLeadFormCustomQuestionOption[];
+  keyMode?: CampaignLeadFormCustomQuestionKeyMode;
 };
 
 export type TemplatePlaceholderField = {

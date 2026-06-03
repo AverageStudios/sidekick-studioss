@@ -298,6 +298,16 @@ function normalizeLeadFormCustomQuestions(
       const keySource = typeof question.key === "string" && question.key.trim() ? question.key : label;
       const normalizedKey = normalizeLeadFormQuestionKey(keySource) || `question_${index + 1}`;
       const type = question.type === "MULTIPLE_CHOICE" ? "MULTIPLE_CHOICE" : "SHORT_ANSWER";
+      const normalizedLabelKey = normalizeLeadFormQuestionKey(label);
+      const normalizedSourceKey = normalizeLeadFormQuestionKey(typeof question.key === "string" ? question.key : "");
+      const inferredKeyMode =
+        question.keyMode === "manual"
+          ? "manual"
+          : question.keyMode === "auto"
+            ? "auto"
+            : normalizedSourceKey && normalizedLabelKey && normalizedSourceKey !== normalizedLabelKey
+              ? "manual"
+              : "auto";
       const options = Array.isArray(question.options)
         ? question.options
             .filter((option) => option && typeof option === "object")
@@ -313,6 +323,7 @@ function normalizeLeadFormCustomQuestions(
         label,
         type,
         options,
+        keyMode: inferredKeyMode,
       };
     });
 }
