@@ -1125,8 +1125,13 @@ export async function createWorkspaceAction(formData: FormData) {
   }
 
   const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=general&created=1");
+  const workspaceName = String(formData.get("workspaceName") || "").trim();
+  if (!workspaceName) {
+    redirect("/workspaces/new?error=Workspace%20name%20is%20required.");
+  }
+
   await createWorkspaceForUser(user, {
-    workspaceName: String(formData.get("workspaceName") || ""),
+    workspaceName,
     businessName: String(formData.get("businessName") || ""),
     businessEmail: String(formData.get("businessEmail") || ""),
     businessPhone: String(formData.get("businessPhone") || ""),

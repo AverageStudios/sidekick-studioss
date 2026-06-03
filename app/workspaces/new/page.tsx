@@ -35,8 +35,11 @@ export default async function NewWorkspacePage() {
           <div className="grid gap-6">
             <div className="grid gap-6 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="workspaceName">
-                  Workspace name
+                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--ink)]" htmlFor="workspaceName">
+                  <span>Workspace name</span>
+                  <span className="rounded-full bg-[var(--soft-panel)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted-strong)]">
+                    Required
+                  </span>
                 </label>
                 <Input
                   id="workspaceName"
@@ -50,25 +53,30 @@ export default async function NewWorkspacePage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="businessName">
-                  Business name
+                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--ink)]" htmlFor="businessName">
+                  <span>Business name</span>
+                  <span className="rounded-full border border-[var(--line)] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                    Optional
+                  </span>
                 </label>
                 <Input
                   id="businessName"
                   name="businessName"
                   placeholder="Acme Auto Detailing"
-                  required
                 />
                 <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
-                  Used for workspace identity, publishing defaults, and lead attribution.
+                  Used for workspace identity, publishing defaults, and lead attribution. If you leave it blank, we&apos;ll reuse the workspace name.
                 </p>
               </div>
             </div>
 
             <div className="grid gap-6 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="businessEmail">
-                  Business email
+                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--ink)]" htmlFor="businessEmail">
+                  <span>Business email</span>
+                  <span className="rounded-full border border-[var(--line)] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                    Optional
+                  </span>
                 </label>
                 <Input
                   id="businessEmail"
@@ -80,8 +88,11 @@ export default async function NewWorkspacePage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="businessPhone">
-                  Business phone
+                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--ink)]" htmlFor="businessPhone">
+                  <span>Business phone</span>
+                  <span className="rounded-full border border-[var(--line)] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                    Optional
+                  </span>
                 </label>
                 <Input
                   id="businessPhone"
@@ -93,8 +104,11 @@ export default async function NewWorkspacePage() {
 
             <div className="grid gap-6 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="website">
-                  Website
+                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--ink)]" htmlFor="website">
+                  <span>Website</span>
+                  <span className="rounded-full border border-[var(--line)] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                    Optional
+                  </span>
                 </label>
                 <Input
                   id="website"
@@ -104,8 +118,11 @@ export default async function NewWorkspacePage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="privacyPolicyUrl">
-                  Privacy policy URL
+                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--ink)]" htmlFor="privacyPolicyUrl">
+                  <span>Privacy policy URL</span>
+                  <span className="rounded-full border border-[var(--line)] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                    Optional
+                  </span>
                 </label>
                 <Input
                   id="privacyPolicyUrl"
@@ -116,8 +133,11 @@ export default async function NewWorkspacePage() {
             </div>
 
             <div className="max-w-sm">
-              <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="industry">
-                Industry
+              <label className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--ink)]" htmlFor="industry">
+                <span>Industry</span>
+                <span className="rounded-full border border-[var(--line)] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                  Optional
+                </span>
               </label>
               <select
                 id="industry"
