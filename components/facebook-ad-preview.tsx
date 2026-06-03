@@ -383,11 +383,12 @@ export function FacebookAdPreview({
                 "whitespace-pre-line break-words [overflow-wrap:anywhere] text-[var(--ink)]",
                 compact ? "text-[0.88rem] leading-[1.35]" : "text-[1.04rem] leading-[1.6]",
                 isPrimaryExpanded
-                  ? "line-clamp-none min-h-0"
+                  ? "min-h-0 overflow-visible"
                   : compact
                     ? `${previewLayoutContract.compactPrimaryLines} min-h-[3.2rem]`
                     : `${previewLayoutContract.regularPrimaryLines} min-h-[8rem]`,
               )}
+              style={isPrimaryExpanded ? { display: "block" } : undefined}
             >
               {resolvedPrimaryText}
             </p>

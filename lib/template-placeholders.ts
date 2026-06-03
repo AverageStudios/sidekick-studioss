@@ -77,7 +77,40 @@ export function replacePlaceholdersInString(input: string, placeholderValues: Re
   PLACEHOLDER_PATTERN.lastIndex = 0;
   return input.replace(PLACEHOLDER_PATTERN, (_, rawKey: string) => {
     const key = rawKey.trim();
-    return placeholderValues[key] ?? "";
+    const directValue = placeholderValues[key];
+    if (directValue != null && String(directValue).trim()) {
+      return String(directValue);
+    }
+
+    const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const normalizedMatch = Object.entries(placeholderValues).find(([candidateKey, candidateValue]) => {
+      if (candidateValue == null || !String(candidateValue).trim()) return false;
+      const candidateNormalized = candidateKey.toLowerCase().replace(/[^a-z0-9]+/g, "");
+      return candidateNormalized === normalizedKey;
+    });
+
+    if (normalizedMatch) {
+      return String(normalizedMatch[1]);
+    }
+
+    const aliasMap: Record<string, string[]> = {
+      price: ["offerPrice", "regularPrice", "monthlyRate", "joinFee"],
+      amount: ["offerPrice", "regularPrice", "monthlyRate", "joinFee"],
+      city: ["city", "location"],
+      location: ["city", "location"],
+      business: ["businessName"],
+      businessname: ["businessName"],
+      cta: ["ctaText"],
+      ctatext: ["ctaText"],
+    };
+
+    for (const alias of aliasMap[normalizedKey] || []) {
+      const aliasedValue = placeholderValues[alias];
+      if (aliasedValue != null && String(aliasedValue).trim()) {
+        return String(aliasedValue);
+      }
+    }
+
+    return "";
   });
 }
-

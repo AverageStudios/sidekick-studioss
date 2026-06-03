@@ -3,11 +3,35 @@ import { slugify } from "@/lib/utils";
 import { replacePlaceholdersInString } from "@/lib/template-placeholders";
 
 function buildPlaceholderTokens(values: TemplateSetupValues) {
+  const placeholderValues = values.placeholderValues || {};
+  const aliasedPlaceholderValues: Record<string, string> = { ...placeholderValues };
+  const aliasPairs: Array<[string, string[]]> = [
+    ["price", ["offerPrice", "regularPrice", "monthlyRate", "joinFee"]],
+    ["offerprice", ["offerPrice", "regularPrice", "monthlyRate", "joinFee"]],
+    ["regularprice", ["regularPrice", "offerPrice", "monthlyRate", "joinFee"]],
+    ["businessname", ["businessName"]],
+    ["business_name", ["businessName"]],
+    ["city", ["city", "location"]],
+    ["location", ["city", "location"]],
+    ["cta", ["ctaText"]],
+    ["ctatext", ["ctaText"]],
+  ];
+
+  for (const [alias, sources] of aliasPairs) {
+    for (const source of sources) {
+      const candidate = placeholderValues[source];
+      if (typeof candidate === "string" && candidate.trim()) {
+        aliasedPlaceholderValues[alias] = candidate.trim();
+        break;
+      }
+    }
+  }
+
   return {
     businessName: values.businessName || "Your detailing shop",
     city: values.city || "your city",
     ctaText: values.ctaText || "",
-    ...(values.placeholderValues || {}),
+    ...aliasedPlaceholderValues,
   };
 }
 
