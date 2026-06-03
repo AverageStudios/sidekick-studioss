@@ -147,7 +147,11 @@ export function buildResolvedPlaceholderMap(
   return resolvedValues;
 }
 
-export function replacePlaceholdersInString(input: string, placeholderValues: Record<string, string>) {
+export function replacePlaceholdersInString(
+  input: string,
+  placeholderValues: Record<string, string>,
+  options?: { preserveMissing?: boolean },
+) {
   const resolvedValues = buildResolvedPlaceholderMap(placeholderValues);
   PLACEHOLDER_PATTERN.lastIndex = 0;
   return input.replace(PLACEHOLDER_PATTERN, (_, rawKey: string) => {
@@ -168,6 +172,6 @@ export function replacePlaceholdersInString(input: string, placeholderValues: Re
       return String(normalizedMatch[1]);
     }
 
-    return "";
+    return options?.preserveMissing ? `{{${key}}}` : "";
   });
 }

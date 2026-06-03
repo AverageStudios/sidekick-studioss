@@ -208,7 +208,7 @@ export function FacebookAdPreview({
   const hasResolvedPlaceholderValues = Object.keys(resolvedPlaceholderValues).length > 0;
   const applyPreviewPlaceholderValues = (value: string) =>
     hasResolvedPlaceholderValues
-      ? replacePlaceholdersInString(value, resolvedPlaceholderValues)
+      ? replacePlaceholdersInString(value, resolvedPlaceholderValues, { preserveMissing: true })
       : value;
   const resolvedPageName = normalizeSingleLine(
     applyPreviewPlaceholderValues(pageName || template?.name || ""),
