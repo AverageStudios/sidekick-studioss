@@ -438,7 +438,7 @@ export function FacebookAdPreview({
               >
                 {isPrimaryExpanded ? resolvedPrimaryText : collapsedPrimaryText}
               </p>
-              {isPrimaryTruncated ? (
+              {isPrimaryTruncated || isPrimaryExpanded ? (
                 <button
                   type="button"
                   className={cn(
