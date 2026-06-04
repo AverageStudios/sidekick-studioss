@@ -996,6 +996,38 @@ function sanitizeDestinationUrl(value: string) {
   return `https://${trimmed}`;
 }
 
+function toDisplayLinkLabel(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .replace(/\/.*$/, "")
+    .trim() || null;
+}
+
+export function getCampaignPreviewDisplayLink(
+  state: Pick<CampaignLaunchState, "selection" | "adTypeConfig">,
+  fallbackTemplateDisplayLink?: string | null,
+) {
+  switch (state.selection.adType) {
+    case "landing_page":
+      return (
+        toDisplayLinkLabel(sanitizeDestinationUrl(state.adTypeConfig.landingPage.url || "")) ||
+        toDisplayLinkLabel(fallbackTemplateDisplayLink || "")
+      );
+    case "lead_form":
+      return "FORM ON FACEBOOK";
+    case "call_now":
+      return "CALL NOW";
+    case "messenger_leads":
+    case "messenger_engagement":
+      return "MESSENGER";
+    default:
+      return toDisplayLinkLabel(fallbackTemplateDisplayLink || "");
+  }
+}
+
 function resolveThankYouDestinationUrl(state: CampaignLaunchState) {
   const thankYou = state.adTypeConfig.leadForm.thankYou;
   if (thankYou.buttonAction === "OPEN_WEBSITE" || thankYou.buttonAction === "DOWNLOAD") {

@@ -40,6 +40,7 @@ import {
   getWizardSectionForStep,
   getTemplatePlaceholderFields,
   getTemplateSetupValuesFromLaunchState,
+  getCampaignPreviewDisplayLink,
   getVisibleWizardSteps,
   locationTargetingModeOptions,
   normalizeCampaignLaunchState,
@@ -1000,6 +1001,10 @@ export function TemplateLaunchWizard({
   });
   const visibleBudgetGuidance = launchState.integrationSelections.adAccountId ? budgetGuidance : null;
   const visibleBudgetGuidanceError = launchState.integrationSelections.adAccountId ? budgetGuidanceError : null;
+  const previewDisplayLink = useMemo(
+    () => getCampaignPreviewDisplayLink(launchState, selectedTemplate?.displayLink || null),
+    [launchState, selectedTemplate?.displayLink],
+  );
 
   const validation = validateWizardStep({
     stepId: launchState.stepId,
@@ -1639,9 +1644,11 @@ export function TemplateLaunchWizard({
                       primaryText={previewPrimaryText}
                       headline={previewHeadline}
                       description={previewDescription}
+                      displayLink={null}
                       ctaLabel={previewCta}
                     imageUrl={template.previewImage || null}
                     compact
+                    showCompactDescription
                     showMetaBar
                     showReactionsBar={false}
                     showActionsRow={false}
@@ -3082,6 +3089,7 @@ export function TemplateLaunchWizard({
                     primaryText={previewBlueprint?.adCopy.primary}
                     headline={previewBlueprint?.adCopy.headlines[0]}
                     description={previewBlueprint?.adCopy.descriptions[0]}
+                    displayLink={previewDisplayLink}
                     ctaLabel={
                       selectedTemplate?.ctaLabel ||
                       previewBlueprint?.funnelConfig.ctaText ||
@@ -3092,6 +3100,7 @@ export function TemplateLaunchWizard({
                     fillHeight={false}
                     collapsedPrimaryLines={6}
                     compact
+                    showCompactDescription
                     mediaFit="contain"
                     mediaAspectMode="uniform"
                     className="w-full rounded-none border-0 bg-transparent p-0 shadow-none"

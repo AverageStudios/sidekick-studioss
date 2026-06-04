@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { FacebookAdPreview } from "@/components/facebook-ad-preview";
 import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
 import { requireUser } from "@/lib/auth";
+import { getCampaignPreviewDisplayLink, normalizeCampaignLaunchState } from "@/lib/campaign-launch";
 import { getDashboardSnapshot, getTemplates, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
 import { resolveMetaPagePreviewIdentity } from "@/lib/meta-page-identity";
 
@@ -64,6 +65,12 @@ export default async function TemplatesPage() {
 
             {publishedCampaigns.map((campaign) => {
               const template = templateMap.get(campaign.template_id);
+              const launchState = campaign.launch_state_json && template
+                ? normalizeCampaignLaunchState(campaign.launch_state_json, template, null)
+                : null;
+              const displayLink = launchState && template
+                ? getCampaignPreviewDisplayLink(launchState, template.displayLink || null)
+                : null;
 
               return (
                 <Link key={campaign.id} href={`/campaigns/${campaign.id}`} className="block">
@@ -75,6 +82,7 @@ export default async function TemplatesPage() {
                       primaryText={campaign.ad_copy_json?.primary || template?.adCopy.primary || campaign.name}
                       headline={campaign.ad_copy_json?.headlines?.[0] || template?.adCopy.headlines?.[0] || campaign.name}
                       description={campaign.ad_copy_json?.descriptions?.[0] || template?.adCopy.descriptions?.[0] || template?.description || "Campaign preview"}
+                      displayLink={displayLink}
                       ctaLabel={resolveTemplateCtaLabel(template, "Open")}
                       imageUrl={template?.previewImage || null}
                       placeholderValues={campaign.launch_state_json?.placeholders?.values || {}}

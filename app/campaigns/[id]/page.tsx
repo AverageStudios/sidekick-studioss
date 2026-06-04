@@ -25,6 +25,7 @@ import {
   createLaunchStateView,
   evaluateLaunchReadiness,
   getAdTypeLabel,
+  getCampaignPreviewDisplayLink,
   getStepDefinition,
   getTemplatePlaceholderFields,
   getTemplateSetupValuesFromLaunchState,
@@ -247,6 +248,8 @@ export default async function CampaignPage({
         };
     }
   })();
+  const previewDisplayLink =
+    launchState ? getCampaignPreviewDisplayLink(launchState, bundle.template.displayLink || null) : null;
 
   const timelineItems: Array<TimelineItem | null> = [
     {
@@ -517,6 +520,7 @@ export default async function CampaignPage({
                     bundle.campaign.subheadline ||
                     bundle.template.description
                   }
+                  displayLink={previewDisplayLink}
                   ctaLabel={bundle.campaign.cta_text || resolveTemplateCtaLabel(bundle.template, "Learn More")}
                   imageUrl={bundle.template.previewImage || null}
                   placeholderValues={launchState?.placeholders?.values || {}}

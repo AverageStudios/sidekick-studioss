@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
 import { deleteDraftCampaignAction } from "@/app/actions";
 import { requireUser } from "@/lib/auth";
+import { getCampaignPreviewDisplayLink, normalizeCampaignLaunchState } from "@/lib/campaign-launch";
 import { getDashboardSnapshot, getTemplates, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
 import { resolveMetaPagePreviewIdentity } from "@/lib/meta-page-identity";
 
@@ -50,6 +51,12 @@ export default async function DraftCampaignsPage() {
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
             {draftCampaigns.map((campaign) => {
               const template = templateMap.get(campaign.template_id);
+              const launchState = campaign.launch_state_json && template
+                ? normalizeCampaignLaunchState(campaign.launch_state_json, template, null)
+                : null;
+              const displayLink = launchState && template
+                ? getCampaignPreviewDisplayLink(launchState, template.displayLink || null)
+                : null;
 
               return (
                 <Card key={campaign.id} className="group max-w-[22rem] overflow-hidden rounded-[24px] border-[var(--line)] bg-white transition duration-200 hover:shadow-[0_8px_28px_rgba(16,24,40,0.06)]">
@@ -61,6 +68,7 @@ export default async function DraftCampaignsPage() {
                       primaryText={campaign.ad_copy_json?.primary || template?.adCopy.primary || campaign.name}
                       headline={campaign.ad_copy_json?.headlines?.[0] || template?.adCopy.headlines?.[0] || campaign.name}
                       description={campaign.ad_copy_json?.descriptions?.[0] || template?.adCopy.descriptions?.[0] || template?.description || "Draft preview"}
+                      displayLink={displayLink}
                       ctaLabel={resolveTemplateCtaLabel(template, "Continue")}
                       imageUrl={template?.previewImage || null}
                       placeholderValues={campaign.launch_state_json?.placeholders?.values || {}}

@@ -349,6 +349,11 @@ export function getTemplateById(id: string) {
 export function hydrateTemplateRecord(record: TemplateRecord): TemplateSeed {
   const fallback = getTemplateById(record.id) || getTemplateBySlug(record.slug);
   const config = record.config_json || {};
+  const explicitLinkDescription =
+    ((config as { linkDescription?: string | null }).linkDescription || "").trim() ||
+    (((config as { creative?: { linkDescription?: string | null } | null }).creative?.linkDescription || "").trim()) ||
+    (((config as { template?: { linkDescription?: string | null } | null }).template?.linkDescription || "").trim()) ||
+    "";
   const industry = normalizeIndustryLabel(record.industry || config.industry || fallback?.industry || record.category) as TemplateIndustry;
   const category = (record.category || config.category || fallback?.category || industry || "Uncategorized").trim();
   const offerType = normalizeOfferTypeLabel(record.offer_type || config.offerType || fallback?.offerType || "") as TemplateOfferType;
@@ -406,14 +411,40 @@ export function hydrateTemplateRecord(record: TemplateRecord): TemplateSeed {
     offerStructure: config.offerStructure || fallback?.offerStructure || [],
     benefits: config.benefits || fallback?.benefits || [],
     faq: config.faq || fallback?.faq || [],
-    adCopy: config.adCopy || fallback?.adCopy || {
-      primary: "",
-      headlines: [],
-      descriptions: [],
-      targeting: "",
-      budget: "",
-      creativeGuidance: [],
-    },
+    adCopy: (() => {
+      const fallbackAdCopy = fallback?.adCopy || {
+        primary: "",
+        headlines: [],
+        descriptions: [],
+        targeting: "",
+        budget: "",
+        creativeGuidance: [],
+      };
+      const configAdCopy = (config.adCopy || {}) as Partial<TemplateSeed["adCopy"]>;
+      const mergedDescriptions = Array.isArray(configAdCopy.descriptions)
+        ? [...configAdCopy.descriptions]
+        : [...(fallbackAdCopy.descriptions || [])];
+
+      if (explicitLinkDescription) {
+        if (mergedDescriptions.length > 0) {
+          mergedDescriptions[0] = explicitLinkDescription;
+        } else {
+          mergedDescriptions.push(explicitLinkDescription);
+        }
+      }
+
+      return {
+        primary: configAdCopy.primary || fallbackAdCopy.primary || "",
+        headlines: Array.isArray(configAdCopy.headlines) ? configAdCopy.headlines : fallbackAdCopy.headlines || [],
+        descriptions: mergedDescriptions,
+        targeting: configAdCopy.targeting || fallbackAdCopy.targeting || "",
+        budget: configAdCopy.budget || fallbackAdCopy.budget || "",
+        creativeGuidance: Array.isArray(configAdCopy.creativeGuidance)
+          ? configAdCopy.creativeGuidance
+          : fallbackAdCopy.creativeGuidance || [],
+        objective: configAdCopy.objective || fallbackAdCopy.objective,
+      };
+    })(),
     funnel: config.funnel || fallback?.funnel || {
       heroHeadline: record.name,
       heroSubheadline: record.description,

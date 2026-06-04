@@ -15,6 +15,7 @@ type FacebookAdPreviewProps = {
   headline?: string;
   description?: string;
   ctaLabel?: string;
+  displayLink?: string | null;
   imageUrl?: string | null;
   videoUrl?: string | null;
   className?: string;
@@ -143,7 +144,7 @@ function resolveCarouselImages(template?: TemplateSeed | null, imageUrl?: string
 }
 
 function resolveDisplayLink(template?: TemplateSeed | null) {
-  const rawValue = template?.displayLink || process.env.NEXT_PUBLIC_APP_URL || "";
+  const rawValue = template?.displayLink || "";
   const normalized = rawValue
     .trim()
     .replace(/^https?:\/\//i, "")
@@ -151,7 +152,7 @@ function resolveDisplayLink(template?: TemplateSeed | null) {
     .replace(/\/.*$/, "")
     .trim();
 
-  return normalized || "sidekickstudioss.com";
+  return normalized || null;
 }
 
 function normalizeFeedMediaAspectRatio(rawRatio?: number | null): ResolvedMediaAspect {
@@ -185,6 +186,7 @@ export function FacebookAdPreview({
   headline,
   description,
   ctaLabel,
+  displayLink,
   imageUrl,
   videoUrl,
   className,
@@ -242,7 +244,7 @@ export function FacebookAdPreview({
       resolveTemplateCtaLabel(template, previewLayoutContract.ctaFallback),
     previewLayoutContract.ctaFallback,
   );
-  const resolvedDisplayLink = resolveDisplayLink(template);
+  const resolvedDisplayLink = normalizeSingleLine(displayLink || resolveDisplayLink(template) || "", "");
   const metrics = compact ? { likes: 29, comments: 4, shares: 2 } : { likes: 129, comments: 12, shares: 8 };
   const [avatarErrorKey, setAvatarErrorKey] = useState("");
   const [isPrimaryExpanded, setIsPrimaryExpanded] = useState(false);
@@ -541,22 +543,31 @@ export function FacebookAdPreview({
           className={cn(
             "border-b border-[rgba(17,18,22,0.08)] bg-[#f0f2f5] px-4 py-4",
             "box-border w-full self-stretch",
-            compact ? "min-h-[5.1rem] flex-1 rounded-b-[28px]" : "min-h-[5.1rem]",
+            compact ? "min-h-[5rem] flex-1 rounded-b-[28px]" : "min-h-[5.1rem]",
           )}
         >
-          <div className={cn("grid h-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-stretch", compact ? "gap-3" : "gap-3.5")}>
-            <div className="flex min-w-0 flex-col justify-center overflow-hidden">
-              <p className="truncate text-[0.78rem] font-medium leading-[1.05] text-[var(--muted-strong)] sm:text-[0.84rem]">
-                {resolvedDisplayLink}
-              </p>
+          <div className={cn("grid h-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center", compact ? "gap-3.5" : "gap-3.5")}>
+            <div className={cn("flex min-w-0 flex-col justify-center overflow-hidden", compact ? "pr-1" : "")}>
+              {resolvedDisplayLink ? (
+                <p
+                  className={cn(
+                    "truncate leading-[1.05] text-[var(--muted-strong)]",
+                    compact
+                      ? "text-[0.66rem] font-medium uppercase tracking-[0.08em] sm:text-[0.7rem]"
+                      : "text-[0.78rem] font-medium sm:text-[0.84rem]",
+                  )}
+                >
+                  {resolvedDisplayLink}
+                </p>
+              ) : null}
               <p
                 className={cn(
                   "mt-0.25 min-w-0 overflow-hidden break-words [overflow-wrap:anywhere] font-semibold tracking-[-0.05em] text-[var(--ink)]",
-                  compact ? previewLayoutContract.compactHeadlineLines : "line-clamp-2",
+                  compact ? "line-clamp-2" : "line-clamp-2",
                 )}
                 style={{
-                  fontSize: getHeadlineFontSize(resolvedHeadline, compact),
-                  lineHeight: compact ? 1.03 : 1.08,
+                  fontSize: compact ? "0.96rem" : getHeadlineFontSize(resolvedHeadline, compact),
+                  lineHeight: compact ? 1.08 : 1.08,
                 }}
               >
                 {resolvedHeadline}
@@ -565,7 +576,7 @@ export function FacebookAdPreview({
                 <p
                   className={cn(
                     "mt-0.5 break-words [overflow-wrap:anywhere] leading-[1.32] text-[var(--muted-strong)]",
-                    compact ? "text-[0.74rem] sm:text-[0.78rem]" : "text-[0.88rem] sm:text-[0.92rem]",
+                    compact ? "text-[0.76rem] sm:text-[0.8rem]" : "text-[0.88rem] sm:text-[0.92rem]",
                     compact ? previewLayoutContract.compactDescriptionLines : previewLayoutContract.regularDescriptionLines,
                   )}
                 >
@@ -576,9 +587,9 @@ export function FacebookAdPreview({
             <button
               type="button"
               className={cn(
-                "justify-self-end self-center inline-flex min-w-0 shrink-0 items-center justify-center overflow-hidden whitespace-nowrap rounded-[9px] bg-[#dbe1e9] px-3 text-center font-semibold leading-none text-[var(--ink)] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]",
+                "justify-self-end self-center inline-flex min-w-0 shrink-0 items-center justify-center overflow-hidden whitespace-nowrap bg-[#e4e7ec] text-center font-semibold leading-none text-[var(--ink)] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]",
                 compact
-                  ? "h-[2.05rem] w-fit max-w-[8rem] text-[0.56rem] tracking-[-0.02em] sm:text-[0.6rem]"
+                  ? "h-[2.25rem] rounded-[10px] px-4 w-fit max-w-[8.5rem] text-[0.7rem] tracking-[-0.02em] sm:text-[0.74rem]"
                   : "h-[2.75rem] w-[7.1rem] text-[0.9rem] sm:text-[0.94rem]",
               )}
               title={resolvedCta}
