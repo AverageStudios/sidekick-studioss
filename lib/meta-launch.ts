@@ -1153,6 +1153,27 @@ export async function runMetaLaunchPreflight({
     });
   }
 
+  const unresolvedTargetLocation = (context.launchState.targetLocations || []).find((location) => {
+    if (location.scope === "world" || location.scope === "country" || location.scope === "state") {
+      return false;
+    }
+
+    const hasMetaKey = Boolean(location.metaLocation?.key);
+    const hasCoordinates = typeof location.lat === "number" && typeof location.lon === "number";
+
+    return !hasMetaKey && !hasCoordinates;
+  });
+
+  if (unresolvedTargetLocation) {
+    issues.push({
+      code: "unresolved_target_location",
+      message: `Select a suggested location for "${unresolvedTargetLocation.label}" before launch so Meta can target it correctly.`,
+      type: "blocking",
+      scope: "both",
+      field: "targetLocations",
+    });
+  }
+
   const setupValues = getTemplateSetupValuesFromLaunchState(
     context.template,
     context.launchStateModel,

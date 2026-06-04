@@ -1298,9 +1298,37 @@ export function TemplateLaunchWizard({
     return "city";
   }
 
+  function normalizeLocationSearchText(value: string) {
+    return value
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\w\s,.-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  }
+
   function addManualLocation() {
     if (!pendingLocation.trim()) return;
     const inferredScope = inferLocationScopeFromQuery(pendingLocation);
+    const normalizedPendingLocation = normalizeLocationSearchText(pendingLocation);
+    const topSuggestion = locationSuggestions[0] || null;
+    const normalizedTopSuggestionLabel = topSuggestion
+      ? normalizeLocationSearchText(topSuggestion.label)
+      : "";
+
+    if (
+      topSuggestion &&
+      inferredScope !== "address" &&
+      inferredScope !== "world" &&
+      (normalizedTopSuggestionLabel === normalizedPendingLocation ||
+        normalizedTopSuggestionLabel.startsWith(`${normalizedPendingLocation},`) ||
+        normalizedTopSuggestionLabel.startsWith(`${normalizedPendingLocation} `))
+    ) {
+      addLocationFromSuggestion(topSuggestion);
+      return;
+    }
+
     const manualLocation: CampaignLaunchLocation = {
       id: `manual-${Date.now()}`,
       label: pendingLocation.trim(),
