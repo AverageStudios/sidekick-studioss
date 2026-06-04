@@ -68,6 +68,8 @@ function lifecycleTone(state: string) {
   switch (state) {
     case "active":
       return "border-[#bbf7d0] bg-[#f0fdf4] text-[#15803d]";
+    case "in_review":
+      return "border-[#dbeafe] bg-[#eff6ff] text-[#1d4ed8]";
     case "paused":
       return "border-[#fed7aa] bg-[#fff7ed] text-[#c2410c]";
     case "archived":
@@ -517,6 +519,7 @@ export default async function CampaignPage({
                   }
                   ctaLabel={bundle.campaign.cta_text || resolveTemplateCtaLabel(bundle.template, "Learn More")}
                   imageUrl={bundle.template.previewImage || null}
+                  placeholderValues={launchState?.placeholders?.values || {}}
                 compact
                 showMetaBar={false}
                 showReactionsBar={false}

@@ -175,3 +175,9 @@ export function replacePlaceholdersInString(
     return options?.preserveMissing ? `{{${key}}}` : "";
   });
 }
+
+export function hasUnresolvedPlaceholders(value?: string | null) {
+  if (!value) return false;
+  PLACEHOLDER_PATTERN.lastIndex = 0;
+  return PLACEHOLDER_PATTERN.test(value);
+}

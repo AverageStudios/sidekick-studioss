@@ -29,6 +29,7 @@ type FacebookAdPreviewProps = {
   placeholderValues?: Record<string, string>;
   fillHeight?: boolean;
   collapsedPrimaryLines?: number;
+  showCompactDescription?: boolean;
 };
 
 type MediaAspectBucket = "portrait" | "square" | "landscape" | "wide";
@@ -198,6 +199,7 @@ export function FacebookAdPreview({
   placeholderValues,
   fillHeight = true,
   collapsedPrimaryLines,
+  showCompactDescription = false,
 }: FacebookAdPreviewProps) {
   const resolvedMedia = resolveMedia(template, imageUrl, videoUrl);
   const resolvedCarouselImages = resolveCarouselImages(template, imageUrl);
@@ -559,12 +561,12 @@ export function FacebookAdPreview({
               >
                 {resolvedHeadline}
               </p>
-              {resolvedDescription && !compact ? (
+              {resolvedDescription && (!compact || showCompactDescription) ? (
                 <p
                   className={cn(
                     "mt-0.5 break-words [overflow-wrap:anywhere] leading-[1.32] text-[var(--muted-strong)]",
-                    "text-[0.88rem] sm:text-[0.92rem]",
-                    previewLayoutContract.regularDescriptionLines,
+                    compact ? "text-[0.74rem] sm:text-[0.78rem]" : "text-[0.88rem] sm:text-[0.92rem]",
+                    compact ? previewLayoutContract.compactDescriptionLines : previewLayoutContract.regularDescriptionLines,
                   )}
                 >
                   {resolvedDescription}

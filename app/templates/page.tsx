@@ -72,12 +72,15 @@ export default async function TemplatesPage() {
                       template={template || undefined}
                       pageName={pagePreviewIdentity.pageName}
                       pageAvatarUrl={pagePreviewIdentity.pageAvatarUrl}
-                      primaryText={template?.adCopy.primary || campaign.name}
-                      headline={template?.adCopy.headlines?.[0] || campaign.name}
-                      description={template?.adCopy.descriptions?.[0] || template?.description || "Campaign preview"}
+                      primaryText={campaign.ad_copy_json?.primary || template?.adCopy.primary || campaign.name}
+                      headline={campaign.ad_copy_json?.headlines?.[0] || template?.adCopy.headlines?.[0] || campaign.name}
+                      description={campaign.ad_copy_json?.descriptions?.[0] || template?.adCopy.descriptions?.[0] || template?.description || "Campaign preview"}
                       ctaLabel={resolveTemplateCtaLabel(template, "Open")}
                       imageUrl={template?.previewImage || null}
+                      placeholderValues={campaign.launch_state_json?.placeholders?.values || {}}
                       compact
+                      collapsedPrimaryLines={5}
+                      showCompactDescription
                       mediaAspectMode="uniform"
                       className="rounded-none border-0 shadow-none"
                     />

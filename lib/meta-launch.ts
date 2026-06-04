@@ -17,6 +17,7 @@ import {
 } from "@/lib/campaign-launch";
 import { readLatestCampaignLaunchSnapshot } from "@/lib/campaign-snapshots";
 import { createCampaignBlueprint } from "@/lib/template-engine";
+import { hasUnresolvedPlaceholders } from "@/lib/template-placeholders";
 import {
   createMetaAd,
   createMetaAdCreative,
@@ -950,9 +951,9 @@ async function loadMetaLaunchContext({
   );
 
   const selectedAdAccountId =
-    launchState.integrationSelections.adAccountId || integrationState.selected.adAccountId || "";
+    integrationState.selected.adAccountId || launchState.integrationSelections.adAccountId || "";
   const selectedPageId =
-    launchState.integrationSelections.pageId || integrationState.selected.pageId || "";
+    integrationState.selected.pageId || launchState.integrationSelections.pageId || "";
   const selectedPixelId =
     launchState.integrationSelections.pixelId || integrationState.selected.pixelId || "";
   const selectedLeadFormId =
@@ -1602,6 +1603,20 @@ export async function runMetaLaunchPreflight({
       code: "lead_form_destination_type_invalid",
       message: "Lead form campaigns must use ON_AD destination so Meta can use the on-ad instant form flow.",
       field: "adSet.destinationType",
+      scope: mode,
+    });
+  }
+  const unresolvedCreativeField = [
+    { field: "creative.primaryText", label: "Primary text", value: normalizedPayloadSummary.creative.primaryText },
+    { field: "creative.headline", label: "Headline", value: normalizedPayloadSummary.creative.headline },
+    { field: "creative.description", label: "Description", value: normalizedPayloadSummary.creative.description },
+  ].find((item) => hasUnresolvedPlaceholders(item.value));
+
+  if (unresolvedCreativeField) {
+    blockingIssues.push({
+      code: "creative_placeholders_unresolved",
+      message: `${unresolvedCreativeField.label} still contains unresolved placeholder text. Fill every required value before publishing.`,
+      field: unresolvedCreativeField.field,
       scope: mode,
     });
   }

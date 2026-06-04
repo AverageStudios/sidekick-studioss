@@ -697,6 +697,36 @@ export function TemplateLaunchWizard({
   }, [router]);
 
   useEffect(() => {
+    setLaunchState((current) => {
+      const nextAdAccountId = metaIntegration?.selected.adAccountId || "";
+      const nextPageId = metaIntegration?.selected.pageId || "";
+      const nextInstagramActorId = metaIntegration?.selected.instagramActorId || "";
+
+      if (
+        current.integrationSelections.adAccountId === nextAdAccountId &&
+        current.integrationSelections.pageId === nextPageId &&
+        current.integrationSelections.instagramActorId === nextInstagramActorId
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        integrationSelections: {
+          ...current.integrationSelections,
+          adAccountId: nextAdAccountId,
+          pageId: nextPageId,
+          instagramActorId: nextInstagramActorId,
+        },
+      };
+    });
+  }, [
+    metaIntegration?.selected.adAccountId,
+    metaIntegration?.selected.pageId,
+    metaIntegration?.selected.instagramActorId,
+  ]);
+
+  useEffect(() => {
     const query = deferredLocationQuery.trim();
     if (query.length < 2) {
       locationSearchAbortRef.current?.abort();
@@ -1830,49 +1860,33 @@ export function TemplateLaunchWizard({
               <WizardDisclosure
                 label="Ad account"
                 value={
-                  metaIntegration?.assets.adAccounts.find((a) => a.asset_id === launchState.integrationSelections.adAccountId)?.name ||
-                  (launchState.integrationSelections.adAccountId ? "Selected" : "Not selected")
+                  metaIntegration?.assets.adAccounts.find((a) => a.asset_id === (metaIntegration?.selected.adAccountId || launchState.integrationSelections.adAccountId))?.name ||
+                  (metaIntegration?.selected.adAccountId || launchState.integrationSelections.adAccountId ? "Selected in workspace" : "Not selected")
                 }
               >
-                <select
-                  value={launchState.integrationSelections.adAccountId}
-                  onChange={(event) =>
-                    updateLaunchState((current) => ({
-                      ...current,
-                      integrationSelections: { ...current.integrationSelections, adAccountId: event.target.value },
-                    }))
-                  }
-                  className="mt-1 h-11 w-full rounded-[14px] border border-[var(--line)] bg-[var(--soft-panel)] px-3 text-sm text-[var(--foreground)] focus:outline-none"
-                >
-                  <option value="">Select ad account</option>
-                  {(metaIntegration?.assets.adAccounts || []).map((account) => (
-                    <option key={account.asset_id} value={account.asset_id}>{account.name || account.asset_id}</option>
-                  ))}
-                </select>
+                <div className="mt-1 rounded-[14px] border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-3 text-sm text-[var(--foreground)]">
+                  {metaIntegration?.assets.adAccounts.find((a) => a.asset_id === (metaIntegration?.selected.adAccountId || launchState.integrationSelections.adAccountId))?.name ||
+                    "Select a workspace ad account in Integrations."}
+                </div>
+                <p className="mt-2 text-xs text-[var(--muted)]">
+                  Publishing always uses the ad account selected in this workspace&apos;s Meta integration.
+                </p>
               </WizardDisclosure>
 
               <WizardDisclosure
                 label="Facebook Page"
                 value={
-                  metaIntegration?.assets.pages.find((p) => p.asset_id === launchState.integrationSelections.pageId)?.name ||
-                  (launchState.integrationSelections.pageId ? "Selected" : "Not selected")
+                  metaIntegration?.assets.pages.find((p) => p.asset_id === (metaIntegration?.selected.pageId || launchState.integrationSelections.pageId))?.name ||
+                  (metaIntegration?.selected.pageId || launchState.integrationSelections.pageId ? "Selected in workspace" : "Not selected")
                 }
               >
-                <select
-                  value={launchState.integrationSelections.pageId}
-                  onChange={(event) =>
-                    updateLaunchState((current) => ({
-                      ...current,
-                      integrationSelections: { ...current.integrationSelections, pageId: event.target.value },
-                    }))
-                  }
-                  className="mt-1 h-11 w-full rounded-[14px] border border-[var(--line)] bg-[var(--soft-panel)] px-3 text-sm text-[var(--foreground)] focus:outline-none"
-                >
-                  <option value="">Select Facebook Page</option>
-                  {(metaIntegration?.assets.pages || []).map((page) => (
-                    <option key={page.asset_id} value={page.asset_id}>{page.name || page.asset_id}</option>
-                  ))}
-                </select>
+                <div className="mt-1 rounded-[14px] border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-3 text-sm text-[var(--foreground)]">
+                  {metaIntegration?.assets.pages.find((p) => p.asset_id === (metaIntegration?.selected.pageId || launchState.integrationSelections.pageId))?.name ||
+                    "Select a workspace Facebook Page in Integrations."}
+                </div>
+                <p className="mt-2 text-xs text-[var(--muted)]">
+                  Publishing always uses the Facebook Page selected in this workspace&apos;s Meta integration.
+                </p>
               </WizardDisclosure>
             </div>
           </div>

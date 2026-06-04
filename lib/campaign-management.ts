@@ -27,7 +27,7 @@ export type CampaignMetaIdentifiers = {
   creativeId: string | null;
 };
 
-export type CampaignLifecycleState = "draft" | "active" | "paused" | "archived" | "unknown";
+export type CampaignLifecycleState = "draft" | "active" | "paused" | "in_review" | "archived" | "unknown";
 
 type CampaignStatusSnapshot = {
   externalPublishStatus: string | null;
@@ -99,13 +99,16 @@ function normalizeMetaLifecycleStatus(input?: string | null) {
     return "paused";
   }
   if (
-    normalized === "ACTIVE" ||
     normalized === "IN_PROCESS" ||
     normalized === "PENDING_REVIEW" ||
     normalized === "PENDING_BILLING_INFO" ||
     normalized === "PREAPPROVED" ||
-    normalized === "DISAPPROVED" ||
     normalized === "PENDING_PROCESSING"
+  ) {
+    return "in_review";
+  }
+  if (
+    normalized === "ACTIVE"
   ) {
     return "active";
   }
@@ -246,6 +249,8 @@ export function getCampaignLifecycleLabel(
   switch (state) {
     case "draft":
       return "Draft";
+    case "in_review":
+      return "In Review";
     case "paused":
       return "Paused";
     case "archived":
