@@ -14,6 +14,10 @@ function fillPlaceholders(input: string, values: TemplateSetupValues) {
   return replacePlaceholdersInString(input, resolvedPlaceholderValues);
 }
 
+function resolveTemplatePrimaryAdText(template: TemplateSeed) {
+  return template.adCopy.primary || template.description || template.promoDetails || "";
+}
+
 export function createCampaignBlueprint(
   template: TemplateSeed,
   values: TemplateSetupValues,
@@ -25,7 +29,7 @@ export function createCampaignBlueprint(
     campaignName: `${values.businessName || "Detailing"} ${template.name}`,
     slug: slugify(`${values.businessName}-${template.slug}-${values.city}`),
     adCopy: {
-      primary: replace(template.adCopy.primary),
+      primary: replace(resolveTemplatePrimaryAdText(template)),
       headlines: [
         replace(values.headline || template.adCopy.headlines[0] || ""),
         ...template.adCopy.headlines.slice(1).map(replace),

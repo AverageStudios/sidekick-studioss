@@ -1567,7 +1567,13 @@ export async function runMetaLaunchPreflight({
     },
     creative: {
       name: `${context.launchState.advanced.campaignName || context.campaign.name} Creative`,
-      primaryText: blueprint.adCopy.primary,
+      primaryText:
+        blueprint.adCopy.primary ||
+        context.campaign.ad_copy_json?.primary ||
+        context.template.adCopy.primary ||
+        context.template.description ||
+        context.template.promoDetails ||
+        "",
       headline: blueprint.adCopy.headlines[0] || context.campaign.headline,
       description:
         blueprint.adCopy.descriptions[0] ||
@@ -2041,6 +2047,7 @@ export async function publishMetaFromPreflight({
   };
   try {
     await updateCampaignWithSchemaFallback(admin, campaignId, {
+      status: mode === "live" ? "published" : "draft",
       external_publish_status: finalStatus,
       external_ids_json: mergedExternalIds,
       ...persistedMetaIds,

@@ -1431,7 +1431,7 @@ export function TemplateLaunchWizard({
     }
   }
 
-  async function runLaunchPreflight(mode: CampaignPublishMode) {
+  async function runLaunchPreflight(mode: CampaignPublishMode, campaignIdOverride?: string | null) {
     if (!selectedTemplate) {
       setPreflightError("Select a template before launch.");
       return null;
@@ -1444,7 +1444,7 @@ export function TemplateLaunchWizard({
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        ...(draftId ? { campaignId: draftId } : {}),
+        ...((campaignIdOverride || draftId) ? { campaignId: campaignIdOverride || draftId } : {}),
         templateSlug: selectedTemplate.slug,
         state: launchState,
         mode,
@@ -1494,7 +1494,7 @@ export function TemplateLaunchWizard({
       return;
     }
 
-    const preflightResult = await runLaunchPreflight(mode);
+    const preflightResult = await runLaunchPreflight(mode, ensuredDraftId);
     if (!preflightResult || preflightResult.blockingIssues.length) {
       return;
     }
