@@ -29,7 +29,7 @@ export default async function SignupPage({
             Get your first detailing campaign live fast
           </h1>
           <p className="text-lg leading-8 text-[var(--muted-strong)]">
-            Create an account, choose a template, customize a few fields, and publish your first funnel.
+            Create an account, choose a template, customize a few fields, and publish your first campaign.
           </p>
           {!isSupabasePublicConfigured() && supabaseFallbackMessage ? (
             <ConfigNotice title="Supabase auth not configured" message={supabaseFallbackMessage} />
@@ -37,7 +37,7 @@ export default async function SignupPage({
         </div>
         <AuthCard
           title="Create account"
-          description="Create your account to start with a template and launch your first detailing funnel."
+          description="Create your account to start with a template and launch your first detailing campaign."
           action={signUpAction}
           submitLabel="Create account"
           pendingLabel="Creating account..."

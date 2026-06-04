@@ -211,6 +211,7 @@ export type CampaignLaunchState = {
   };
   review: {
     headline: string;
+    description: string;
     subheadline: string;
     businessDescription: string;
     testimonialText: string;
@@ -443,6 +444,7 @@ export type TemplateSetupValues = {
   regularPrice: string;
   ctaText: string;
   headline: string;
+  description: string;
   subheadline: string;
   businessDescription: string;
   testimonialText: string;

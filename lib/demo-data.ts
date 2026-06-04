@@ -32,6 +32,7 @@ const blueprint = createCampaignBlueprint(
     regularPrice: "249",
     ctaText: "Get My Quote",
     headline: "",
+    description: template.adCopy.descriptions[0] || "",
     subheadline: "",
     businessDescription:
       "We help busy drivers keep their cars looking sharp with straightforward packages and fast replies.",

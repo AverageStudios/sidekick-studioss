@@ -6,7 +6,6 @@ import {
   Clock3,
   ExternalLink,
   FileText,
-  Globe,
   LayoutTemplate,
   Rocket,
   SquarePen,
@@ -336,18 +335,6 @@ export default async function CampaignPage({
                   </>
                 ) : (
                   <>
-                    {bundle.funnel.is_published ? (
-                      <Button asChild variant="outline" className="h-11 rounded-[18px] px-5">
-                        <Link href={`/f/${bundle.funnel.slug}`} target="_blank">
-                          View Public Funnel
-                          <ExternalLink className="h-4 w-4" />
-                        </Link>
-                      </Button>
-                    ) : (
-                      <Button asChild variant="outline" className="h-11 rounded-[18px] px-5">
-                        <Link href={`/funnels/${bundle.funnel.id}`}>Open Funnel Manager</Link>
-                      </Button>
-                    )}
                     <Button asChild variant="outline" className="h-11 rounded-[18px] px-5">
                       <a href={openInMetaHref} target="_blank" rel="noreferrer">
                         Open in Meta
@@ -524,8 +511,8 @@ export default async function CampaignPage({
                   primaryText={bundle.campaign.ad_copy_json.primary || bundle.campaign.business_description}
                   headline={bundle.campaign.headline || bundle.campaign.ad_copy_json.headlines[0] || bundle.campaign.name}
                   description={
-                    bundle.campaign.subheadline ||
                     bundle.campaign.ad_copy_json.descriptions[0] ||
+                    bundle.campaign.subheadline ||
                     bundle.template.description
                   }
                   ctaLabel={bundle.campaign.cta_text || resolveTemplateCtaLabel(bundle.template, "Learn More")}
@@ -631,24 +618,6 @@ export default async function CampaignPage({
               </div>
 
               {isPublished ? (
-                <div className="rounded-[24px] border border-[var(--line)] bg-white p-5">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-[var(--ink)]">
-                    <Globe className="h-4 w-4 text-[var(--brand)]" />
-                    Public funnel
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                    {bundle.funnel.is_published ? (
-                      <Link href={`/f/${bundle.funnel.slug}`} target="_blank" className="text-[var(--brand)] hover:underline">
-                        /f/{bundle.funnel.slug}
-                      </Link>
-                    ) : (
-                      "This funnel is still private."
-                    )}
-                  </p>
-                </div>
-              ) : null}
-
-              {isPublished ? (
                 <form action={syncCampaignStatusAction}>
                   <input type="hidden" name="campaignId" value={bundle.campaign.id} />
                   <input type="hidden" name="redirectTo" value={redirectTo} />
@@ -725,8 +694,6 @@ export default async function CampaignPage({
             <InfoRow label="Campaign ID" value={bundle.campaign.id} />
             <InfoRow label="Template ID" value={bundle.template.id} />
             <InfoRow label="Campaign slug" value={bundle.campaign.slug} />
-            <InfoRow label="Funnel ID" value={bundle.funnel.id} />
-            <InfoRow label="Funnel slug" value={bundle.funnel.slug} />
             <InfoRow label="Workspace ID" value={bundle.campaign.workspace_id || "—"} />
             <InfoRow label="Meta campaign ID" value={metaIds.campaignId || "Not saved"} />
             <InfoRow label="Meta ad set ID" value={metaIds.adSetId || "Not saved"} />

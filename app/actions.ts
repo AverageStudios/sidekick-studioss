@@ -1800,6 +1800,7 @@ export async function createCampaignAction(formData: FormData) {
     regularPrice: String(formData.get("regularPrice") || ""),
     ctaText: String(formData.get("ctaText") || template.ctaDefault),
     headline: String(formData.get("headline") || "").trim().slice(0, 25),
+    description: String(formData.get("description") || template.adCopy.descriptions?.[0] || ""),
     subheadline: String(formData.get("subheadline") || ""),
     businessDescription: String(formData.get("businessDescription") || ""),
     testimonialText: String(formData.get("testimonialText") || ""),
@@ -1931,7 +1932,7 @@ export async function submitLeadAction(formData: FormData) {
   if (isSupabaseServerConfigured()) {
     const admin = createSupabaseAdminClient();
     if (!admin) {
-      redirect(`/f/${payload.funnelSlug}?submitted=1`);
+      redirect("/leads?submitted=1");
     }
 
     const campaignResult = await admin
@@ -2008,7 +2009,7 @@ export async function submitLeadAction(formData: FormData) {
     }
   }
 
-  redirect(`/f/${payload.funnelSlug}?submitted=1`);
+  redirect("/leads?submitted=1");
 }
 
 export async function updateLeadStatusAction(formData: FormData) {
@@ -3314,7 +3315,7 @@ export async function publishFunnelAction(formData: FormData) {
   }
 
   revalidatePath("/dashboard");
-  redirect(`/funnels/${funnelId}`);
+  redirect("/dashboard");
 }
 
 export async function createSlugAction(name: string) {

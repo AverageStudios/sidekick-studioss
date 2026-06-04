@@ -32,7 +32,7 @@ export default async function LoginPage({
             Launch faster without starting from scratch
           </h1>
           <p className="text-lg leading-8 text-[var(--muted-strong)]">
-            Sign in to manage your detail campaigns, funnels, and leads in one calm workspace.
+            Sign in to manage your detail campaigns and leads in one calm workspace.
           </p>
           {!isSupabasePublicConfigured() && supabaseFallbackMessage ? (
             <ConfigNotice title="Supabase auth not configured" message={supabaseFallbackMessage} />

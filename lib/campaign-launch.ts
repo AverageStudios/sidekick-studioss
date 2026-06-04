@@ -545,6 +545,10 @@ function createDefaultState({
     },
     review: {
       headline: partial?.review?.headline || "",
+      description:
+        partial?.review?.description ||
+        resolvedTemplate?.adCopy.descriptions?.[0] ||
+        "",
       subheadline: partial?.review?.subheadline || "",
       businessDescription: partial?.review?.businessDescription || businessProfile?.description || "",
       testimonialText: partial?.review?.testimonialText || "",
@@ -781,6 +785,9 @@ function migrateLegacyState(
     },
     review: {
       headline: "",
+      description:
+        (typeof state.description === "string" ? state.description : "") ||
+        defaultState.review.description,
       subheadline: "",
       businessDescription: businessProfile?.description || defaultState.review.businessDescription,
       testimonialText: "",
@@ -1027,6 +1034,7 @@ export function getTemplateSetupValuesFromLaunchState(
     regularPrice,
     ctaText: getMetaCompatibleCtaLabel(state.selection.adType),
     headline: state.review.headline,
+    description: state.review.description,
     subheadline: state.review.subheadline,
     businessDescription: state.review.businessDescription || businessProfile?.description || "",
     testimonialText: state.review.testimonialText,

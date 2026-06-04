@@ -26,8 +26,14 @@ export function createCampaignBlueprint(
     slug: slugify(`${values.businessName}-${template.slug}-${values.city}`),
     adCopy: {
       primary: replace(template.adCopy.primary),
-      headlines: template.adCopy.headlines.map(replace),
-      descriptions: template.adCopy.descriptions.map(replace),
+      headlines: [
+        replace(values.headline || template.adCopy.headlines[0] || ""),
+        ...template.adCopy.headlines.slice(1).map(replace),
+      ].filter(Boolean),
+      descriptions: [
+        replace(values.description || template.adCopy.descriptions[0] || ""),
+        ...template.adCopy.descriptions.slice(1).map(replace),
+      ].filter(Boolean),
       targeting: replace(template.adCopy.targeting),
       budget: replace(template.adCopy.budget),
       creativeGuidance: template.adCopy.creativeGuidance.map(replace),

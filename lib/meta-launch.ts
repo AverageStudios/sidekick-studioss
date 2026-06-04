@@ -1568,7 +1568,10 @@ export async function runMetaLaunchPreflight({
       name: `${context.launchState.advanced.campaignName || context.campaign.name} Creative`,
       primaryText: blueprint.adCopy.primary,
       headline: blueprint.adCopy.headlines[0] || context.campaign.headline,
-      description: blueprint.adCopy.descriptions[0] || context.campaign.subheadline,
+      description:
+        blueprint.adCopy.descriptions[0] ||
+        context.campaign.ad_copy_json?.descriptions?.[0] ||
+        "",
       ctaType: mapAdTypeToCta(context.launchState.adType),
       destinationUrl: adTypeRequiresLeadForm(context.launchState.adType)
         ? resolvedLeadFormCreativeUrl
