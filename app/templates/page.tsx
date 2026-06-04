@@ -6,9 +6,28 @@ import { Card } from "@/components/ui/card";
 import { FacebookAdPreview } from "@/components/facebook-ad-preview";
 import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
 import { requireUser } from "@/lib/auth";
+import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
 import { getCampaignPreviewDisplayLink, normalizeCampaignLaunchState } from "@/lib/campaign-launch";
 import { getDashboardSnapshot, getTemplates, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
 import { resolveMetaPagePreviewIdentity } from "@/lib/meta-page-identity";
+
+function getCampaignBadgeTone(state: ReturnType<typeof getCampaignLifecycleState>) {
+  switch (state) {
+    case "active":
+      return "bg-[#ecfdf3] text-[#15803d]";
+    case "paused":
+      return "bg-[#fff7ed] text-[#c2410c]";
+    case "in_review":
+      return "bg-[#eef2ff] text-[#4f46e5]";
+    case "unknown":
+      return "bg-[var(--soft-panel)] text-[var(--muted-strong)]";
+    case "archived":
+      return "bg-[#f8fafc] text-[#475569]";
+    case "draft":
+    default:
+      return "bg-[#fff4e8] text-[#9c6328]";
+  }
+}
 
 export default async function TemplatesPage() {
   const user = await requireUser();
@@ -23,8 +42,11 @@ export default async function TemplatesPage() {
   });
 
   const templateMap = new Map(templates.map((template) => [template.id, template]));
-  const draftCampaigns = snapshot.campaigns.filter((campaign) => campaign.status === "draft");
-  const publishedCampaigns = snapshot.campaigns.filter((campaign) => campaign.status === "published");
+  const draftCampaigns = snapshot.campaigns.filter((campaign) => getCampaignLifecycleState(campaign) === "draft");
+  const publishedCampaigns = snapshot.campaigns.filter((campaign) => {
+    const lifecycle = getCampaignLifecycleState(campaign);
+    return lifecycle !== "draft" && lifecycle !== "archived";
+  });
   const hasDrafts = draftCampaigns.length > 0;
 
   return (
@@ -64,6 +86,8 @@ export default async function TemplatesPage() {
             ) : null}
 
             {publishedCampaigns.map((campaign) => {
+              const lifecycleState = getCampaignLifecycleState(campaign);
+              const lifecycleLabel = getCampaignLifecycleLabel(campaign);
               const template = templateMap.get(campaign.template_id);
               const launchState = campaign.launch_state_json && template
                 ? normalizeCampaignLaunchState(campaign.launch_state_json, template, null)
@@ -102,8 +126,8 @@ export default async function TemplatesPage() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <span className="rounded-full bg-[#ecfdf3] px-2.5 py-1 text-[11px] font-medium text-[#15803d]">
-                          Live
+                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${getCampaignBadgeTone(lifecycleState)}`}>
+                          {lifecycleLabel}
                         </span>
                         <span className="rounded-full bg-[var(--soft-panel)] px-2.5 py-1 text-[11px] font-medium text-[var(--muted-strong)]">
                           {template?.name || "Campaign"}

@@ -45,6 +45,8 @@ function getCampaignStatusTone(state: string) {
   switch (state) {
     case "active":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "in_review":
+      return "border-indigo-200 bg-indigo-50 text-indigo-700";
     case "paused":
       return "border-amber-200 bg-amber-50 text-amber-700";
     case "draft":

@@ -142,6 +142,8 @@ function getCampaignStateTone(state: ReturnType<typeof getCampaignLifecycleState
   switch (state) {
     case "active":
       return "emerald";
+    case "in_review":
+      return "brand";
     case "paused":
       return "amber";
     case "draft":
