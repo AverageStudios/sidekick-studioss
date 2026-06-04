@@ -2893,47 +2893,6 @@ export function TemplateLaunchWizard({
               ) : null}
             </ReviewGroupCard>
 
-            <ReviewGroupCard title="Ad Copy">
-              <div className="grid gap-4">
-                <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-[var(--ink)]">Headline</label>
-                  <Input
-                    value={launchState.review.headline}
-                    onChange={(event) =>
-                      updateLaunchState((current) => ({
-                        ...current,
-                        review: {
-                          ...current.review,
-                          headline: event.target.value,
-                        },
-                      }))
-                    }
-                    placeholder={selectedTemplate?.adCopy.headlines?.[0] || "Short headline"}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-[var(--ink)]">Description</label>
-                  <Textarea
-                    value={launchState.review.description}
-                    onChange={(event) =>
-                      updateLaunchState((current) => ({
-                        ...current,
-                        review: {
-                          ...current.review,
-                          description: event.target.value,
-                        },
-                      }))
-                    }
-                    rows={3}
-                    placeholder={selectedTemplate?.adCopy.descriptions?.[0] || "Short link description"}
-                  />
-                  <p className="text-xs text-[var(--muted)]">
-                    This is the short Facebook link description under the headline, not the main post text above the image.
-                  </p>
-                </div>
-              </div>
-            </ReviewGroupCard>
-
             {/* Issues — only shown if present */}
             {(currentIssues.length > 0 || localReadinessIssues.length > 0) ? (
               <IssueList title="Resolve before launch" issues={currentIssues.length ? currentIssues : localReadinessIssues} />
