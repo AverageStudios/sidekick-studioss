@@ -47,6 +47,50 @@ import {
 
 type SupabaseAdmin = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
 
+const optionalCampaignColumns = new Set([
+  "workspace_id",
+  "external_ids_json",
+  "external_publish_status",
+  "meta_campaign_id",
+  "meta_adset_id",
+  "meta_ad_id",
+  "meta_lead_form_id",
+  "meta_creative_id",
+  "meta_effective_status",
+  "meta_configured_status",
+  "meta_status_synced_at",
+  "management_sync_state",
+  "archived_at",
+]);
+
+function getMissingCampaignSchemaColumn(message?: string) {
+  if (!message) return null;
+  const match = message.match(/Could not find the '([^']+)' column of 'campaigns'/i);
+  return match?.[1] || null;
+}
+
+async function updateCampaignWithSchemaFallback(
+  admin: SupabaseAdmin,
+  campaignId: string,
+  payload: Record<string, unknown>,
+) {
+  const nextPayload = { ...payload };
+
+  while (Object.keys(nextPayload).length) {
+    const { error } = await admin.from("campaigns").update(nextPayload).eq("id", campaignId);
+    if (!error) {
+      return;
+    }
+
+    const missingColumn = getMissingCampaignSchemaColumn(error.message);
+    if (!missingColumn || !optionalCampaignColumns.has(missingColumn) || !(missingColumn in nextPayload)) {
+      throw new Error(error.message);
+    }
+
+    delete nextPayload[missingColumn];
+  }
+}
+
 type IssueScope = "draft" | "live" | "both";
 
 type InternalIssue = {
@@ -1780,18 +1824,15 @@ export async function publishMetaFromPreflight({
         mode,
       });
 
-      await admin
-        .from("campaigns")
-        .update({
-          external_ids_json: {
-            ...existingExternalIds,
-            lead_form_id: createdLeadForm.id,
-            lead_form_name: managedLeadFormName,
-            lead_form_fingerprint: leadFormFingerprint,
-          },
-          updated_at: now,
-        })
-        .eq("id", campaignId);
+      await updateCampaignWithSchemaFallback(admin, campaignId, {
+        external_ids_json: {
+          ...existingExternalIds,
+          lead_form_id: createdLeadForm.id,
+          lead_form_name: managedLeadFormName,
+          lead_form_fingerprint: leadFormFingerprint,
+        },
+        updated_at: now,
+      });
     }
   }
 
@@ -1980,17 +2021,15 @@ export async function publishMetaFromPreflight({
       : {}),
     ...externalIds,
   };
-  const { error: campaignPersistError } = await admin
-    .from("campaigns")
-    .update({
+  try {
+    await updateCampaignWithSchemaFallback(admin, campaignId, {
       external_publish_status: finalStatus,
       external_ids_json: mergedExternalIds,
       ...persistedMetaIds,
       updated_at: now,
-    })
-    .eq("id", campaignId);
-
-  if (campaignPersistError) {
+    });
+  } catch (error) {
+    const campaignPersistError = error instanceof Error ? error : new Error(String(error));
     console.error("[meta publish] failed to persist campaign meta ids", {
       campaignId,
       error: campaignPersistError.message,
