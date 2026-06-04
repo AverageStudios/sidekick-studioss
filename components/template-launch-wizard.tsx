@@ -1156,7 +1156,7 @@ export function TemplateLaunchWizard({
     }));
   }
 
-  async function persistDraft(nextState = launchState) {
+  async function persistDraft(nextState = launchState, redirectAfterSave = false) {
     if (!selectedTemplate) return null;
     setSaveState("saving");
     setSaveError(null);
@@ -1175,6 +1175,9 @@ export function TemplateLaunchWizard({
     setTimeout(() => {
       setSaveState((current) => (current === "saved" ? "idle" : current));
     }, 1400);
+    if (redirectAfterSave) {
+      router.push("/templates");
+    }
     return payload.draftId;
   }
 
@@ -1499,7 +1502,7 @@ export function TemplateLaunchWizard({
 
     setPublishSuccess(mode === "live" ? "Campaign launched to Meta." : "Campaign draft pushed to Meta.");
     setPublishErrorDetails(null);
-    router.refresh();
+    router.push("/templates");
   }
 
   function renderStepContent() {
@@ -2918,7 +2921,7 @@ export function TemplateLaunchWizard({
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => persistDraft()}
+                    onClick={() => persistDraft(launchState, true)}
                     disabled={!selectedTemplate || saveState === "saving"}
                     className="h-11 px-5"
                   >

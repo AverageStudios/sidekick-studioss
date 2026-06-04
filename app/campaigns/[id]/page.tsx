@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import type { ComponentType } from "react";
 import {
   AlertTriangle,
-  Archive,
   Clock3,
   ExternalLink,
   FileText,
@@ -12,6 +11,7 @@ import {
   Rocket,
   SquarePen,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { FacebookAdPreview } from "@/components/facebook-ad-preview";
@@ -19,7 +19,7 @@ import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
-import { archiveCampaignAction, pauseCampaignAction, resumeCampaignAction, syncCampaignStatusAction } from "@/app/actions";
+import { deleteCampaignAction, pauseCampaignAction, resumeCampaignAction, syncCampaignStatusAction } from "@/app/actions";
 import { requireUser } from "@/lib/auth";
 import { getCampaignBundle, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
 import {
@@ -155,7 +155,7 @@ export default async function CampaignPage({
   const isPublished = bundle.campaign.status === "published";
   const canPause = lifecycleState === "active";
   const canResume = lifecycleState === "paused";
-  const canArchive = lifecycleState === "active" || lifecycleState === "paused" || lifecycleState === "unknown" || isDraft;
+  const canDelete = true;
   const pageIdentity = resolveMetaPagePreviewIdentity({
     integration: metaIntegration,
     fallbackName: "No Facebook Page selected",
@@ -374,17 +374,18 @@ export default async function CampaignPage({
                     </Button>
                   </form>
                 ) : null}
-                {canArchive ? (
-                  <form action={archiveCampaignAction}>
+                {canDelete ? (
+                  <form action={deleteCampaignAction}>
                     <input type="hidden" name="campaignId" value={bundle.campaign.id} />
                     <input type="hidden" name="redirectTo" value={redirectTo} />
+                    <input type="hidden" name="successRedirectTo" value="/templates" />
                     <Button
                       type="submit"
                       variant="outline"
                       className="h-11 rounded-[18px] border-rose-200 px-5 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
                     >
-                      Archive
-                      <Archive className="h-4 w-4" />
+                      Delete
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </form>
                 ) : null}
@@ -595,12 +596,12 @@ export default async function CampaignPage({
                     <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
                       {isDraft
                         ? "This campaign has not been published yet."
-                        : "This campaign has already been pushed live and can be paused, resumed, or archived."}
-                    </p>
-                  </div>
-                  <span className={cn("rounded-full border px-3 py-1 text-xs font-medium", lifecycleTone(lifecycleState))}>
-                    {lifecycleLabel}
-                  </span>
+                        : "This campaign has already been pushed live and can be paused, resumed, or deleted."}
+                  </p>
+                </div>
+                <span className={cn("rounded-full border px-3 py-1 text-xs font-medium", lifecycleTone(lifecycleState))}>
+                  {lifecycleLabel}
+                </span>
                 </div>
               </div>
 
@@ -620,11 +621,13 @@ export default async function CampaignPage({
                   value={formatDateTime(bundle.campaign.published_at)}
                   detail={isDraft ? "Not published yet." : null}
                 />
-                <InfoRow
-                  label="Archived"
-                  value={formatDateTime(bundle.campaign.archived_at)}
-                  detail={bundle.campaign.archived_at ? "Moved out of active views." : "Still available in the workspace."}
-                />
+                {bundle.campaign.archived_at ? (
+                  <InfoRow
+                    label="Archived"
+                    value={formatDateTime(bundle.campaign.archived_at)}
+                    detail="Moved out of active views."
+                  />
+                ) : null}
               </div>
 
               {isPublished ? (

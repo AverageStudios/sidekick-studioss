@@ -39,6 +39,7 @@ import {
 import { syncWorkspaceMetaLeads } from "@/lib/meta-leads";
 import {
   archiveCampaignWithMetaSync,
+  deleteCampaignWithMetaCleanup,
   getCampaignLifecycleState,
   repairCampaignMetaIdentifiers,
   syncCampaignStatusFromMeta,
@@ -952,6 +953,31 @@ async function runCampaignLifecycleAction(
   }
 }
 
+async function deleteCampaignRecordsEverywhere({
+  admin,
+  campaign,
+}: {
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
+  campaign: CampaignRecord;
+}) {
+  const campaignId = campaign.id;
+
+  const [leadResult, snapshotResult, followUpResult, funnelResult, publishJobsResult, campaignResult] = await Promise.all([
+    admin.from("leads").delete().eq("campaign_id", campaignId),
+    admin.from("campaign_launch_snapshots").delete().eq("campaign_id", campaignId),
+    admin.from("follow_up_settings").delete().eq("campaign_id", campaignId),
+    admin.from("funnels").delete().eq("campaign_id", campaignId),
+    admin.from("campaign_publish_jobs").delete().eq("campaign_id", campaignId),
+    admin.from("campaigns").delete().eq("id", campaignId),
+  ]);
+
+  for (const result of [leadResult, snapshotResult, followUpResult, funnelResult, publishJobsResult, campaignResult]) {
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
+  }
+}
+
 export async function pauseCampaignAction(formData: FormData) {
   await runCampaignLifecycleAction(formData, "pause");
 }
@@ -961,7 +987,61 @@ export async function resumeCampaignAction(formData: FormData) {
 }
 
 export async function archiveCampaignAction(formData: FormData) {
-  await runCampaignLifecycleAction(formData, "archive");
+  await deleteCampaignAction(formData);
+}
+
+export async function deleteCampaignAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!isSupabaseServerConfigured()) {
+    redirect("/dashboard");
+  }
+
+  const campaignId = String(formData.get("campaignId") || "").trim();
+  const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
+  const successRedirectTo = String(formData.get("successRedirectTo") || "/templates") || "/templates";
+
+  if (!campaignId) {
+    redirect(appendQueryParam(redirectTo, "error", "Campaign could not be found."));
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(appendQueryParam(redirectTo, "error", "Campaign deletion is not available right now."));
+  }
+
+  try {
+    const campaign = await loadManagedCampaign(admin, campaignId);
+    const hasAccess = campaign.workspace_id
+      ? await userHasWorkspaceAccess(user.id, campaign.workspace_id)
+      : campaign.user_id === user.id;
+
+    if (!hasAccess) {
+      throw new Error("You do not have access to this campaign.");
+    }
+
+    await deleteCampaignWithMetaCleanup({
+      admin,
+      campaign,
+    });
+    await deleteCampaignRecordsEverywhere({
+      admin,
+      campaign,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Campaign deletion failed.";
+    redirect(appendQueryParam(redirectTo, "error", message));
+  }
+
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath("/workspace/settings");
+  revalidatePath("/templates");
+  revalidatePath("/performance");
+  revalidatePath("/dashboard");
+  redirect(appendQueryParam(successRedirectTo, "success", "Campaign deleted."));
 }
 
 export async function deleteDraftCampaignAction(formData: FormData) {
@@ -1000,20 +1080,14 @@ export async function deleteDraftCampaignAction(formData: FormData) {
       throw new Error("Only draft campaigns can be deleted.");
     }
 
-    const [leadResult, snapshotResult, followUpResult, funnelResult, publishJobsResult, campaignResult] = await Promise.all([
-      admin.from("leads").delete().eq("campaign_id", campaignId),
-      admin.from("campaign_launch_snapshots").delete().eq("campaign_id", campaignId),
-      admin.from("follow_up_settings").delete().eq("campaign_id", campaignId),
-      admin.from("funnels").delete().eq("campaign_id", campaignId),
-      admin.from("campaign_publish_jobs").delete().eq("campaign_id", campaignId),
-      admin.from("campaigns").delete().eq("id", campaignId).eq("user_id", user.id),
-    ]);
-
-    for (const result of [leadResult, snapshotResult, followUpResult, funnelResult, publishJobsResult, campaignResult]) {
-      if (result.error) {
-        throw new Error(result.error.message);
-      }
-    }
+    await deleteCampaignWithMetaCleanup({
+      admin,
+      campaign,
+    });
+    await deleteCampaignRecordsEverywhere({
+      admin,
+      campaign,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Draft deletion failed.";
     redirect(appendQueryParam(redirectTo, "error", message));

@@ -1,5 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { fetchMetaCampaignStatus } from "@/lib/meta";
+import { deleteMetaObject, fetchMetaCampaignStatus } from "@/lib/meta";
 import { getWorkspaceMetaAccessToken } from "@/lib/meta-integration";
 import { CampaignRecord } from "@/types";
 
@@ -24,6 +24,7 @@ export type CampaignMetaIdentifiers = {
   adSetId: string | null;
   adId: string | null;
   leadFormId: string | null;
+  creativeId: string | null;
 };
 
 export type CampaignLifecycleState = "draft" | "active" | "paused" | "archived" | "unknown";
@@ -166,13 +167,14 @@ function getCampaignIdentifiersFromExternalIds(externalIds: Record<string, unkno
     adSetId: typeof externalIds.adset_id === "string" ? externalIds.adset_id : null,
     adId: typeof externalIds.ad_id === "string" ? externalIds.ad_id : null,
     leadFormId: typeof externalIds.lead_form_id === "string" ? externalIds.lead_form_id : null,
+    creativeId: typeof externalIds.creative_id === "string" ? externalIds.creative_id : null,
   };
 }
 
 export function getCampaignMetaIdentifiers(
   campaign: Pick<
     CampaignRecord,
-    "external_ids_json" | "meta_campaign_id" | "meta_adset_id" | "meta_ad_id" | "meta_lead_form_id"
+    "external_ids_json" | "meta_campaign_id" | "meta_adset_id" | "meta_ad_id" | "meta_lead_form_id" | "meta_creative_id"
   >,
 ): CampaignMetaIdentifiers {
   const externalIds = getObjectRecord(campaign.external_ids_json);
@@ -195,6 +197,10 @@ export function getCampaignMetaIdentifiers(
       "meta_lead_form_id" in campaign && typeof campaign.meta_lead_form_id === "string"
         ? campaign.meta_lead_form_id
         : jobIdentifiers.leadFormId,
+    creativeId:
+      "meta_creative_id" in campaign && typeof campaign.meta_creative_id === "string"
+        ? campaign.meta_creative_id
+        : jobIdentifiers.creativeId,
   };
 }
 
@@ -299,6 +305,7 @@ function mergeCampaignManagementData(
     meta_adset_id: campaign.meta_adset_id || identifiers.adSetId,
     meta_ad_id: campaign.meta_ad_id || identifiers.adId,
     meta_lead_form_id: campaign.meta_lead_form_id || identifiers.leadFormId,
+    meta_creative_id: campaign.meta_creative_id || identifiers.creativeId,
     external_publish_status:
       snapshot?.externalPublishStatus || campaign.external_publish_status || null,
     meta_effective_status:
@@ -328,6 +335,7 @@ async function persistCampaignManagementState({
     ...(identifiers.adSetId ? { adset_id: identifiers.adSetId } : {}),
     ...(identifiers.adId ? { ad_id: identifiers.adId } : {}),
     ...(identifiers.leadFormId ? { lead_form_id: identifiers.leadFormId } : {}),
+    ...(identifiers.creativeId ? { creative_id: identifiers.creativeId } : {}),
   };
 
   const lifecycle = snapshot.externalPublishStatus || "unknown";
@@ -339,6 +347,7 @@ async function persistCampaignManagementState({
     meta_adset_id: identifiers.adSetId,
     meta_ad_id: identifiers.adId,
     meta_lead_form_id: identifiers.leadFormId,
+    meta_creative_id: identifiers.creativeId,
     meta_effective_status: snapshot.effectiveStatus,
     meta_configured_status: snapshot.configuredStatus,
     meta_status_synced_at: now,
@@ -542,6 +551,57 @@ export async function archiveCampaignWithMetaSync({
   });
 
   return archivedCampaign;
+}
+
+export async function deleteCampaignWithMetaCleanup({
+  admin,
+  campaign,
+}: {
+  admin: SupabaseAdmin;
+  campaign: CampaignRecord;
+}) {
+  const repaired = await repairCampaignMetaIdentifiers(admin, campaign);
+  const identifiers = repaired.identifiers;
+  const workspaceId = repaired.campaign.workspace_id;
+
+  if (workspaceId) {
+    const tokenContext = await getWorkspaceMetaAccessToken({
+      admin,
+      workspaceId,
+    });
+
+    if (tokenContext?.accessToken) {
+      const remoteObjectIds = Array.from(
+        new Set(
+          [
+            identifiers.adId,
+            identifiers.adSetId,
+            identifiers.campaignId,
+            identifiers.creativeId,
+            identifiers.leadFormId,
+          ].filter((value): value is string => Boolean(value)),
+        ),
+      );
+
+      for (const objectId of remoteObjectIds) {
+        try {
+          await deleteMetaObject({
+            accessToken: tokenContext.accessToken,
+            objectId,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Meta delete failed.";
+          console.warn("[campaign] Failed to delete Meta object during campaign deletion:", {
+            campaignId: repaired.campaign.id,
+            objectId,
+            message,
+          });
+        }
+      }
+    }
+  }
+
+  return repaired.campaign;
 }
 
 export function getCampaignLastSyncedAt(campaign: Pick<CampaignRecord, "meta_status_synced_at">) {

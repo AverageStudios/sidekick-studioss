@@ -983,3 +983,21 @@ export async function updateMetaObjectStatus({
     body: body.toString(),
   });
 }
+
+export async function deleteMetaObject({
+  accessToken,
+  objectId,
+}: {
+  accessToken: string;
+  objectId: string;
+}) {
+  const url = new URL(buildMetaGraphUrl(objectId));
+  const body = new URLSearchParams({
+    access_token: accessToken,
+  });
+  return fetchMetaJson<{ success?: boolean }>(url.toString(), {
+    method: "DELETE",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+}
