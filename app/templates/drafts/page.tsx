@@ -52,7 +52,7 @@ export default async function DraftCampaignsPage() {
               const template = templateMap.get(campaign.template_id);
 
               return (
-                <Card key={campaign.id} className="group max-w-[20rem] overflow-hidden rounded-[24px] border-[var(--line)] bg-white transition duration-200 hover:shadow-[0_8px_28px_rgba(16,24,40,0.06)]">
+                <Card key={campaign.id} className="group max-w-[22rem] overflow-hidden rounded-[24px] border-[var(--line)] bg-white transition duration-200 hover:shadow-[0_8px_28px_rgba(16,24,40,0.06)]">
                   <Link href={`/campaigns/${campaign.id}`} className="block">
                     <FacebookAdPreview
                       template={template || undefined}
@@ -64,8 +64,8 @@ export default async function DraftCampaignsPage() {
                       ctaLabel={resolveTemplateCtaLabel(template, "Continue")}
                       imageUrl={template?.previewImage || null}
                       compact
-                      showMetaBar={false}
-                      className="rounded-none border-0 shadow-none opacity-90"
+                      mediaAspectMode="uniform"
+                      className="rounded-none border-0 shadow-none"
                     />
                   </Link>
 

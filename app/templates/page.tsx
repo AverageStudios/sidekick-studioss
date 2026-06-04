@@ -67,7 +67,7 @@ export default async function TemplatesPage() {
 
               return (
                 <Link key={campaign.id} href={`/campaigns/${campaign.id}`} className="block">
-                  <Card className="group max-w-[20rem] overflow-hidden rounded-[24px] border-[var(--line)] bg-white transition duration-200 hover:shadow-[0_8px_28px_rgba(16,24,40,0.06)]">
+                  <Card className="group max-w-[22rem] overflow-hidden rounded-[24px] border-[var(--line)] bg-white transition duration-200 hover:shadow-[0_8px_28px_rgba(16,24,40,0.06)]">
                     <FacebookAdPreview
                       template={template || undefined}
                       pageName={pagePreviewIdentity.pageName}
@@ -78,7 +78,6 @@ export default async function TemplatesPage() {
                       ctaLabel={resolveTemplateCtaLabel(template, "Open")}
                       imageUrl={template?.previewImage || null}
                       compact
-                      showMetaBar
                       mediaAspectMode="uniform"
                       className="rounded-none border-0 shadow-none"
                     />
