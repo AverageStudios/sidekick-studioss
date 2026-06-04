@@ -1681,7 +1681,7 @@ export async function publishMetaFromPreflight({
             key: type.toLowerCase(),
           })),
           ...summary.creative.leadFormCustomQuestions.map((question) => ({
-            type: question.type === "MULTIPLE_CHOICE" ? "MULTIPLE_CHOICE" : "CUSTOM",
+            type: "CUSTOM",
             key: normalizeLeadFormQuestionKey(question.key || question.label),
             label: question.label,
             ...(question.type === "MULTIPLE_CHOICE"

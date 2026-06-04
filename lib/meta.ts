@@ -751,7 +751,7 @@ export async function createMetaLeadForm({
     if (question.type === "MULTIPLE_CHOICE") {
       return {
         ...base,
-        type: "MULTIPLE_CHOICE",
+        type: "CUSTOM",
         options: question.options
           .map((option, index) => ({
             key: `${question.key}_${index + 1}`,
