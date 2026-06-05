@@ -10,9 +10,9 @@ import {
   Rocket,
   SquarePen,
   Sparkles,
-  Trash2,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { CampaignActionSubmitButton } from "@/components/campaign-action-submit-button";
 import { FacebookAdPreview } from "@/components/facebook-ad-preview";
 import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
 import { Button } from "@/components/ui/button";
@@ -352,18 +352,24 @@ export default async function CampaignPage({
                   <form action={pauseCampaignAction}>
                     <input type="hidden" name="campaignId" value={bundle.campaign.id} />
                     <input type="hidden" name="redirectTo" value={redirectTo} />
-                    <Button type="submit" variant="outline" className="h-11 rounded-[18px] px-5">
-                      Pause
-                    </Button>
+                    <CampaignActionSubmitButton
+                      label="Pause"
+                      pendingLabel="Pausing..."
+                      variant="outline"
+                      className="h-11 rounded-[18px] px-5"
+                    />
                   </form>
                 ) : null}
                 {canResume ? (
                   <form action={resumeCampaignAction}>
                     <input type="hidden" name="campaignId" value={bundle.campaign.id} />
                     <input type="hidden" name="redirectTo" value={redirectTo} />
-                    <Button type="submit" variant="outline" className="h-11 rounded-[18px] px-5">
-                      Resume
-                    </Button>
+                    <CampaignActionSubmitButton
+                      label="Resume"
+                      pendingLabel="Resuming..."
+                      variant="outline"
+                      className="h-11 rounded-[18px] px-5"
+                    />
                   </form>
                 ) : null}
                 {canDelete ? (
@@ -371,14 +377,12 @@ export default async function CampaignPage({
                     <input type="hidden" name="campaignId" value={bundle.campaign.id} />
                     <input type="hidden" name="redirectTo" value={redirectTo} />
                     <input type="hidden" name="successRedirectTo" value="/templates" />
-                    <Button
-                      type="submit"
+                    <CampaignActionSubmitButton
+                      label="Delete"
+                      pendingLabel="Deleting..."
                       variant="outline"
                       className="h-11 rounded-[18px] border-rose-200 px-5 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
-                    >
-                      Delete
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    />
                   </form>
                 ) : null}
               </>
@@ -628,9 +632,12 @@ export default async function CampaignPage({
                 <form action={syncCampaignStatusAction}>
                   <input type="hidden" name="campaignId" value={bundle.campaign.id} />
                   <input type="hidden" name="redirectTo" value={redirectTo} />
-                  <Button type="submit" variant="outline" className="rounded-[18px] px-5">
-                    Refresh Meta status
-                  </Button>
+                  <CampaignActionSubmitButton
+                    label="Refresh Meta status"
+                    pendingLabel="Refreshing..."
+                    variant="outline"
+                    className="rounded-[18px] px-5"
+                  />
                 </form>
               ) : null}
 
@@ -640,18 +647,24 @@ export default async function CampaignPage({
                     <form action={pauseCampaignAction}>
                       <input type="hidden" name="campaignId" value={bundle.campaign.id} />
                       <input type="hidden" name="redirectTo" value={redirectTo} />
-                      <Button type="submit" variant="outline" className="rounded-[18px] px-5">
-                        Pause campaign
-                      </Button>
+                      <CampaignActionSubmitButton
+                        label="Pause campaign"
+                        pendingLabel="Pausing..."
+                        variant="outline"
+                        className="rounded-[18px] px-5"
+                      />
                     </form>
                   ) : null}
                   {canResume ? (
                     <form action={resumeCampaignAction}>
                       <input type="hidden" name="campaignId" value={bundle.campaign.id} />
                       <input type="hidden" name="redirectTo" value={redirectTo} />
-                      <Button type="submit" className="rounded-[18px] px-5">
-                        Resume campaign
-                      </Button>
+                      <CampaignActionSubmitButton
+                        label="Resume campaign"
+                        pendingLabel="Resuming..."
+                        variant="primary"
+                        className="rounded-[18px] px-5"
+                      />
                     </form>
                   ) : null}
                 </div>
