@@ -888,12 +888,25 @@ async function runCampaignLifecycleAction(
 
       const remoteObjectIds = action === "archive" && !metaAccessToken ? [] : metaObjectIds;
 
-      for (const objectId of remoteObjectIds) {
-        await updateMetaObjectStatus({
-          accessToken: metaAccessToken || "",
-          objectId,
-          status: targetMetaStatus,
-        });
+      if (remoteObjectIds.length) {
+        const statusUpdates = await Promise.allSettled(
+          remoteObjectIds.map((objectId) =>
+            updateMetaObjectStatus({
+              accessToken: metaAccessToken || "",
+              objectId,
+              status: targetMetaStatus,
+            }),
+          ),
+        );
+
+        const failedUpdate = statusUpdates.find((result) => result.status === "rejected") as
+          | PromiseRejectedResult
+          | undefined;
+        if (failedUpdate) {
+          throw failedUpdate.reason instanceof Error
+            ? failedUpdate.reason
+            : new Error(String(failedUpdate.reason || "Meta status update failed."));
+        }
       }
 
       if (action === "archive") {

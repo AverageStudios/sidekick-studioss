@@ -588,21 +588,24 @@ export async function deleteCampaignWithMetaCleanup({
         ),
       );
 
-      for (const objectId of remoteObjectIds) {
-        try {
-          await deleteMetaObject({
+      const deleteResults = await Promise.allSettled(
+        remoteObjectIds.map((objectId) =>
+          deleteMetaObject({
             accessToken: tokenContext.accessToken,
             objectId,
-          });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "Meta delete failed.";
-          console.warn("[campaign] Failed to delete Meta object during campaign deletion:", {
-            campaignId: repaired.campaign.id,
-            objectId,
-            message,
-          });
-        }
-      }
+          }),
+        ),
+      );
+
+      deleteResults.forEach((result, index) => {
+        if (result.status !== "rejected") return;
+        const message = result.reason instanceof Error ? result.reason.message : "Meta delete failed.";
+        console.warn("[campaign] Failed to delete Meta object during campaign deletion:", {
+          campaignId: repaired.campaign.id,
+          objectId: remoteObjectIds[index],
+          message,
+        });
+      });
     }
   }
 
