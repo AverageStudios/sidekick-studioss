@@ -567,9 +567,27 @@ function resolveAdTypeDestinationUrl(context: MetaLaunchContext) {
 function resolveCallPhoneNumber(context: MetaLaunchContext) {
   const rawPhone = context.launchState.phoneNumber.trim();
   if (!rawPhone) return "";
-  if (/^\+/.test(rawPhone)) return rawPhone;
-  const countryCode = context.launchState.thankYouPage.completionCountryCode || "+1";
-  return `${countryCode}${rawPhone}`;
+  const normalizedRawPhone = rawPhone.replace(/[^\d+]/g, "");
+  if (!normalizedRawPhone) return "";
+  if (/^\+/.test(normalizedRawPhone)) {
+    return `+${normalizedRawPhone.slice(1).replace(/\D/g, "")}`;
+  }
+
+  const digitPhone = normalizedRawPhone.replace(/\D/g, "");
+  const rawCountryCode = (context.launchState.thankYouPage.completionCountryCode || "+1").trim();
+  const normalizedCountryCode = rawCountryCode.startsWith("+")
+    ? `+${rawCountryCode.slice(1).replace(/\D/g, "")}`
+    : `+${rawCountryCode.replace(/\D/g, "")}`;
+
+  if (!digitPhone) return "";
+  if (normalizedCountryCode === "+1" && digitPhone.length === 11 && digitPhone.startsWith("1")) {
+    return `+${digitPhone}`;
+  }
+  return `${normalizedCountryCode}${digitPhone}`;
+}
+
+function isValidMetaCallPhoneNumber(phone: string) {
+  return /^\+\d{10,15}$/.test(phone);
 }
 
 function getSelectedPageAsset(context: MetaLaunchContext) {
@@ -1271,6 +1289,14 @@ export async function runMetaLaunchPreflight({
       issues.push({
         code: "missing_call_phone",
         message: "Call Now campaigns need a phone number.",
+        type: "blocking",
+        scope: "both",
+        field: "phoneNumber",
+      });
+    } else if (!isValidMetaCallPhoneNumber(resolveCallPhoneNumber(context))) {
+      issues.push({
+        code: "invalid_call_phone",
+        message: "Call Now phone number must include a valid country code and phone number.",
         type: "blocking",
         scope: "both",
         field: "phoneNumber",
@@ -1983,8 +2009,7 @@ export async function publishMetaFromPreflight({
               }
             : context.launchState.adType === "call_now"
               ? {
-                  link: summary.creative.destinationUrl,
-                  phone_number: resolveCallPhoneNumber(context),
+                  link: `tel:${resolveCallPhoneNumber(context)}`,
                 }
             : {
                 link: summary.creative.destinationUrl,
