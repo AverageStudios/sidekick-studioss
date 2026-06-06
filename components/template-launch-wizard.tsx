@@ -29,6 +29,7 @@ import {
 import { FacebookAdPreview } from "@/components/facebook-ad-preview";
 import { resolveMetaPagePreviewIdentity } from "@/lib/meta-page-identity";
 import { buildResolvedPlaceholderMap } from "@/lib/template-placeholders";
+import { buildInternationalPhoneNumber, PHONE_COUNTRY_OPTIONS } from "@/lib/phone-utils";
 import { cn } from "@/lib/utils";
 import {
   createInitialCampaignLaunchState,
@@ -2654,23 +2655,70 @@ export function TemplateLaunchWizard({
             ) : null}
 
             {launchState.selection.adType === "call_now" ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <label className="block text-sm font-medium text-[var(--ink)]">Business phone number</label>
-                <Input
-                  value={launchState.adTypeConfig.callNow.phoneNumber}
-                  onChange={(event) =>
-                    updateLaunchState((current) => ({
-                      ...current,
-                      adTypeConfig: {
-                        ...current.adTypeConfig,
-                        callNow: {
-                          phoneNumber: event.target.value,
-                        },
-                      },
-                    }))
-                  }
-                  placeholder="+1 555 123 4567"
-                />
+                <div className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)]">
+                  <label className="space-y-2">
+                    <span className="block text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted)]">
+                      Country
+                    </span>
+                    <select
+                      value={launchState.adTypeConfig.callNow.countryCode}
+                      onChange={(event) =>
+                        updateLaunchState((current) => ({
+                          ...current,
+                          adTypeConfig: {
+                            ...current.adTypeConfig,
+                            callNow: {
+                              ...current.adTypeConfig.callNow,
+                              countryCode: event.target.value,
+                            },
+                          },
+                        }))
+                      }
+                      className="h-11 w-full rounded-[16px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)]"
+                    >
+                      {PHONE_COUNTRY_OPTIONS.map((country) => (
+                        <option key={`${country.code}-${country.dialCode}`} value={country.dialCode}>
+                          {country.label} ({country.dialCode})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-2">
+                    <span className="block text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted)]">
+                      Phone number
+                    </span>
+                    <Input
+                      value={launchState.adTypeConfig.callNow.phoneNumber}
+                      onChange={(event) =>
+                        updateLaunchState((current) => ({
+                          ...current,
+                          adTypeConfig: {
+                            ...current.adTypeConfig,
+                            callNow: {
+                              ...current.adTypeConfig.callNow,
+                              phoneNumber: event.target.value.replace(/[^\d]/g, ""),
+                            },
+                          },
+                        }))
+                      }
+                      inputMode="tel"
+                      autoComplete="tel-national"
+                      placeholder="3522842103"
+                    />
+                  </label>
+                </div>
+                <p className="text-xs text-[var(--muted)]">
+                  We format this automatically for Meta as{" "}
+                  <span className="font-medium text-[var(--ink)]">
+                    {buildInternationalPhoneNumber(
+                      launchState.adTypeConfig.callNow.countryCode,
+                      launchState.adTypeConfig.callNow.phoneNumber,
+                    ) || `${launchState.adTypeConfig.callNow.countryCode} phone number`}
+                  </span>
+                  .
+                </p>
               </div>
             ) : null}
 
@@ -2817,7 +2865,10 @@ export function TemplateLaunchWizard({
                     : launchState.selection.adType === "landing_page"
                       ? launchState.adTypeConfig.landingPage.url || "—"
                       : launchState.selection.adType === "call_now"
-                        ? launchState.adTypeConfig.callNow.phoneNumber || "—"
+                        ? buildInternationalPhoneNumber(
+                            launchState.adTypeConfig.callNow.countryCode,
+                            launchState.adTypeConfig.callNow.phoneNumber,
+                          ) || "—"
                         : "Messenger"
                 }
               />

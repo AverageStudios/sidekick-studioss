@@ -195,6 +195,7 @@ export type CampaignLaunchState = {
       pixelName: string;
     };
     callNow: {
+      countryCode: string;
       phoneNumber: string;
     };
     messenger: {
@@ -455,6 +456,7 @@ export type TemplateSetupValues = {
   dailyBudget?: string;
   targetLocation?: string;
   landingPageUrl?: string;
+  phoneCountryCode?: string;
   phoneNumber?: string;
   messengerWelcomeMessage?: string;
   messengerReplyPrompt?: string;

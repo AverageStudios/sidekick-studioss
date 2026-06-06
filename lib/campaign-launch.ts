@@ -16,6 +16,12 @@ import {
 } from "@/types";
 import { normalizeIndustryLabel, normalizeOfferTypeLabel } from "@/data/template-taxonomy";
 import { extractTemplatePlaceholderFields } from "@/lib/template-placeholders";
+import {
+  buildInternationalPhoneNumber,
+  isValidInternationalPhoneNumber,
+  normalizeDialCode,
+  splitPhoneNumberForInput,
+} from "@/lib/phone-utils";
 
 export type CampaignLaunchView = {
   platform: CampaignLaunchState["platform"];
@@ -29,6 +35,7 @@ export type CampaignLaunchView = {
   targetLocation: string;
   targetLocations: CampaignLaunchLocation[];
   landingPageUrl: string;
+  phoneCountryCode: string;
   phoneNumber: string;
   messengerWelcomeMessage: string;
   messengerReplyPrompt: string;
@@ -520,11 +527,13 @@ function createDefaultState({
         pixelName: partial?.adTypeConfig?.landingPage?.pixelName || "",
       },
       callNow: {
-        phoneNumber:
+        ...splitPhoneNumberForInput(
           partial?.adTypeConfig?.callNow?.phoneNumber ||
-          resolvedTemplate?.adTypeConfig?.call_now?.phoneNumber ||
-          businessProfile?.phone ||
-          "",
+            resolvedTemplate?.adTypeConfig?.call_now?.phoneNumber ||
+            businessProfile?.phone ||
+            "",
+          partial?.adTypeConfig?.callNow?.countryCode || "+1",
+        ),
       },
       messenger: {
         welcomeMessage:
@@ -754,9 +763,13 @@ function migrateLegacyState(
           defaultState.adTypeConfig.landingPage.pixelName,
       },
       callNow: {
-        phoneNumber:
+        ...splitPhoneNumberForInput(
           (typeof state.phoneNumber === "string" ? state.phoneNumber : "") ||
-          defaultState.adTypeConfig.callNow.phoneNumber,
+            defaultState.adTypeConfig.callNow.phoneNumber,
+          (typeof (state as Record<string, unknown>).phoneCountryCode === "string"
+            ? ((state as Record<string, unknown>).phoneCountryCode as string)
+            : "") || defaultState.adTypeConfig.callNow.countryCode,
+        ),
       },
       messenger: {
         welcomeMessage:
@@ -963,6 +976,7 @@ export function createLaunchStateView(state: CampaignLaunchState): CampaignLaunc
     targetLocation: primaryLocationLabel(state),
     targetLocations: state.targeting.locations,
     landingPageUrl: state.adTypeConfig.landingPage.url,
+    phoneCountryCode: state.adTypeConfig.callNow.countryCode,
     phoneNumber: state.adTypeConfig.callNow.phoneNumber,
     messengerWelcomeMessage: state.adTypeConfig.messenger.welcomeMessage,
     messengerReplyPrompt: state.adTypeConfig.messenger.replyPrompt,
@@ -1078,6 +1092,7 @@ export function getTemplateSetupValuesFromLaunchState(
     dailyBudget: state.campaign.dailyBudget,
     targetLocation: primaryLocation,
     landingPageUrl: state.adTypeConfig.landingPage.url,
+    phoneCountryCode: state.adTypeConfig.callNow.countryCode,
     phoneNumber: state.adTypeConfig.callNow.phoneNumber,
     messengerWelcomeMessage: state.adTypeConfig.messenger.welcomeMessage,
     messengerReplyPrompt: state.adTypeConfig.messenger.replyPrompt,
@@ -1360,6 +1375,18 @@ export function validateWizardStep({
           message: "Provide a phone number for Call Now campaigns.",
           field: "adTypeConfig.callNow.phoneNumber",
         });
+      } else if (state.selection.adType === "call_now") {
+        const normalizedCallNumber = buildInternationalPhoneNumber(
+          normalizeDialCode(state.adTypeConfig.callNow.countryCode),
+          state.adTypeConfig.callNow.phoneNumber,
+        );
+        if (!isValidInternationalPhoneNumber(normalizedCallNumber)) {
+          issues.push({
+            code: "phone_invalid",
+            message: "Provide a valid Call Now phone number with country code.",
+            field: "adTypeConfig.callNow.phoneNumber",
+          });
+        }
       }
 
       if (

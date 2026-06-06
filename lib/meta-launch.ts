@@ -19,6 +19,11 @@ import { readLatestCampaignLaunchSnapshot } from "@/lib/campaign-snapshots";
 import { createCampaignBlueprint } from "@/lib/template-engine";
 import { hasUnresolvedPlaceholders } from "@/lib/template-placeholders";
 import {
+  buildInternationalPhoneNumber,
+  isValidInternationalPhoneNumber,
+  normalizeDialCode,
+} from "@/lib/phone-utils";
+import {
   createMetaAd,
   createMetaAdCreative,
   createMetaAdSet,
@@ -565,29 +570,14 @@ function resolveAdTypeDestinationUrl(context: MetaLaunchContext) {
 }
 
 function resolveCallPhoneNumber(context: MetaLaunchContext) {
-  const rawPhone = context.launchState.phoneNumber.trim();
-  if (!rawPhone) return "";
-  const normalizedRawPhone = rawPhone.replace(/[^\d+]/g, "");
-  if (!normalizedRawPhone) return "";
-  if (/^\+/.test(normalizedRawPhone)) {
-    return `+${normalizedRawPhone.slice(1).replace(/\D/g, "")}`;
-  }
-
-  const digitPhone = normalizedRawPhone.replace(/\D/g, "");
-  const rawCountryCode = (context.launchState.thankYouPage.completionCountryCode || "+1").trim();
-  const normalizedCountryCode = rawCountryCode.startsWith("+")
-    ? `+${rawCountryCode.slice(1).replace(/\D/g, "")}`
-    : `+${rawCountryCode.replace(/\D/g, "")}`;
-
-  if (!digitPhone) return "";
-  if (normalizedCountryCode === "+1" && digitPhone.length === 11 && digitPhone.startsWith("1")) {
-    return `+${digitPhone}`;
-  }
-  return `${normalizedCountryCode}${digitPhone}`;
+  return buildInternationalPhoneNumber(
+    normalizeDialCode(context.launchState.phoneCountryCode || "+1"),
+    context.launchState.phoneNumber,
+  );
 }
 
 function isValidMetaCallPhoneNumber(phone: string) {
-  return /^\+\d{10,15}$/.test(phone);
+  return isValidInternationalPhoneNumber(phone);
 }
 
 function getSelectedPageAsset(context: MetaLaunchContext) {

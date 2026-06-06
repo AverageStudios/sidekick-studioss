@@ -82,6 +82,7 @@ export function createCampaignBlueprint(
         dailyBudget: values.dailyBudget || "",
         targetLocation: values.targetLocation || values.city,
         landingPageUrl: values.landingPageUrl || "",
+        phoneCountryCode: values.phoneCountryCode || "+1",
         phoneNumber: values.phoneNumber || "",
         messengerWelcomeMessage: values.messengerWelcomeMessage || "",
         messengerReplyPrompt: values.messengerReplyPrompt || "",
