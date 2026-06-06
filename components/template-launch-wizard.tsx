@@ -1269,7 +1269,9 @@ export function TemplateLaunchWizard({
           ...current,
           targeting: {
             ...current.targeting,
-            locations: [...current.targeting.locations, nextLocation],
+            locations: current.targeting.locations.some((location) => location.id === nextLocation.id)
+              ? current.targeting.locations
+              : [...current.targeting.locations, nextLocation],
           },
         },
         selectedTemplate || templates[0],
@@ -1280,102 +1282,6 @@ export function TemplateLaunchWizard({
     setLocationSuggestions([]);
     setActiveLocationSuggestionIndex(0);
     setLocationSearchError(null);
-  }
-
-  function inferLocationScopeFromQuery(query: string): CampaignLocationScope {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return "city";
-    if (normalized === "world" || normalized === "worldwide" || normalized === "global") return "world";
-    if (/^\d{5}(-\d{4})?$/.test(normalized)) return "zip";
-    if (
-      /\d/.test(normalized) ||
-      /(?:street|st|avenue|ave|road|rd|lane|ln|drive|dr|boulevard|blvd|court|ct|way|suite|ste|apt|apartment|unit|highway|hwy)\b/i.test(
-        normalized,
-      )
-    ) {
-      return "address";
-    }
-    return "city";
-  }
-
-  function normalizeLocationSearchText(value: string) {
-    return value
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^\w\s,.-]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .toLowerCase();
-  }
-
-  function addManualLocation() {
-    if (!pendingLocation.trim()) return;
-    const inferredScope = inferLocationScopeFromQuery(pendingLocation);
-    const normalizedPendingLocation = normalizeLocationSearchText(pendingLocation);
-    const topSuggestion = locationSuggestions[0] || null;
-    const normalizedTopSuggestionLabel = topSuggestion
-      ? normalizeLocationSearchText(topSuggestion.label)
-      : "";
-
-    if (
-      topSuggestion &&
-      inferredScope !== "address" &&
-      inferredScope !== "world" &&
-      (normalizedTopSuggestionLabel === normalizedPendingLocation ||
-        normalizedTopSuggestionLabel.startsWith(`${normalizedPendingLocation},`) ||
-        normalizedTopSuggestionLabel.startsWith(`${normalizedPendingLocation} `))
-    ) {
-      addLocationFromSuggestion(topSuggestion);
-      return;
-    }
-
-    const manualLocation: CampaignLaunchLocation = {
-      id: `manual-${Date.now()}`,
-      label: pendingLocation.trim(),
-      radius: inferredScope === "world" ? "0" : "10",
-      radiusAllowed: !["world", "country", "state"].includes(inferredScope),
-      distanceUnit: "mile",
-      targetingMode: locationMode,
-      scope: inferredScope,
-      metaLocation: {
-        classification:
-          inferredScope === "country"
-            ? "country"
-            : inferredScope === "state"
-              ? "region"
-              : inferredScope === "city"
-                ? "city"
-                : inferredScope === "zip"
-                  ? "zip"
-                  : inferredScope === "neighborhood"
-                    ? "neighborhood"
-                    : inferredScope === "world"
-                      ? "world"
-                      : "address",
-        name: pendingLocation.trim(),
-        addressString: pendingLocation.trim(),
-      },
-    };
-
-    updateLaunchState((current) =>
-      normalizeCampaignLaunchState(
-        {
-          ...current,
-          targeting: {
-            ...current.targeting,
-            locations:
-              inferredScope === "world"
-                ? [manualLocation]
-                : [...current.targeting.locations.filter((item) => item.scope !== "world"), manualLocation],
-          },
-        },
-        selectedTemplate || templates[0],
-        businessProfile,
-      ),
-    );
-    setPendingLocation("");
-    setLocationSuggestions([]);
-    setActiveLocationSuggestionIndex(0);
   }
 
   function removeLocation(locationId: string) {
@@ -1421,7 +1327,9 @@ export function TemplateLaunchWizard({
     if (!locationSuggestions.length) {
       if (event.key === "Enter") {
         event.preventDefault();
-        addManualLocation();
+        if (pendingLocation.trim()) {
+          setLocationSearchError("Choose a location from the suggestions before adding it.");
+        }
       }
       return;
     }
@@ -1446,8 +1354,6 @@ export function TemplateLaunchWizard({
         locationSuggestions[activeLocationSuggestionIndex] || locationSuggestions[0] || null;
       if (suggestion) {
         addLocationFromSuggestion(suggestion);
-      } else {
-        addManualLocation();
       }
       return;
     }
@@ -1938,6 +1844,9 @@ export function TemplateLaunchWizard({
                   const nextValue = event.target.value;
                   setPendingLocation(nextValue);
                   setActiveLocationSuggestionIndex(0);
+                  if (locationSearchError) {
+                    setLocationSearchError(null);
+                  }
                   if (nextValue.trim().length < 2) {
                     locationSearchAbortRef.current?.abort();
                     setLocationSuggestions([]);
@@ -1957,6 +1866,9 @@ export function TemplateLaunchWizard({
                 aria-expanded={locationSuggestions.length > 0}
                 className="h-13 rounded-[18px] px-5 text-base shadow-[0_2px_12px_rgba(15,23,42,0.06)]"
               />
+              <p className="mt-2 text-xs text-[var(--muted)]">
+                Choose a suggestion to add a location. Free-typed locations are not saved.
+              </p>
               {isSearchingLocations ? (
                 <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">
                   Searching…
@@ -2003,7 +1915,7 @@ export function TemplateLaunchWizard({
               <p className="text-sm text-rose-500">{locationSearchError}</p>
             ) : null}
 
-            {/* Targeting mode + manual add */}
+            {/* Targeting mode */}
             <div className="flex flex-wrap items-center gap-3">
               <select
                 value={locationMode}
@@ -2018,9 +1930,6 @@ export function TemplateLaunchWizard({
                   </option>
                 ))}
               </select>
-              <Button type="button" onClick={addManualLocation} variant="outline" className="h-10">
-                Add manually
-              </Button>
             </div>
 
             {/* Selected location chips */}
