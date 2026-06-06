@@ -526,14 +526,31 @@ function resolveLeadFormCreativeExternalUrl(context: MetaLaunchContext) {
   return "";
 }
 
+function resolveCallNowCreativeUrl(context: MetaLaunchContext) {
+  const candidates = [
+    context.businessProfile?.website || "",
+    context.launchState.landingPageUrl,
+    resolveLeadFormPrivacyPolicyUrl(context),
+    buildPublicAppUrl("/"),
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = sanitizeDestinationUrl(candidate);
+    if (!normalized) continue;
+    if (!isPublicAbsoluteUrl(normalized)) continue;
+    if (isMetaOwnedUrl(normalized)) continue;
+    return normalized;
+  }
+
+  return "";
+}
+
 function resolveAdTypeDestinationUrl(context: MetaLaunchContext) {
   switch (context.launchState.adType) {
     case "landing_page":
       return sanitizeDestinationUrl(context.launchState.landingPageUrl);
     case "call_now":
-      return context.launchState.phoneNumber?.trim()
-        ? `tel:${resolveCallPhoneNumber(context)}`
-        : "";
+      return resolveCallNowCreativeUrl(context);
     case "messenger_leads":
     case "messenger_engagement":
       return context.resolvedAssets.page?.id
