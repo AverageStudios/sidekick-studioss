@@ -261,7 +261,15 @@ function mapAdTypeToCta(adType: CampaignAdType) {
   }
 }
 
-function mapGoalToOptimizationGoal(goal: CampaignGoal) {
+function resolveMetaObjective(adType: CampaignAdType, goal: CampaignGoal) {
+  if (adType === "call_now") {
+    return "OUTCOME_AWARENESS" as const;
+  }
+  return goal;
+}
+
+function mapGoalToOptimizationGoal(adType: CampaignAdType, goal: CampaignGoal) {
+  if (adType === "call_now") return "REACH" as const;
   if (goal === "OUTCOME_AWARENESS") return "REACH" as const;
   if (goal === "OUTCOME_TRAFFIC") return "LINK_CLICKS" as const;
   if (goal === "OUTCOME_ENGAGEMENT") return "POST_ENGAGEMENT" as const;
@@ -1568,7 +1576,7 @@ export async function runMetaLaunchPreflight({
   }
 
   const normalizedPayloadSummary: MetaNormalizedPayloadSummary = {
-    objective: context.launchState.campaignGoal,
+    objective: resolveMetaObjective(context.launchState.adType, context.launchState.campaignGoal),
     campaign: {
       name:
         context.launchState.advanced.campaignName ||
@@ -1581,7 +1589,7 @@ export async function runMetaLaunchPreflight({
       name: `${context.launchState.advanced.campaignName || context.campaign.name} Ad Set`,
       dailyBudgetCents: budgetCents || 0,
       billingEvent: "IMPRESSIONS",
-      optimizationGoal: mapGoalToOptimizationGoal(context.launchState.campaignGoal),
+      optimizationGoal: mapGoalToOptimizationGoal(context.launchState.adType, context.launchState.campaignGoal),
       targeting,
       promotedObject,
       destinationType: resolveAdSetDestinationType(context.launchState.adType),

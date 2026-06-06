@@ -238,6 +238,7 @@ export function getCampaignGoalForAdType(adType: CampaignAdType): CampaignGoal {
     case "landing_page":
       return "OUTCOME_TRAFFIC";
     case "call_now":
+      return "OUTCOME_AWARENESS";
     case "messenger_engagement":
       return "OUTCOME_ENGAGEMENT";
     case "messenger_leads":
