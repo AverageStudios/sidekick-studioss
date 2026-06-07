@@ -32,26 +32,38 @@ export function encryptCrmSecret(value: string): EncryptedSecretPayload {
   };
 }
 
-export function decryptCrmSecret(payload: {
-  token_ciphertext?: string | null;
-  token_iv?: string | null;
-  token_tag?: string | null;
+export function decryptEncryptedSecret(payload: {
+  ciphertext?: string | null;
+  iv?: string | null;
+  tag?: string | null;
 }) {
-  if (!payload.token_ciphertext || !payload.token_iv || !payload.token_tag) return null;
+  if (!payload.ciphertext || !payload.iv || !payload.tag) return null;
 
   try {
     const decipher = createDecipheriv(
       "aes-256-gcm",
       buildKeyBuffer(),
-      Buffer.from(payload.token_iv, "base64"),
+      Buffer.from(payload.iv, "base64"),
     );
-    decipher.setAuthTag(Buffer.from(payload.token_tag, "base64"));
+    decipher.setAuthTag(Buffer.from(payload.tag, "base64"));
     const decrypted = Buffer.concat([
-      decipher.update(Buffer.from(payload.token_ciphertext, "base64")),
+      decipher.update(Buffer.from(payload.ciphertext, "base64")),
       decipher.final(),
     ]);
     return decrypted.toString("utf8");
   } catch {
     return null;
   }
+}
+
+export function decryptCrmSecret(payload: {
+  token_ciphertext?: string | null;
+  token_iv?: string | null;
+  token_tag?: string | null;
+}) {
+  return decryptEncryptedSecret({
+    ciphertext: payload.token_ciphertext,
+    iv: payload.token_iv,
+    tag: payload.token_tag,
+  });
 }

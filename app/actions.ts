@@ -2691,6 +2691,10 @@ export async function saveCrmConnectionAction(formData: FormData) {
   const accessToken = String(formData.get("accessToken") || "").trim();
   const locationId = String(formData.get("locationId") || "").trim();
 
+  if (provider === "gohighlevel") {
+    redirect("/integrations?error=Connect%20GoHighLevel%20through%20the%20OAuth%20install%20flow.");
+  }
+
   if (!provider || !accessToken) {
     redirect("/integrations?error=Provider and access token are required.");
   }

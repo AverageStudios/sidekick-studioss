@@ -1,5 +1,6 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { decryptCrmSecret, encryptCrmSecret } from "@/lib/crm-security";
+import { decryptCrmSecret, decryptEncryptedSecret, encryptCrmSecret } from "@/lib/crm-security";
+import { env, isGhlConfigured } from "@/lib/env";
 import { CrmConnectionStatus, CrmDeliveryState, CrmProvider, LeadRecord } from "@/types";
 
 type SupabaseAdmin = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
@@ -14,6 +15,9 @@ export type WorkspaceCrmConnectionRow = {
   token_ciphertext: string | null;
   token_iv: string | null;
   token_tag: string | null;
+  refresh_token_ciphertext: string | null;
+  refresh_token_iv: string | null;
+  refresh_token_tag: string | null;
   token_type: string | null;
   token_expires_at: string | null;
   scopes: string[];
@@ -89,6 +93,8 @@ type ValidatedConnection = {
   providerUserId: string | null;
   providerUserName: string | null;
   tokenType?: string | null;
+  tokenExpiresAt?: string | null;
+  refreshToken?: string | null;
   scopes: string[];
   metadata: Record<string, unknown>;
   destinations: CrmDestinationSeed[];
@@ -98,6 +104,22 @@ type DeliveryResult = {
   externalRecordId: string | null;
   requestPayload: Record<string, unknown>;
   responsePayload: Record<string, unknown>;
+};
+
+type GoHighLevelOAuthTokenResponse = {
+  access_token?: string;
+  token_type?: string;
+  expires_in?: number;
+  refresh_token?: string;
+  scope?: string;
+  userType?: string;
+  companyId?: string;
+  companyName?: string;
+  locationId?: string;
+  userId?: string;
+  traceId?: string;
+  refreshTokenId?: string;
+  isBulkInstallation?: boolean;
 };
 
 const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce"];
@@ -115,6 +137,28 @@ function getFirstString(...values: unknown[]) {
     if (typeof value === "string" && value.trim()) return value.trim();
   }
   return null;
+}
+
+function getScopeList(value: unknown) {
+  if (Array.isArray(value)) {
+    return Array.from(
+      new Set(
+        value
+          .filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+          .map((entry) => entry.trim()),
+      ),
+    );
+  }
+  if (typeof value === "string") {
+    return Array.from(new Set(value.split(/[,\s]+/).map((entry) => entry.trim()).filter(Boolean)));
+  }
+  return [];
+}
+
+function buildTokenExpiry(expiresIn?: number) {
+  return typeof expiresIn === "number" && expiresIn > 0
+    ? new Date(Date.now() + expiresIn * 1000).toISOString()
+    : null;
 }
 
 async function crmFetch<T>(url: string, init: RequestInit & { headers?: HeadersInit }, errorPrefix: string) {
@@ -138,9 +182,29 @@ async function crmFetch<T>(url: string, init: RequestInit & { headers?: HeadersI
 async function validateGoHighLevelConnection({
   accessToken,
   locationId,
+  tokenType,
+  expiresIn,
+  refreshToken,
+  scope,
+  userType,
+  companyId,
+  companyName,
+  userId,
+  refreshTokenId,
+  traceId,
 }: {
   accessToken: string;
   locationId: string;
+  tokenType?: string | null;
+  expiresIn?: number;
+  refreshToken?: string | null;
+  scope?: string | string[];
+  userType?: string | null;
+  companyId?: string | null;
+  companyName?: string | null;
+  userId?: string | null;
+  refreshTokenId?: string | null;
+  traceId?: string | null;
 }): Promise<ValidatedConnection> {
   const details = await crmFetch<Record<string, unknown>>(
     `https://services.leadconnectorhq.com/locations/${encodeURIComponent(locationId)}`,
@@ -161,12 +225,20 @@ async function validateGoHighLevelConnection({
   return {
     providerUserId: getFirstString(location.id, locationId),
     providerUserName: locationName,
-    tokenType: "Bearer",
-    scopes: ["contacts.write", "locations.readonly"],
+    tokenType: tokenType || "Bearer",
+    tokenExpiresAt: buildTokenExpiry(expiresIn),
+    refreshToken: refreshToken || null,
+    scopes: getScopeList(scope).length ? getScopeList(scope) : ["contacts.write", "locations.readonly"],
     metadata: {
       validated_at: new Date().toISOString(),
       location_id: locationId,
       location_name: locationName,
+      user_type: userType || "Location",
+      company_id: companyId || null,
+      company_name: companyName || null,
+      provider_user_id: userId || null,
+      refresh_token_id: refreshTokenId || null,
+      trace_id: traceId || null,
       account_details: location,
     },
     destinations: [
@@ -245,6 +317,24 @@ async function validateCrmConnection(input: {
       return validateGoHighLevelConnection({
         accessToken: input.accessToken,
         locationId,
+        tokenType: getString(input.metadata?.tokenType),
+        expiresIn:
+          typeof input.metadata?.expiresIn === "number"
+            ? input.metadata.expiresIn
+            : typeof input.metadata?.expiresIn === "string"
+              ? Number(input.metadata.expiresIn)
+              : undefined,
+        refreshToken: getString(input.metadata?.refreshToken),
+        scope:
+          typeof input.metadata?.scope === "string" || Array.isArray(input.metadata?.scope)
+            ? input.metadata.scope
+            : undefined,
+        userType: getString(input.metadata?.userType),
+        companyId: getString(input.metadata?.companyId),
+        companyName: getString(input.metadata?.companyName),
+        userId: getString(input.metadata?.userId),
+        refreshTokenId: getString(input.metadata?.refreshTokenId),
+        traceId: getString(input.metadata?.traceId),
       });
     }
     case "hubspot":
@@ -252,6 +342,119 @@ async function validateCrmConnection(input: {
     default:
       throw new Error(`${input.provider} is not available in this first CRM pass yet.`);
   }
+}
+
+async function exchangeGoHighLevelCodeForToken({
+  code,
+  userType,
+}: {
+  code: string;
+  userType: "Location" | "Company";
+}) {
+  if (!isGhlConfigured() || !env.ghlClientId || !env.ghlClientSecret || !env.ghlRedirectUri) {
+    throw new Error("GoHighLevel OAuth env vars are missing.");
+  }
+
+  const response = await crmFetch<GoHighLevelOAuthTokenResponse>(
+    "https://services.leadconnectorhq.com/oauth/token",
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        client_id: env.ghlClientId,
+        client_secret: env.ghlClientSecret,
+        grant_type: "authorization_code",
+        code,
+        user_type: userType,
+        redirect_uri: env.ghlRedirectUri,
+      }).toString(),
+    },
+    "GoHighLevel OAuth exchange failed",
+  );
+
+  if (!response.access_token) {
+    throw new Error("GoHighLevel did not return an access token.");
+  }
+
+  return response;
+}
+
+async function refreshGoHighLevelToken({
+  admin,
+  connection,
+  refreshToken,
+}: {
+  admin: SupabaseAdmin;
+  connection: WorkspaceCrmConnectionRow;
+  refreshToken: string;
+}) {
+  if (!isGhlConfigured() || !env.ghlClientId || !env.ghlClientSecret || !env.ghlRedirectUri) {
+    throw new Error("GoHighLevel OAuth env vars are missing.");
+  }
+
+  const refreshed = await crmFetch<GoHighLevelOAuthTokenResponse>(
+    "https://services.leadconnectorhq.com/oauth/token",
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        client_id: env.ghlClientId,
+        client_secret: env.ghlClientSecret,
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        user_type:
+          getFirstString(connection.metadata_json.user_type, "Location") === "Company"
+            ? "Company"
+            : "Location",
+        redirect_uri: env.ghlRedirectUri,
+      }).toString(),
+    },
+    "GoHighLevel token refresh failed",
+  );
+
+  if (!refreshed.access_token) {
+    throw new Error("GoHighLevel did not return a refreshed access token.");
+  }
+
+  const accessPayload = encryptCrmSecret(refreshed.access_token);
+  const nextRefreshToken = refreshed.refresh_token || refreshToken;
+  const refreshPayload = nextRefreshToken ? encryptCrmSecret(nextRefreshToken) : null;
+
+  const { error } = await admin
+    .from("workspace_provider_connections")
+    .update({
+      token_ciphertext: accessPayload.ciphertext,
+      token_iv: accessPayload.iv,
+      token_tag: accessPayload.tag,
+      refresh_token_ciphertext: refreshPayload?.ciphertext || null,
+      refresh_token_iv: refreshPayload?.iv || null,
+      refresh_token_tag: refreshPayload?.tag || null,
+      token_type: refreshed.token_type || connection.token_type || "Bearer",
+      token_expires_at: buildTokenExpiry(refreshed.expires_in),
+      scopes: getScopeList(refreshed.scope).length ? getScopeList(refreshed.scope) : connection.scopes,
+      metadata_json: {
+        ...connection.metadata_json,
+        user_type: refreshed.userType || connection.metadata_json.user_type || "Location",
+        company_id: refreshed.companyId || connection.metadata_json.company_id || null,
+        refresh_token_id: refreshed.refreshTokenId || connection.metadata_json.refresh_token_id || null,
+        trace_id: refreshed.traceId || connection.metadata_json.trace_id || null,
+      },
+      last_synced_at: new Date().toISOString(),
+      status: "connected",
+      disconnected_at: null,
+      is_active: true,
+    })
+    .eq("id", connection.id);
+
+  if (error) throw new Error(error.message);
+
+  return refreshed.access_token;
 }
 
 async function listCrmConnections(admin: SupabaseAdmin, workspaceId: string) {
@@ -350,6 +553,9 @@ export async function connectWorkspaceCrmProvider({
     metadata,
   });
   const encrypted = encryptCrmSecret(accessToken);
+  const encryptedRefreshToken = validated.refreshToken
+    ? encryptCrmSecret(validated.refreshToken)
+    : null;
   const existingConnections = await listCrmConnections(admin, workspaceId);
   const activeConnection = existingConnections.find((connection) => connection.provider === provider && connection.is_active) || null;
 
@@ -362,7 +568,11 @@ export async function connectWorkspaceCrmProvider({
         token_ciphertext: encrypted.ciphertext,
         token_iv: encrypted.iv,
         token_tag: encrypted.tag,
+        refresh_token_ciphertext: encryptedRefreshToken?.ciphertext || null,
+        refresh_token_iv: encryptedRefreshToken?.iv || null,
+        refresh_token_tag: encryptedRefreshToken?.tag || null,
         token_type: validated.tokenType || "Bearer",
+        token_expires_at: validated.tokenExpiresAt || null,
         scopes: validated.scopes,
         status: "connected",
         metadata_json: {
@@ -386,7 +596,11 @@ export async function connectWorkspaceCrmProvider({
       token_ciphertext: encrypted.ciphertext,
       token_iv: encrypted.iv,
       token_tag: encrypted.tag,
+      refresh_token_ciphertext: encryptedRefreshToken?.ciphertext || null,
+      refresh_token_iv: encryptedRefreshToken?.iv || null,
+      refresh_token_tag: encryptedRefreshToken?.tag || null,
       token_type: validated.tokenType || "Bearer",
+      token_expires_at: validated.tokenExpiresAt || null,
       scopes: validated.scopes,
       status: "connected",
       metadata_json: {
@@ -433,6 +647,73 @@ export async function connectWorkspaceCrmProvider({
   }
 
   return savedConnection;
+}
+
+export async function connectWorkspaceGoHighLevelOAuthProvider({
+  admin,
+  workspaceId,
+  userId,
+  code,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+  userId: string;
+  code: string;
+}) {
+  const locationToken = await exchangeGoHighLevelCodeForToken({
+    code,
+    userType: "Location",
+  }).catch(async (error) => {
+    const locationMessage = error instanceof Error ? error.message : "GoHighLevel location install failed.";
+    try {
+      const companyToken = await exchangeGoHighLevelCodeForToken({
+        code,
+        userType: "Company",
+      });
+      const locationId = getFirstString(companyToken.locationId);
+      if (!locationId) {
+        throw new Error(
+          "GoHighLevel returned an agency-level install. Install the app from the target sub-account so SideKick receives a location token.",
+        );
+      }
+
+      return companyToken;
+    } catch (companyError) {
+      const companyMessage =
+        companyError instanceof Error ? companyError.message : "GoHighLevel company install failed.";
+      throw new Error(
+        companyMessage.includes("agency-level install")
+          ? companyMessage
+          : `${locationMessage} ${companyMessage}`.trim(),
+      );
+    }
+  });
+
+  const locationId = getFirstString(locationToken.locationId);
+  if (!locationId) {
+    throw new Error("GoHighLevel did not return a location ID for this installation.");
+  }
+
+  return connectWorkspaceCrmProvider({
+    admin,
+    workspaceId,
+    userId,
+    provider: "gohighlevel",
+    accessToken: locationToken.access_token || "",
+    metadata: {
+      locationId,
+      companyId: locationToken.companyId || null,
+      companyName: locationToken.companyName || null,
+      userId: locationToken.userId || null,
+      userType: locationToken.userType || "Location",
+      scope: locationToken.scope || null,
+      refreshTokenId: locationToken.refreshTokenId || null,
+      traceId: locationToken.traceId || null,
+      expiresIn: locationToken.expires_in,
+      refreshToken: locationToken.refresh_token || null,
+      tokenType: locationToken.token_type || "Bearer",
+    },
+  });
 }
 
 export async function disconnectWorkspaceCrmProvider({
@@ -542,17 +823,53 @@ export async function resolveCrmRoutingRule({
   );
 }
 
+async function getGoHighLevelAccessToken({
+  admin,
+  connection,
+}: {
+  admin: SupabaseAdmin;
+  connection: WorkspaceCrmConnectionRow;
+}) {
+  const accessToken = decryptCrmSecret(connection);
+  if (!accessToken) {
+    throw new Error("GoHighLevel token is unavailable.");
+  }
+
+  const expiresAt = connection.token_expires_at ? new Date(connection.token_expires_at).getTime() : null;
+  const expiresSoon = typeof expiresAt === "number" && Number.isFinite(expiresAt) && expiresAt <= Date.now() + 60_000;
+
+  if (!expiresSoon) {
+    return accessToken;
+  }
+
+  const refreshToken = decryptEncryptedSecret({
+    ciphertext: connection.refresh_token_ciphertext,
+    iv: connection.refresh_token_iv,
+    tag: connection.refresh_token_tag,
+  });
+  if (!refreshToken) {
+    return accessToken;
+  }
+
+  return refreshGoHighLevelToken({
+    admin,
+    connection,
+    refreshToken,
+  }).catch(() => accessToken);
+}
+
 async function deliverLeadToGoHighLevel({
+  admin,
   connection,
   destination,
   lead,
 }: {
+  admin: SupabaseAdmin;
   connection: WorkspaceCrmConnectionRow;
   destination: WorkspaceCrmAssetRow | null;
   lead: LeadRecord;
 }): Promise<DeliveryResult> {
-  const token = decryptCrmSecret(connection);
-  if (!token) throw new Error("GoHighLevel token is unavailable.");
+  const token = await getGoHighLevelAccessToken({ admin, connection });
 
   const locationId =
     getFirstString(destination?.metadata_json.locationId, connection.metadata_json.location_id, destination?.asset_id) ||
@@ -671,17 +988,19 @@ async function deliverLeadToHubSpot({
 }
 
 async function deliverLeadViaProvider({
+  admin,
   connection,
   destination,
   lead,
 }: {
+  admin: SupabaseAdmin;
   connection: WorkspaceCrmConnectionRow;
   destination: WorkspaceCrmAssetRow | null;
   lead: LeadRecord;
 }) {
   switch (connection.provider) {
     case "gohighlevel":
-      return deliverLeadToGoHighLevel({ connection, destination, lead });
+      return deliverLeadToGoHighLevel({ admin, connection, destination, lead });
     case "hubspot":
       return deliverLeadToHubSpot({ connection, lead });
     default:
@@ -778,7 +1097,7 @@ export async function processLeadCrmDelivery({
   const attemptedAt = new Date().toISOString();
 
   try {
-    const result = await deliverLeadViaProvider({ connection, destination, lead });
+    const result = await deliverLeadViaProvider({ admin, connection, destination, lead });
     await admin.from("lead_delivery_attempts").insert({
       delivery_id: delivery.id,
       attempt_number: attemptNumber,

@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
 import { getWorkspaceCrmState } from "@/lib/crm-integration";
 import { getWorkspaceMetaIntegrationForUser } from "@/lib/data";
+import { getGhlEnvStatus } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getActiveWorkspaceIdForUser } from "@/lib/workspaces";
 
@@ -71,6 +72,7 @@ export default async function IntegrationsPage({
       metaIntegration.tokenAvailable &&
       metaIntegration.connection.status === "connected",
   );
+  const ghlEnvStatus = getGhlEnvStatus();
   const connectedProviders = new Set(crmState.connections.filter((connection) => connection.is_active).map((connection) => connection.provider));
   const providerDestinations = crmState.destinations.filter((destination) => destination.is_available);
 
@@ -177,7 +179,7 @@ export default async function IntegrationsPage({
             </div>
 
             <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-              Connect a sub-account token and location ID. SideKick will upsert captured leads into GoHighLevel contacts for that location.
+              Connect through the GoHighLevel install flow. SideKick will store the returned sub-account connection and hand campaign leads off into that location.
             </p>
 
             {connectedProviders.has("gohighlevel") ? (
@@ -197,29 +199,23 @@ export default async function IntegrationsPage({
                   <Button type="submit" variant="outline">Disconnect GoHighLevel</Button>
                 </form>
               </div>
+            ) : !ghlEnvStatus.configured ? (
+              <div className="mt-5 rounded-[22px] border border-dashed border-[var(--line)] px-5 py-6 text-sm leading-6 text-[var(--muted)]">
+                GoHighLevel OAuth is not configured yet.
+                Missing: {ghlEnvStatus.missingKeys.join(", ")}
+              </div>
             ) : (
-              <form action={saveCrmConnectionAction} className="mt-5 space-y-4">
-                <input type="hidden" name="provider" value="gohighlevel" />
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-[var(--ink)]">Private integration token</label>
-                  <input
-                    type="password"
-                    name="accessToken"
-                    required
-                    className="h-11 w-full rounded-[14px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)]"
-                  />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-[var(--ink)]">Location ID</label>
-                  <input
-                    type="text"
-                    name="locationId"
-                    required
-                    className="h-11 w-full rounded-[14px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)]"
-                  />
-                </div>
-                <Button type="submit">Connect GoHighLevel</Button>
-              </form>
+              <div className="mt-5 space-y-4">
+                <p className="text-sm leading-6 text-[var(--muted)]">
+                  This follows the same pattern users expect from tools like UpHex: click connect, sign in with GoHighLevel, choose the account, and return with the CRM linked.
+                </p>
+                <Button asChild>
+                  <Link href="/api/gohighlevel/connect?next=/integrations">Connect GoHighLevel</Link>
+                </Button>
+                <p className="text-xs leading-5 text-[var(--muted)]">
+                  For this first pass, install from the target sub-account so SideKick receives a location-level token for lead delivery.
+                </p>
+              </div>
             )}
           </Card>
 
@@ -371,7 +367,7 @@ export default async function IntegrationsPage({
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               {[
-                { name: "GoHighLevel", state: "Live now", detail: "Token validation, default destination, contact upsert, delivery logging." },
+                { name: "GoHighLevel", state: "Live now", detail: "OAuth install flow, default destination, contact upsert, delivery logging." },
                 { name: "HubSpot", state: "Live now", detail: "Private app token validation, contact upsert, delivery logging." },
                 { name: "Pipedrive", state: "Later", detail: "Reserved in the data model and provider checks for the next wave." },
                 { name: "Salesforce", state: "Later", detail: "Reserved in the data model and provider checks for the next wave." },
