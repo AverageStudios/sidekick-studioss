@@ -45,6 +45,13 @@ const insertOptionalLeadColumns = new Set([
   "last_synced_at",
   "is_test_lead",
 ]);
+const optionalCampaignLeadMappingColumns = new Set([
+  "meta_campaign_id",
+  "meta_adset_id",
+  "meta_ad_id",
+  "meta_lead_form_id",
+  "external_ids_json",
+]);
 
 export type WorkspaceLeadSyncHealth = {
   connected: boolean;
@@ -92,6 +99,12 @@ function getObjectRecord(value: unknown) {
 function getMissingInsertColumn(message?: string) {
   if (!message) return null;
   const match = message.match(/Could not find the '([^']+)' column of 'leads'/i);
+  return match?.[1] || null;
+}
+
+function getMissingCampaignMappingColumn(message?: string) {
+  if (!message) return null;
+  const match = message.match(/Could not find the '([^']+)' column of 'campaigns'/i);
   return match?.[1] || null;
 }
 
@@ -222,11 +235,48 @@ function normalizeLeadFieldData(fieldData: Array<{ name?: string; values?: strin
 }
 
 async function loadCampaignLeadMappings(admin: SupabaseAdmin, workspaceId: string) {
-  const [campaignsResult, jobsResult, snapshotsResult] = await Promise.all([
-    admin
-      .from("campaigns")
-      .select("id, user_id, workspace_id, name, meta_campaign_id, meta_adset_id, meta_ad_id, meta_lead_form_id, external_ids_json")
-      .eq("workspace_id", workspaceId),
+  const campaignSelectColumns = [
+    "id",
+    "user_id",
+    "workspace_id",
+    "name",
+    "meta_campaign_id",
+    "meta_adset_id",
+    "meta_ad_id",
+    "meta_lead_form_id",
+    "external_ids_json",
+  ];
+
+  const loadCampaignRows = async () => {
+    const columns = [...campaignSelectColumns];
+
+    while (columns.length) {
+      const result = await admin
+        .from("campaigns")
+        .select(columns.join(", "))
+        .eq("workspace_id", workspaceId);
+
+      if (!result.error) {
+        return result.data || [];
+      }
+
+      const missingColumn = getMissingCampaignMappingColumn(result.error.message);
+      if (!missingColumn || !optionalCampaignLeadMappingColumns.has(missingColumn)) {
+        throw new Error(result.error.message);
+      }
+
+      const missingIndex = columns.indexOf(missingColumn);
+      if (missingIndex === -1) {
+        throw new Error(result.error.message);
+      }
+      columns.splice(missingIndex, 1);
+    }
+
+    return [];
+  };
+
+  const [campaignRows, jobsResult, snapshotsResult] = await Promise.all([
+    loadCampaignRows(),
     admin
       .from("campaign_publish_jobs")
       .select("campaign_id, external_ids_json, resolved_assets_json, normalized_payload_json, created_at")
@@ -240,7 +290,6 @@ async function loadCampaignLeadMappings(admin: SupabaseAdmin, workspaceId: strin
       .order("created_at", { ascending: false }),
   ]);
 
-  if (campaignsResult.error) throw new Error(campaignsResult.error.message);
   if (jobsResult.error) throw new Error(jobsResult.error.message);
   if (snapshotsResult.error) throw new Error(snapshotsResult.error.message);
 
@@ -258,7 +307,7 @@ async function loadCampaignLeadMappings(admin: SupabaseAdmin, workspaceId: strin
     latestSnapshots.set(campaignId, getObjectRecord(row.snapshot_json));
   }
 
-  return ((campaignsResult.data || []) as Array<Record<string, unknown>>).map((campaign) => {
+  return (campaignRows as unknown as Array<Record<string, unknown>>).map((campaign) => {
     const campaignId = String(campaign.id || "");
     const externalIds = getObjectRecord(campaign.external_ids_json);
     const job = latestJobs.get(campaignId);
