@@ -1389,17 +1389,6 @@ export function validateWizardStep({
         }
       }
 
-      if (
-        (state.selection.adType === "messenger_leads" || state.selection.adType === "messenger_engagement") &&
-        !state.adTypeConfig.messenger.welcomeMessage.trim() &&
-        !state.adTypeConfig.messenger.replyPrompt.trim()
-      ) {
-        issues.push({
-          code: "messenger_setup_missing",
-          message: "Add a welcome message or reply prompt for Messenger campaigns.",
-          field: "adTypeConfig.messenger",
-        });
-      }
       break;
     case "placeholders":
       if (!template || !setupValues) break;

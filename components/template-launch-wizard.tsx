@@ -2725,40 +2725,61 @@ export function TemplateLaunchWizard({
             {(launchState.selection.adType === "messenger_leads" ||
               launchState.selection.adType === "messenger_engagement") ? (
               <div className="grid gap-4">
-                <Textarea
-                  value={launchState.adTypeConfig.messenger.welcomeMessage}
-                  onChange={(event) =>
-                    updateLaunchState((current) => ({
-                      ...current,
-                      adTypeConfig: {
-                        ...current.adTypeConfig,
-                        messenger: {
-                          ...current.adTypeConfig.messenger,
-                          welcomeMessage: event.target.value,
+                <div className="rounded-[18px] border border-[var(--line)] bg-[var(--panel)] px-4 py-4">
+                  <p className="text-sm font-medium text-[var(--ink)]">Messenger setup</p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+                    This ad will open a Messenger conversation with your selected Facebook Page. The fields below are
+                    optional planning notes so your team knows how the conversation should start.
+                  </p>
+                </div>
+
+                <label className="grid gap-2">
+                  <span className="text-sm font-medium text-[var(--ink)]">Opening message plan</span>
+                  <span className="text-xs leading-5 text-[var(--muted)]">
+                    Write the first message you want the conversation to feel like after someone taps the ad.
+                  </span>
+                  <Textarea
+                    value={launchState.adTypeConfig.messenger.welcomeMessage}
+                    onChange={(event) =>
+                      updateLaunchState((current) => ({
+                        ...current,
+                        adTypeConfig: {
+                          ...current.adTypeConfig,
+                          messenger: {
+                            ...current.adTypeConfig.messenger,
+                            welcomeMessage: event.target.value,
+                          },
                         },
-                      },
-                    }))
-                  }
-                  rows={4}
-                  placeholder="Messenger welcome message"
-                />
-                <Textarea
-                  value={launchState.adTypeConfig.messenger.replyPrompt}
-                  onChange={(event) =>
-                    updateLaunchState((current) => ({
-                      ...current,
-                      adTypeConfig: {
-                        ...current.adTypeConfig,
-                        messenger: {
-                          ...current.adTypeConfig.messenger,
-                          replyPrompt: event.target.value,
+                      }))
+                    }
+                    rows={4}
+                    placeholder="Example: Hey! Thanks for reaching out. What kind of detailing service are you looking for today?"
+                  />
+                </label>
+
+                <label className="grid gap-2">
+                  <span className="text-sm font-medium text-[var(--ink)]">Follow-up prompt</span>
+                  <span className="text-xs leading-5 text-[var(--muted)]">
+                    Optional note for the next question or reply your team should send once the conversation begins.
+                  </span>
+                  <Textarea
+                    value={launchState.adTypeConfig.messenger.replyPrompt}
+                    onChange={(event) =>
+                      updateLaunchState((current) => ({
+                        ...current,
+                        adTypeConfig: {
+                          ...current.adTypeConfig,
+                          messenger: {
+                            ...current.adTypeConfig.messenger,
+                            replyPrompt: event.target.value,
+                          },
                         },
-                      },
-                    }))
-                  }
-                  rows={3}
-                  placeholder="Messenger reply prompt"
-                />
+                      }))
+                    }
+                    rows={3}
+                    placeholder="Example: Would you like a quick quote, available times, or help picking the right package?"
+                  />
+                </label>
               </div>
             ) : null}
           </div>

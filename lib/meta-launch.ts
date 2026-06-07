@@ -259,7 +259,7 @@ function mapAdTypeToCta(adType: CampaignAdType) {
       return "CALL_NOW";
     case "messenger_leads":
     case "messenger_engagement":
-      return "SEND_MESSAGE";
+      return "MESSAGE_PAGE";
     case "lead_form":
     default:
       return "SIGN_UP";
@@ -1439,21 +1439,6 @@ export async function runMetaLaunchPreflight({
         });
       }
       issues.push(...validateManagedLeadFormCustomQuestions(customQuestions, selectedLeadFields));
-    }
-  }
-
-  if (adTypeUsesMessengerSetup(context.launchState.adType)) {
-    if (
-      !context.launchState.messengerWelcomeMessage.trim() &&
-      !context.launchState.messengerReplyPrompt.trim()
-    ) {
-      issues.push({
-        code: "missing_messenger_setup",
-        message: "Messenger campaigns work best with a welcome message or reply prompt.",
-        type: "warning",
-        scope: "both",
-        field: "messengerSetup",
-      });
     }
   }
 
