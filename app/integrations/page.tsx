@@ -38,6 +38,19 @@ function formatDeliveryState(state: string) {
   }
 }
 
+function formatConnectionTimestamp(value: string | null | undefined) {
+  if (!value) return null;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
 export default async function IntegrationsPage({
   searchParams,
 }: {
@@ -74,7 +87,18 @@ export default async function IntegrationsPage({
   );
   const ghlEnvStatus = getGhlEnvStatus();
   const connectedProviders = new Set(crmState.connections.filter((connection) => connection.is_active).map((connection) => connection.provider));
+  const ghlConnection =
+    crmState.connections.find((connection) => connection.provider === "gohighlevel" && connection.is_active) || null;
   const providerDestinations = crmState.destinations.filter((destination) => destination.is_available);
+  const ghlLocationName =
+    typeof ghlConnection?.metadata_json.location_name === "string"
+      ? ghlConnection.metadata_json.location_name
+      : ghlConnection?.provider_user_name || null;
+  const ghlCompanyName =
+    typeof ghlConnection?.metadata_json.company_name === "string"
+      ? ghlConnection.metadata_json.company_name
+      : null;
+  const ghlConnectedAt = formatConnectionTimestamp(ghlConnection?.connected_at);
 
   return (
     <AppShell currentPath="/integrations">
@@ -179,25 +203,32 @@ export default async function IntegrationsPage({
             </div>
 
             <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-              Connect through the GoHighLevel install flow. SideKick will store the returned sub-account connection and hand campaign leads off into that location.
+              Connect through the GoHighLevel install flow. The connected sub-account is saved to this workspace so SideKick can hand campaign leads off cleanly into GHL.
             </p>
 
-            {connectedProviders.has("gohighlevel") ? (
+            {ghlConnection ? (
               <div className="mt-5 space-y-4">
-                {crmState.connections
-                  .filter((connection) => connection.provider === "gohighlevel" && connection.is_active)
-                  .map((connection) => (
-                    <div key={connection.id} className="rounded-[22px] border border-[var(--line)] bg-[var(--surface)] p-4">
-                      <p className="text-sm font-semibold text-[var(--ink)]">{connection.provider_user_name || "GoHighLevel workspace"}</p>
-                      <p className="mt-1 text-sm text-[var(--muted)]">
-                        Connected and ready for CRM lead handoff
-                      </p>
-                    </div>
-                  ))}
-                <form action={disconnectCrmConnectionAction}>
-                  <input type="hidden" name="provider" value="gohighlevel" />
-                  <Button type="submit" variant="outline">Disconnect GoHighLevel</Button>
-                </form>
+                <div className="rounded-[22px] border border-[var(--line)] bg-[var(--surface)] p-4">
+                  <p className="text-sm font-semibold text-[var(--ink)]">
+                    {ghlLocationName || "GoHighLevel sub-account connected"}
+                  </p>
+                  <p className="mt-1 text-sm text-[var(--muted)]">
+                    {ghlCompanyName ? `${ghlCompanyName} workspace` : "Workspace-scoped CRM connection"}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                    SideKick is ready to hand leads from this workspace into GoHighLevel.
+                    {ghlConnectedAt ? ` Connected ${ghlConnectedAt}.` : ""}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Button asChild>
+                    <Link href="/api/gohighlevel/connect?next=/integrations">Reconnect GoHighLevel</Link>
+                  </Button>
+                  <form action={disconnectCrmConnectionAction}>
+                    <input type="hidden" name="provider" value="gohighlevel" />
+                    <Button type="submit" variant="outline">Disconnect GoHighLevel</Button>
+                  </form>
+                </div>
               </div>
             ) : !ghlEnvStatus.configured ? (
               <div className="mt-5 rounded-[22px] border border-dashed border-[var(--line)] px-5 py-6 text-sm leading-6 text-[var(--muted)]">
@@ -207,13 +238,13 @@ export default async function IntegrationsPage({
             ) : (
               <div className="mt-5 space-y-4">
                 <p className="text-sm leading-6 text-[var(--muted)]">
-                  This follows the same pattern users expect from tools like UpHex: click connect, sign in with GoHighLevel, choose the account, and return with the CRM linked.
+                  This follows the same pattern users expect from tools like UpHex: click connect, sign in with GoHighLevel, choose the sub-account, and return with this workspace linked.
                 </p>
                 <Button asChild>
                   <Link href="/api/gohighlevel/connect?next=/integrations">Connect GoHighLevel</Link>
                 </Button>
                 <p className="text-xs leading-5 text-[var(--muted)]">
-                  For this first pass, install from the target sub-account so SideKick receives a location-level token for lead delivery.
+                  The connection is stored per workspace so each SideKick workspace can route leads to its own GoHighLevel destination.
                 </p>
               </div>
             )}
