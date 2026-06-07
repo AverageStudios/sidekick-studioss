@@ -163,7 +163,7 @@ function readConnectionLeadSyncMetadata(connection: WorkspaceProviderConnectionR
 function buildLeadReconnectHint() {
   const requiredScopes = getMetaScopes({
     includeLeadFormManagement: true,
-    includeLeadRetrieval: false,
+    includeLeadRetrieval: true,
     includePageWebhookManagement: false,
   });
   return `Reconnect Meta from the Leads page so the active workspace token includes: ${requiredScopes.join(", ")}.`;
@@ -1112,7 +1112,7 @@ export async function ingestMetaLeadWebhookPayload({
 }
 
 export function buildLeadSyncReconnectUrl(next = "/leads") {
-  return `/api/meta/connect?reconnect=1&scopeSet=lead_forms&next=${encodeURIComponent(next)}`;
+  return `/api/meta/connect?reconnect=1&scopeSet=leads&next=${encodeURIComponent(next)}`;
 }
 
 export function getLeadInboxSearchMatch(lead: LeadRecord, query: string) {

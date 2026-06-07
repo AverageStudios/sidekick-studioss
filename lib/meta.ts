@@ -13,9 +13,11 @@ const defaultMetaScopes = [
 ] as const;
 
 const leadFormManagementMetaScopes = ["pages_manage_ads"] as const;
+const leadRetrievalMetaScopes = ["leads_retrieval"] as const;
 const allowedMetaScopes = new Set<string>([
   ...defaultMetaScopes,
   ...leadFormManagementMetaScopes,
+  ...leadRetrievalMetaScopes,
 ]);
 
 export type MetaAdAccount = {
@@ -282,6 +284,9 @@ function filterMetaScopesByOptions(
     if (scope === "pages_manage_ads") {
       return Boolean(options?.includeLeadFormManagement);
     }
+    if (scope === "leads_retrieval") {
+      return Boolean(options?.includeLeadRetrieval);
+    }
     return true;
   });
 }
@@ -294,7 +299,10 @@ export function getMetaScopes(options?: {
   const raw = readMetaEnv("META_SCOPES") || env.metaScopes;
   const fallback = [...defaultMetaScopes];
   if (!raw) {
-    const extraScopes = [...(options?.includeLeadFormManagement ? [...leadFormManagementMetaScopes] : [])];
+    const extraScopes = [
+      ...(options?.includeLeadFormManagement ? [...leadFormManagementMetaScopes] : []),
+      ...(options?.includeLeadRetrieval ? [...leadRetrievalMetaScopes] : []),
+    ];
     return extraScopes.length ? dedupeScopes([...fallback, ...extraScopes]) : fallback;
   }
 

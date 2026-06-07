@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       : "/workspace/settings?section=integrations");
   const resolvedScopeSet =
     statePayload?.scopeSet ||
-    (scopeSetCookie === "leads" || scopeSetCookie === "lead_forms" ? "lead_forms" : "default");
+    (scopeSetCookie === "leads" ? "leads" : scopeSetCookie === "lead_forms" ? "lead_forms" : "default");
   const requestedScopes = statePayload?.requestedScopes?.length
     ? statePayload.requestedScopes
     : requestedScopesCookie
@@ -141,8 +141,8 @@ export async function GET(request: NextRequest) {
       (requestedScopes.length
         ? requestedScopes
         : getMetaScopes({
-            includeLeadFormManagement: resolvedScopeSet === "lead_forms",
-            includeLeadRetrieval: false,
+            includeLeadFormManagement: resolvedScopeSet === "lead_forms" || resolvedScopeSet === "leads",
+            includeLeadRetrieval: resolvedScopeSet === "leads",
             includePageWebhookManagement: false,
           }));
     const tokenExpiresAt =
