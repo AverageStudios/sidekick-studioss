@@ -190,7 +190,7 @@ export default async function IntegrationsPage({
                     <div key={connection.id} className="rounded-[22px] border border-[var(--line)] bg-[var(--surface)] p-4">
                       <p className="text-sm font-semibold text-[var(--ink)]">{connection.provider_user_name || "GoHighLevel workspace"}</p>
                       <p className="mt-1 text-sm text-[var(--muted)]">
-                        Location ID {String(connection.metadata_json.location_id || "unknown")}
+                        Connected and ready for CRM lead handoff
                       </p>
                     </div>
                   ))}
