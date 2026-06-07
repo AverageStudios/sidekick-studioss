@@ -95,6 +95,36 @@ export default async function LeadsPage({
           </Card>
         ) : null}
 
+        {inbox.syncHealth?.connected ? (
+          inbox.syncHealth.canReadLeads && inbox.syncHealth.webhookSubscriptionReady ? (
+            <Card className="rounded-[24px] border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-none">
+              <p className="font-semibold">Automatic Meta lead sync is active.</p>
+              <p className="mt-1 leading-6">
+                New Meta instant-form leads should flow into this inbox automatically
+                {inbox.syncHealth.lastWorkspaceSyncAt ? ` and were last checked ${new Date(inbox.syncHealth.lastWorkspaceSyncAt).toLocaleString()}.` : "."}
+              </p>
+            </Card>
+          ) : (
+            <Card className="rounded-[24px] border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-none">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="font-semibold">Automatic Meta lead sync still needs attention.</p>
+                  <p className="mt-1 leading-6">
+                    {inbox.syncHealth.requiredScopesMissing.length
+                      ? `Missing Meta scopes: ${inbox.syncHealth.requiredScopesMissing.join(", ")}.`
+                      : inbox.syncHealth.selectedPageId
+                        ? "The selected Page still needs webhook subscription or a recovery sync to finalize automatic lead delivery."
+                        : "Select a Facebook Page in Meta integrations to finish automatic lead sync."}
+                  </p>
+                </div>
+                <Button asChild variant="outline" className="shrink-0 bg-white/80">
+                  <Link href={inbox.reconnectUrl}>Reconnect Meta</Link>
+                </Button>
+              </div>
+            </Card>
+          )
+        ) : null}
+
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {[
             { label: "New", value: leadCounts.new, tone: "bg-[#eef4ff] text-[#3559a7]" },

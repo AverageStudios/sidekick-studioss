@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { parseMetaOAuthState } from "@/lib/meta-oauth-state";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
+import { ensureWorkspaceMetaLeadAutomation } from "@/lib/meta-leads";
 import {
   exchangeMetaCodeForToken,
   exchangeMetaTokenForLongLivedToken,
@@ -192,12 +193,22 @@ export async function GET(request: NextRequest) {
     );
 
     let syncWarning: string | null = null;
+    let leadAutomationWarning: string | null = null;
     try {
       await syncWorkspaceMetaAssets({
         admin,
         workspaceId,
         userId: user.id,
       });
+      const leadAutomation = await ensureWorkspaceMetaLeadAutomation({
+        admin,
+        workspaceId,
+      });
+      if (leadAutomation.errors.length) {
+        leadAutomationWarning = leadAutomation.errors[0] || null;
+      } else if (leadAutomation.warnings.length) {
+        leadAutomationWarning = leadAutomation.warnings[0] || null;
+      }
     } catch (syncErr) {
       console.error("[meta callback] Asset sync failed:", syncErr instanceof Error ? syncErr.message : syncErr);
       syncWarning =
@@ -216,6 +227,9 @@ export async function GET(request: NextRequest) {
     }
     if (syncWarning) {
       callbackWarnings.push(syncWarning);
+    }
+    if (leadAutomationWarning) {
+      callbackWarnings.push(leadAutomationWarning);
     }
     if (callbackWarnings.length) {
       redirectUrl.searchParams.set("error", callbackWarnings.join(" "));

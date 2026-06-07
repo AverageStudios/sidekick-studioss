@@ -139,6 +139,10 @@ function readConnectionLeadSyncMetadata(connection: WorkspaceProviderConnectionR
       typeof leadSync.last_synced_at === "string" ? leadSync.last_synced_at : null,
     lastWorkspaceSyncError:
       typeof leadSync.last_error === "string" ? leadSync.last_error : null,
+    webhookSubscriptionReady:
+      typeof leadSync.webhook_subscription_ready === "boolean"
+        ? leadSync.webhook_subscription_ready
+        : null,
   };
 }
 
@@ -340,7 +344,10 @@ function buildLeadSyncHealth(args: {
     optionalScopesMissing,
     canReadLeads: Boolean(args.connection) && requiredScopesMissing.length === 0,
     webhookSubscriptionAttempted: Boolean(args.connection?.metadata_json && getObjectRecord(args.connection.metadata_json).lead_sync),
-    webhookSubscriptionReady: optionalScopesMissing.length === 0,
+    webhookSubscriptionReady:
+      typeof metadata.webhookSubscriptionReady === "boolean"
+        ? metadata.webhookSubscriptionReady
+        : false,
     lastWorkspaceSyncAt: metadata.lastWorkspaceSyncAt,
     lastWorkspaceSyncError: metadata.lastWorkspaceSyncError,
   } satisfies WorkspaceLeadSyncHealth;
@@ -631,6 +638,120 @@ export async function getWorkspaceLeadSyncHealth({
     connection: integrationState.connection,
     selectedPage,
   });
+}
+
+export async function ensureWorkspaceMetaLeadAutomation({
+  admin,
+  workspaceId,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+}) {
+  const integrationState = await getWorkspaceMetaIntegrationState({ admin, workspaceId });
+  const selectedPage =
+    integrationState.assets.pages.find((asset) => asset.is_selected) || integrationState.assets.pages[0] || null;
+  const health = buildLeadSyncHealth({
+    connection: integrationState.connection,
+    selectedPage,
+  });
+
+  const result = {
+    connected: health.connected,
+    subscribed: false,
+    synced: false,
+    mode: "incremental" as LeadSyncMode,
+    warnings: [] as string[],
+    errors: [] as string[],
+  };
+
+  if (!integrationState.connection) {
+    result.warnings.push("Meta is not connected for this workspace yet.");
+    return result;
+  }
+
+  if (!selectedPage?.asset_id) {
+    result.warnings.push("Select a Facebook Page before automatic lead sync can be enabled.");
+    await persistLeadSyncMetadata({
+      admin,
+      connectionId: integrationState.connection.id,
+      previousMetadata: getObjectRecord(integrationState.connection.metadata_json),
+      errorMessage: null,
+      webhookSubscriptionReady: false,
+    });
+    return result;
+  }
+
+  if (!health.canReadLeads) {
+    result.warnings.push(
+      `Lead sync is not ready yet because the active Meta connection is missing: ${health.requiredScopesMissing.join(", ")}. ${buildLeadReconnectHint()}`,
+    );
+    await persistLeadSyncMetadata({
+      admin,
+      connectionId: integrationState.connection.id,
+      previousMetadata: getObjectRecord(integrationState.connection.metadata_json),
+      errorMessage: result.warnings[0] || null,
+      webhookSubscriptionReady: false,
+    });
+    return result;
+  }
+
+  const selectedPageAccessToken = getPageAccessTokenFromAsset(selectedPage);
+  if (!selectedPageAccessToken) {
+    result.warnings.push(
+      `The selected Page ${selectedPage.name || selectedPage.asset_id} is missing a usable Page token, so automatic lead sync could not be finalized yet.`,
+    );
+    await persistLeadSyncMetadata({
+      admin,
+      connectionId: integrationState.connection.id,
+      previousMetadata: getObjectRecord(integrationState.connection.metadata_json),
+      errorMessage: result.warnings[0] || null,
+      webhookSubscriptionReady: false,
+    });
+    return result;
+  }
+
+  try {
+    await subscribeMetaPageToLeadgenWebhooks({
+      accessToken: selectedPageAccessToken,
+      pageId: selectedPage.asset_id,
+    });
+    result.subscribed = true;
+    await persistLeadSyncMetadata({
+      admin,
+      connectionId: integrationState.connection.id,
+      previousMetadata: getObjectRecord(integrationState.connection.metadata_json),
+      errorMessage: null,
+      webhookSubscriptionReady: true,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Page webhook subscription failed.";
+    result.errors.push(message);
+    await persistLeadSyncMetadata({
+      admin,
+      connectionId: integrationState.connection.id,
+      previousMetadata: getObjectRecord(integrationState.connection.metadata_json),
+      errorMessage: message,
+      webhookSubscriptionReady: false,
+    });
+    return result;
+  }
+
+  const syncMetadata = readConnectionLeadSyncMetadata(integrationState.connection);
+  result.mode = syncMetadata.lastWorkspaceSyncAt ? "incremental" : "backfill";
+
+  try {
+    await syncWorkspaceMetaLeads({
+      admin,
+      workspaceId,
+      mode: result.mode,
+    });
+    result.synced = true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Automatic lead recovery sync failed.";
+    result.errors.push(message);
+  }
+
+  return result;
 }
 
 export async function syncWorkspaceMetaLeads({

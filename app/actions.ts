@@ -36,7 +36,7 @@ import {
   syncWorkspaceMetaAssets,
   getWorkspaceMetaAccessToken,
 } from "@/lib/meta-integration";
-import { syncWorkspaceMetaLeads } from "@/lib/meta-leads";
+import { ensureWorkspaceMetaLeadAutomation, syncWorkspaceMetaLeads } from "@/lib/meta-leads";
 import {
   archiveCampaignWithMetaSync,
   deleteCampaignWithMetaCleanup,
@@ -2512,12 +2512,23 @@ export async function refreshMetaIntegrationAssetsAction() {
       workspaceId,
       userId: user.id,
     });
+    const automation = await ensureWorkspaceMetaLeadAutomation({
+      admin,
+      workspaceId,
+    });
+    if (automation.errors.length) {
+      const message = automation.errors[0] || "Meta assets refreshed, but lead automation could not be finalized.";
+      redirect(`/workspace/settings?section=integrations&error=${encodeURIComponent(message)}`);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not refresh Meta assets.";
     redirect(`/workspace/settings?section=integrations&error=${encodeURIComponent(message)}`);
   }
 
   revalidatePath("/workspace/settings");
+  revalidatePath("/leads");
+  revalidatePath("/dashboard");
+  revalidatePath("/performance");
   redirect("/workspace/settings?section=integrations&saved=1");
 }
 
@@ -2560,6 +2571,14 @@ export async function saveMetaIntegrationSelectionsAction(formData: FormData) {
         instagramActorId: String(formData.get("instagramActorId") || "").trim() || undefined,
       },
     });
+    const automation = await ensureWorkspaceMetaLeadAutomation({
+      admin,
+      workspaceId,
+    });
+    if (automation.errors.length) {
+      const message = automation.errors[0] || "Meta selections saved, but lead automation could not be finalized.";
+      redirect(`/workspace/settings?section=integrations&error=${encodeURIComponent(message)}`);
+    }
   } catch (error) {
     const message =
       error instanceof Error
@@ -2570,6 +2589,9 @@ export async function saveMetaIntegrationSelectionsAction(formData: FormData) {
 
   revalidatePath("/workspace/settings");
   revalidatePath("/templates/new");
+  revalidatePath("/leads");
+  revalidatePath("/dashboard");
+  revalidatePath("/performance");
   redirect("/workspace/settings?section=integrations&saved=1");
 }
 
