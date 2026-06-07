@@ -112,14 +112,18 @@ export default async function LeadsPage({
                   <p className="mt-1 leading-6">
                     {inbox.syncHealth.requiredScopesMissing.length
                       ? `Missing Meta scopes: ${inbox.syncHealth.requiredScopesMissing.join(", ")}.`
+                      : !inbox.syncHealth.currentScopes.includes("leads_retrieval")
+                        ? "SideKick can still run recovery lead syncs, but true real-time webhook delivery needs Meta app approval for leads_retrieval."
                       : inbox.syncHealth.selectedPageId
                         ? "The selected Page still needs webhook subscription or a recovery sync to finalize automatic lead delivery."
                         : "Select a Facebook Page in Meta integrations to finish automatic lead sync."}
                   </p>
                 </div>
-                <Button asChild variant="outline" className="shrink-0 bg-white/80">
-                  <Link href={inbox.reconnectUrl}>Reconnect Meta</Link>
-                </Button>
+                {inbox.syncHealth.requiredScopesMissing.length ? (
+                  <Button asChild variant="outline" className="shrink-0 bg-white/80">
+                    <Link href={inbox.reconnectUrl}>Reconnect Meta</Link>
+                  </Button>
+                ) : null}
               </div>
             </Card>
           )

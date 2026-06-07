@@ -18,6 +18,7 @@ import { CampaignAdType, LeadRecord } from "@/types";
 type SupabaseAdmin = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
 
 const requiredLeadSyncScopes = ["pages_manage_ads"] as const;
+const realtimeLeadSyncScopes = ["leads_retrieval"] as const;
 const optionalLeadSyncScopes: readonly string[] = [];
 const leadStatusIds = ["new", "contacted", "qualified", "closed", "archived"] as const;
 const insertOptionalLeadColumns = new Set([
@@ -332,6 +333,7 @@ function buildLeadSyncHealth(args: {
 }) {
   const scopes = getConnectionScopes(args.connection);
   const requiredScopesMissing = requiredLeadSyncScopes.filter((scope) => !scopes.includes(scope));
+  const realtimeScopesMissing = realtimeLeadSyncScopes.filter((scope) => !scopes.includes(scope));
   const optionalScopesMissing = optionalLeadSyncScopes.filter((scope) => !scopes.includes(scope));
   const metadata = readConnectionLeadSyncMetadata(args.connection);
   return {
@@ -654,6 +656,9 @@ export async function ensureWorkspaceMetaLeadAutomation({
     connection: integrationState.connection,
     selectedPage,
   });
+  const realtimeScopesMissing = realtimeLeadSyncScopes.filter(
+    (scope) => !health.currentScopes.includes(scope),
+  );
 
   const result = {
     connected: health.connected,
@@ -692,6 +697,35 @@ export async function ensureWorkspaceMetaLeadAutomation({
       errorMessage: result.warnings[0] || null,
       webhookSubscriptionReady: false,
     });
+    return result;
+  }
+
+  if (realtimeScopesMissing.length > 0) {
+    const message =
+      "Real-time Meta lead delivery is not fully available yet because the connected Meta app/token does not have leads_retrieval. SideKick can still run automatic recovery syncs, but instant webhook delivery requires Meta app approval for leads_retrieval.";
+    result.warnings.push(message);
+    await persistLeadSyncMetadata({
+      admin,
+      connectionId: integrationState.connection.id,
+      previousMetadata: getObjectRecord(integrationState.connection.metadata_json),
+      errorMessage: null,
+      webhookSubscriptionReady: false,
+    });
+
+    try {
+      const syncMetadata = readConnectionLeadSyncMetadata(integrationState.connection);
+      result.mode = syncMetadata.lastWorkspaceSyncAt ? "incremental" : "backfill";
+      await syncWorkspaceMetaLeads({
+        admin,
+        workspaceId,
+        mode: result.mode,
+      });
+      result.synced = true;
+    } catch (error) {
+      const syncMessage = error instanceof Error ? error.message : "Automatic lead recovery sync failed.";
+      result.errors.push(syncMessage);
+    }
+
     return result;
   }
 
