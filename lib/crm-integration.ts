@@ -1,0 +1,827 @@
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { decryptCrmSecret, encryptCrmSecret } from "@/lib/crm-security";
+import { CrmConnectionStatus, CrmDeliveryState, CrmProvider, LeadRecord } from "@/types";
+
+type SupabaseAdmin = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
+
+export type WorkspaceCrmConnectionRow = {
+  id: string;
+  workspace_id: string;
+  provider: CrmProvider;
+  user_id: string;
+  provider_user_id: string | null;
+  provider_user_name: string | null;
+  token_ciphertext: string | null;
+  token_iv: string | null;
+  token_tag: string | null;
+  token_type: string | null;
+  token_expires_at: string | null;
+  scopes: string[];
+  status: CrmConnectionStatus;
+  metadata_json: Record<string, unknown>;
+  connected_at: string;
+  disconnected_at: string | null;
+  last_synced_at: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WorkspaceCrmAssetRow = {
+  id: string;
+  workspace_id: string;
+  provider: CrmProvider;
+  connection_id: string | null;
+  asset_type: "crm_destination";
+  asset_id: string;
+  name: string | null;
+  metadata_json: Record<string, unknown>;
+  is_available: boolean;
+  is_selected: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CrmRoutingRuleRow = {
+  id: string;
+  workspace_id: string;
+  campaign_id: string | null;
+  provider: CrmProvider;
+  connection_id: string;
+  destination_asset_id: string | null;
+  rule_scope: "workspace_default" | "campaign_override";
+  priority: number;
+  is_active: boolean;
+  metadata_json: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LeadDeliveryRow = {
+  id: string;
+  workspace_id: string;
+  lead_id: string;
+  campaign_id: string | null;
+  provider: CrmProvider;
+  connection_id: string;
+  destination_asset_id: string | null;
+  state: CrmDeliveryState;
+  external_record_id: string | null;
+  attempts_count: number;
+  last_attempt_at: string | null;
+  last_error: string | null;
+  last_error_detail_json: Record<string, unknown>;
+  request_payload_json: Record<string, unknown>;
+  response_payload_json: Record<string, unknown>;
+  delivered_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type CrmDestinationSeed = {
+  assetId: string;
+  name: string;
+  metadata: Record<string, unknown>;
+  selected?: boolean;
+};
+
+type ValidatedConnection = {
+  providerUserId: string | null;
+  providerUserName: string | null;
+  tokenType?: string | null;
+  scopes: string[];
+  metadata: Record<string, unknown>;
+  destinations: CrmDestinationSeed[];
+};
+
+type DeliveryResult = {
+  externalRecordId: string | null;
+  requestPayload: Record<string, unknown>;
+  responsePayload: Record<string, unknown>;
+};
+
+const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce"];
+
+function getObjectRecord(value: unknown) {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function getString(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
+function getFirstString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+async function crmFetch<T>(url: string, init: RequestInit & { headers?: HeadersInit }, errorPrefix: string) {
+  const response = await fetch(url, init);
+  const raw = await response.text();
+  const data = raw
+    ? (() => {
+        try {
+          return JSON.parse(raw) as T;
+        } catch {
+          return { raw } as T;
+        }
+      })()
+    : ({} as T);
+  if (!response.ok) {
+    throw new Error(`${errorPrefix}: ${response.status} ${response.statusText}`);
+  }
+  return data;
+}
+
+async function validateGoHighLevelConnection({
+  accessToken,
+  locationId,
+}: {
+  accessToken: string;
+  locationId: string;
+}): Promise<ValidatedConnection> {
+  const details = await crmFetch<Record<string, unknown>>(
+    `https://services.leadconnectorhq.com/locations/${encodeURIComponent(locationId)}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Version: "2023-02-21",
+        Accept: "application/json",
+      },
+    },
+    "GoHighLevel connection failed",
+  );
+
+  const location = getObjectRecord(details.location ?? details);
+  const locationName = getFirstString(location.name, location.businessName, `Location ${locationId}`) || `Location ${locationId}`;
+
+  return {
+    providerUserId: getFirstString(location.id, locationId),
+    providerUserName: locationName,
+    tokenType: "Bearer",
+    scopes: ["contacts.write", "locations.readonly"],
+    metadata: {
+      validated_at: new Date().toISOString(),
+      location_id: locationId,
+      location_name: locationName,
+      account_details: location,
+    },
+    destinations: [
+      {
+        assetId: locationId,
+        name: `${locationName} contacts`,
+        metadata: {
+          destinationType: "location_contacts",
+          locationId,
+        },
+        selected: true,
+      },
+    ],
+  };
+}
+
+async function validateHubSpotConnection({
+  accessToken,
+}: {
+  accessToken: string;
+}): Promise<ValidatedConnection> {
+  const details = await crmFetch<Record<string, unknown>>(
+    "https://api.hubapi.com/account-info/v3/details",
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+      },
+    },
+    "HubSpot connection failed",
+  );
+
+  const portalId =
+    getFirstString(details.portalId, details.hubId) ||
+    (typeof details.portalId === "number" ? String(details.portalId) : null) ||
+    (typeof details.hubId === "number" ? String(details.hubId) : null) ||
+    "hubspot-account";
+  const uiDomain = getFirstString(details.uiDomain, details.timeZone);
+
+  return {
+    providerUserId: portalId,
+    providerUserName: uiDomain || `Portal ${portalId}`,
+    tokenType: "Bearer",
+    scopes: ["crm.objects.contacts.write"],
+    metadata: {
+      validated_at: new Date().toISOString(),
+      portal_id: portalId,
+      account_details: details,
+    },
+    destinations: [
+      {
+        assetId: "contacts",
+        name: "HubSpot contacts",
+        metadata: {
+          destinationType: "contacts",
+          objectType: "contacts",
+        },
+        selected: true,
+      },
+    ],
+  };
+}
+
+async function validateCrmConnection(input: {
+  provider: CrmProvider;
+  accessToken: string;
+  metadata?: Record<string, unknown>;
+}) {
+  switch (input.provider) {
+    case "gohighlevel": {
+      const locationId = getString(input.metadata?.locationId)?.trim();
+      if (!locationId) {
+        throw new Error("GoHighLevel requires a location ID.");
+      }
+      return validateGoHighLevelConnection({
+        accessToken: input.accessToken,
+        locationId,
+      });
+    }
+    case "hubspot":
+      return validateHubSpotConnection({ accessToken: input.accessToken });
+    default:
+      throw new Error(`${input.provider} is not available in this first CRM pass yet.`);
+  }
+}
+
+async function listCrmConnections(admin: SupabaseAdmin, workspaceId: string) {
+  const { data, error } = await admin
+    .from("workspace_provider_connections")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .in("provider", CRM_PROVIDERS)
+    .order("updated_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data || []) as WorkspaceCrmConnectionRow[];
+}
+
+async function listCrmDestinations(admin: SupabaseAdmin, workspaceId: string) {
+  const { data, error } = await admin
+    .from("workspace_provider_assets")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("asset_type", "crm_destination")
+    .in("provider", CRM_PROVIDERS)
+    .order("updated_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data || []) as WorkspaceCrmAssetRow[];
+}
+
+async function listCrmRoutingRules(admin: SupabaseAdmin, workspaceId: string) {
+  const { data, error } = await admin
+    .from("crm_routing_rules")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("is_active", true)
+    .order("priority", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return (data || []) as CrmRoutingRuleRow[];
+}
+
+async function listRecentLeadDeliveries(admin: SupabaseAdmin, workspaceId: string) {
+  const { data, error } = await admin
+    .from("lead_deliveries")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .order("updated_at", { ascending: false })
+    .limit(12);
+
+  if (error) throw new Error(error.message);
+  return (data || []) as LeadDeliveryRow[];
+}
+
+export async function getWorkspaceCrmState({
+  admin,
+  workspaceId,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+}) {
+  const [connections, destinations, routingRules, deliveries] = await Promise.all([
+    listCrmConnections(admin, workspaceId),
+    listCrmDestinations(admin, workspaceId),
+    listCrmRoutingRules(admin, workspaceId),
+    listRecentLeadDeliveries(admin, workspaceId),
+  ]);
+
+  const activeRoutingRule =
+    routingRules.find((rule) => rule.rule_scope === "workspace_default" && rule.is_active) || null;
+
+  return {
+    connections,
+    destinations,
+    routingRules,
+    activeRoutingRule,
+    deliveries,
+  };
+}
+
+export async function connectWorkspaceCrmProvider({
+  admin,
+  workspaceId,
+  userId,
+  provider,
+  accessToken,
+  metadata,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+  userId: string;
+  provider: CrmProvider;
+  accessToken: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const validated = await validateCrmConnection({
+    provider,
+    accessToken,
+    metadata,
+  });
+  const encrypted = encryptCrmSecret(accessToken);
+  const existingConnections = await listCrmConnections(admin, workspaceId);
+  const activeConnection = existingConnections.find((connection) => connection.provider === provider && connection.is_active) || null;
+
+  if (activeConnection) {
+    const { error } = await admin
+      .from("workspace_provider_connections")
+      .update({
+        provider_user_id: validated.providerUserId,
+        provider_user_name: validated.providerUserName,
+        token_ciphertext: encrypted.ciphertext,
+        token_iv: encrypted.iv,
+        token_tag: encrypted.tag,
+        token_type: validated.tokenType || "Bearer",
+        scopes: validated.scopes,
+        status: "connected",
+        metadata_json: {
+          ...validated.metadata,
+          ...getObjectRecord(metadata),
+        },
+        disconnected_at: null,
+        last_synced_at: new Date().toISOString(),
+        is_active: true,
+      })
+      .eq("id", activeConnection.id);
+
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await admin.from("workspace_provider_connections").insert({
+      workspace_id: workspaceId,
+      provider,
+      user_id: userId,
+      provider_user_id: validated.providerUserId,
+      provider_user_name: validated.providerUserName,
+      token_ciphertext: encrypted.ciphertext,
+      token_iv: encrypted.iv,
+      token_tag: encrypted.tag,
+      token_type: validated.tokenType || "Bearer",
+      scopes: validated.scopes,
+      status: "connected",
+      metadata_json: {
+        ...validated.metadata,
+        ...getObjectRecord(metadata),
+      },
+      is_active: true,
+      last_synced_at: new Date().toISOString(),
+    });
+
+    if (error) throw new Error(error.message);
+  }
+
+  const refreshedConnections = await listCrmConnections(admin, workspaceId);
+  const savedConnection = refreshedConnections.find((connection) => connection.provider === provider && connection.is_active);
+  if (!savedConnection) {
+    throw new Error(`Could not save ${provider} connection.`);
+  }
+
+  const { error: clearAssetsError } = await admin
+    .from("workspace_provider_assets")
+    .delete()
+    .eq("workspace_id", workspaceId)
+    .eq("provider", provider)
+    .eq("asset_type", "crm_destination");
+
+  if (clearAssetsError) throw new Error(clearAssetsError.message);
+
+  if (validated.destinations.length) {
+    const { error: destinationsError } = await admin.from("workspace_provider_assets").insert(
+      validated.destinations.map((destination) => ({
+        workspace_id: workspaceId,
+        provider,
+        connection_id: savedConnection.id,
+        asset_type: "crm_destination",
+        asset_id: destination.assetId,
+        name: destination.name,
+        metadata_json: destination.metadata,
+        is_available: true,
+        is_selected: Boolean(destination.selected),
+      })),
+    );
+    if (destinationsError) throw new Error(destinationsError.message);
+  }
+
+  return savedConnection;
+}
+
+export async function disconnectWorkspaceCrmProvider({
+  admin,
+  workspaceId,
+  provider,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+  provider: CrmProvider;
+}) {
+  const connections = await listCrmConnections(admin, workspaceId);
+  const activeConnection = connections.find((connection) => connection.provider === provider && connection.is_active) || null;
+  if (!activeConnection) return;
+
+  const { error: connectionError } = await admin
+    .from("workspace_provider_connections")
+    .update({
+      status: "disconnected",
+      is_active: false,
+      disconnected_at: new Date().toISOString(),
+    })
+    .eq("id", activeConnection.id);
+
+  if (connectionError) throw new Error(connectionError.message);
+
+  const { error: assetsError } = await admin
+    .from("workspace_provider_assets")
+    .delete()
+    .eq("workspace_id", workspaceId)
+    .eq("provider", provider)
+    .eq("asset_type", "crm_destination");
+
+  if (assetsError) throw new Error(assetsError.message);
+
+  const { error: routingError } = await admin
+    .from("crm_routing_rules")
+    .update({ is_active: false })
+    .eq("workspace_id", workspaceId)
+    .eq("provider", provider);
+
+  if (routingError) throw new Error(routingError.message);
+}
+
+export async function saveWorkspaceCrmRoutingRule({
+  admin,
+  workspaceId,
+  campaignId,
+  provider,
+  destinationAssetId,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+  campaignId?: string | null;
+  provider: CrmProvider;
+  destinationAssetId: string;
+}) {
+  const connections = await listCrmConnections(admin, workspaceId);
+  const connection = connections.find((entry) => entry.provider === provider && entry.is_active);
+  if (!connection) {
+    throw new Error(`Connect ${provider} before saving routing.`);
+  }
+
+  const ruleScope = campaignId ? "campaign_override" : "workspace_default";
+  const query = admin
+    .from("crm_routing_rules")
+    .update({ is_active: false })
+    .eq("workspace_id", workspaceId)
+    .eq("rule_scope", ruleScope);
+
+  if (campaignId) {
+    const { error } = await query.eq("campaign_id", campaignId);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await query.is("campaign_id", null);
+    if (error) throw new Error(error.message);
+  }
+
+  const { error: insertError } = await admin.from("crm_routing_rules").insert({
+    workspace_id: workspaceId,
+    campaign_id: campaignId || null,
+    provider,
+    connection_id: connection.id,
+    destination_asset_id: destinationAssetId,
+    rule_scope: ruleScope,
+    priority: campaignId ? 10 : 100,
+    is_active: true,
+    metadata_json: {},
+  });
+  if (insertError) throw new Error(insertError.message);
+}
+
+export async function resolveCrmRoutingRule({
+  admin,
+  workspaceId,
+  campaignId,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+  campaignId?: string | null;
+}) {
+  const rules = await listCrmRoutingRules(admin, workspaceId);
+  return (
+    (campaignId ? rules.find((rule) => rule.rule_scope === "campaign_override" && rule.campaign_id === campaignId) : null) ||
+    rules.find((rule) => rule.rule_scope === "workspace_default" && !rule.campaign_id) ||
+    null
+  );
+}
+
+async function deliverLeadToGoHighLevel({
+  connection,
+  destination,
+  lead,
+}: {
+  connection: WorkspaceCrmConnectionRow;
+  destination: WorkspaceCrmAssetRow | null;
+  lead: LeadRecord;
+}): Promise<DeliveryResult> {
+  const token = decryptCrmSecret(connection);
+  if (!token) throw new Error("GoHighLevel token is unavailable.");
+
+  const locationId =
+    getFirstString(destination?.metadata_json.locationId, connection.metadata_json.location_id, destination?.asset_id) ||
+    "";
+  if (!locationId) throw new Error("GoHighLevel location ID is missing.");
+
+  const payload = {
+    locationId,
+    firstName: lead.first_name || undefined,
+    lastName: lead.last_name || undefined,
+    name: lead.full_name || lead.name || undefined,
+    email: lead.email || undefined,
+    phone: lead.phone || undefined,
+    companyName: lead.company_name || undefined,
+    source: "SideKick",
+    tags: ["sidekick"],
+  };
+
+  const response = await crmFetch<Record<string, unknown>>(
+    "https://services.leadconnectorhq.com/contacts/upsert",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Version: "2023-02-21",
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "GoHighLevel lead delivery failed",
+  );
+
+  const contact = getObjectRecord(response.contact);
+  return {
+    externalRecordId: getFirstString(contact.id),
+    requestPayload: payload,
+    responsePayload: response,
+  };
+}
+
+async function deliverLeadToHubSpot({
+  connection,
+  lead,
+}: {
+  connection: WorkspaceCrmConnectionRow;
+  lead: LeadRecord;
+}): Promise<DeliveryResult> {
+  const token = decryptCrmSecret(connection);
+  if (!token) throw new Error("HubSpot token is unavailable.");
+
+  const properties = {
+    ...(lead.email ? { email: lead.email } : {}),
+    ...(lead.first_name ? { firstname: lead.first_name } : {}),
+    ...(lead.last_name ? { lastname: lead.last_name } : {}),
+    ...(lead.phone ? { phone: lead.phone } : {}),
+    ...(lead.company_name ? { company: lead.company_name } : {}),
+    ...(lead.job_title ? { jobtitle: lead.job_title } : {}),
+  };
+
+  if (!Object.keys(properties).length) {
+    throw new Error("HubSpot delivery needs at least one mapped contact property.");
+  }
+
+  if (lead.email) {
+    const payload = {
+      inputs: [
+        {
+          id: lead.email,
+          idProperty: "email",
+          properties,
+          objectWriteTraceId: lead.id,
+        },
+      ],
+    };
+    const response = await crmFetch<Record<string, unknown>>(
+      "https://api.hubapi.com/crm/v3/objects/contacts/batch/upsert",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+      },
+      "HubSpot lead delivery failed",
+    );
+    const firstResult = Array.isArray(response.results) ? getObjectRecord(response.results[0]) : {};
+    return {
+      externalRecordId: getFirstString(firstResult.id),
+      requestPayload: payload,
+      responsePayload: response,
+    };
+  }
+
+  const payload = { properties };
+  const response = await crmFetch<Record<string, unknown>>(
+    "https://api.hubapi.com/crm/v3/objects/contacts",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "HubSpot lead delivery failed",
+  );
+  return {
+    externalRecordId: getFirstString(response.id),
+    requestPayload: payload,
+    responsePayload: response,
+  };
+}
+
+async function deliverLeadViaProvider({
+  connection,
+  destination,
+  lead,
+}: {
+  connection: WorkspaceCrmConnectionRow;
+  destination: WorkspaceCrmAssetRow | null;
+  lead: LeadRecord;
+}) {
+  switch (connection.provider) {
+    case "gohighlevel":
+      return deliverLeadToGoHighLevel({ connection, destination, lead });
+    case "hubspot":
+      return deliverLeadToHubSpot({ connection, lead });
+    default:
+      throw new Error(`${connection.provider} delivery is not implemented yet.`);
+  }
+}
+
+export async function queueLeadForCrmDelivery({
+  admin,
+  lead,
+}: {
+  admin: SupabaseAdmin;
+  lead: LeadRecord;
+}) {
+  if (!lead.workspace_id) return null;
+  const routingRule = await resolveCrmRoutingRule({
+    admin,
+    workspaceId: lead.workspace_id,
+    campaignId: lead.campaign_id || null,
+  });
+
+  if (!routingRule) return null;
+
+  const { data: existing } = await admin
+    .from("lead_deliveries")
+    .select("*")
+    .eq("lead_id", lead.id)
+    .eq("provider", routingRule.provider)
+    .eq("connection_id", routingRule.connection_id)
+    .maybeSingle();
+
+  const delivery = existing
+    ? (existing as LeadDeliveryRow)
+    : (
+        await admin
+          .from("lead_deliveries")
+          .insert({
+            workspace_id: lead.workspace_id,
+            lead_id: lead.id,
+            campaign_id: lead.campaign_id || null,
+            provider: routingRule.provider,
+            connection_id: routingRule.connection_id,
+            destination_asset_id: routingRule.destination_asset_id,
+            state: "pending",
+            last_error_detail_json: {},
+            request_payload_json: {},
+            response_payload_json: {},
+          })
+          .select("*")
+          .single()
+      ).data as LeadDeliveryRow;
+
+  if (!delivery) return null;
+  return processLeadCrmDelivery({ admin, deliveryId: delivery.id, lead });
+}
+
+export async function processLeadCrmDelivery({
+  admin,
+  deliveryId,
+  lead: providedLead,
+}: {
+  admin: SupabaseAdmin;
+  deliveryId: string;
+  lead?: LeadRecord;
+}) {
+  const { data: deliveryData, error: deliveryError } = await admin
+    .from("lead_deliveries")
+    .select("*")
+    .eq("id", deliveryId)
+    .single();
+  if (deliveryError) throw new Error(deliveryError.message);
+  const delivery = deliveryData as LeadDeliveryRow;
+
+  const lead = providedLead || (
+    (await admin.from("leads").select("*").eq("id", delivery.lead_id).single()).data as LeadRecord
+  );
+  const { data: connectionData } = await admin
+    .from("workspace_provider_connections")
+    .select("*")
+    .eq("id", delivery.connection_id)
+    .single();
+  const connection = connectionData as WorkspaceCrmConnectionRow;
+  const destination = delivery.destination_asset_id
+    ? (
+        await admin
+          .from("workspace_provider_assets")
+          .select("*")
+          .eq("id", delivery.destination_asset_id)
+          .maybeSingle()
+      ).data as WorkspaceCrmAssetRow | null
+    : null;
+
+  const attemptNumber = (delivery.attempts_count || 0) + 1;
+  const attemptedAt = new Date().toISOString();
+
+  try {
+    const result = await deliverLeadViaProvider({ connection, destination, lead });
+    await admin.from("lead_delivery_attempts").insert({
+      delivery_id: delivery.id,
+      attempt_number: attemptNumber,
+      state: "delivered",
+      http_status: 200,
+      request_payload_json: result.requestPayload,
+      response_payload_json: result.responsePayload,
+    });
+    await admin
+      .from("lead_deliveries")
+      .update({
+        state: "delivered",
+        external_record_id: result.externalRecordId,
+        attempts_count: attemptNumber,
+        last_attempt_at: attemptedAt,
+        delivered_at: attemptedAt,
+        last_error: null,
+        last_error_detail_json: {},
+        request_payload_json: result.requestPayload,
+        response_payload_json: result.responsePayload,
+      })
+      .eq("id", delivery.id);
+    return { ok: true as const };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "CRM delivery failed.";
+    await admin.from("lead_delivery_attempts").insert({
+      delivery_id: delivery.id,
+      attempt_number: attemptNumber,
+      state: "failed",
+      request_payload_json: {},
+      response_payload_json: {},
+      error_message: message,
+    });
+    await admin
+      .from("lead_deliveries")
+      .update({
+        state: "failed",
+        attempts_count: attemptNumber,
+        last_attempt_at: attemptedAt,
+        last_error: message,
+        last_error_detail_json: { message },
+      })
+      .eq("id", delivery.id);
+    return { ok: false as const, error: message };
+  }
+}

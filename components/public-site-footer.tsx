@@ -23,9 +23,6 @@ export function PublicSiteFooter() {
           <Link href="/pricing" className="font-medium transition hover:text-[var(--public-text)]">
             Pricing
           </Link>
-          <Link href="/product/templates" className="font-medium transition hover:text-[var(--public-text)]">
-            Templates
-          </Link>
           <Link href="/faq" className="font-medium transition hover:text-[var(--public-text)]">
             FAQ
           </Link>

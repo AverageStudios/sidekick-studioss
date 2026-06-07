@@ -12,6 +12,7 @@ import {
   type WorkspaceProviderAssetRow,
   type WorkspaceProviderConnectionRow,
 } from "@/lib/meta-integration";
+import { queueLeadForCrmDelivery } from "@/lib/crm-integration";
 import { coerceFieldAnswers, formatLeadSearchValue, getCanonicalLeadStatus, type CanonicalLeadStatus } from "@/lib/leads";
 import { CampaignAdType, LeadRecord } from "@/types";
 
@@ -670,6 +671,19 @@ async function ingestMetaLeadDetails({
     formId: leadDetails.form_id || null,
     pageId,
   });
+
+  if (upserted.created) {
+    await queueLeadForCrmDelivery({
+      admin,
+      lead: upserted.lead,
+    }).catch((error) => {
+      console.error("[crm delivery] could not queue lead after Meta ingestion", {
+        workspaceId,
+        metaLeadId: leadDetails.id,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    });
+  }
 
   return upserted;
 }

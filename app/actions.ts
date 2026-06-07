@@ -51,6 +51,13 @@ import {
   getEmptyAdminTemplateFormData,
   getEmptyLeadFormSettings,
 } from "@/lib/admin-template-form";
+import {
+  connectWorkspaceCrmProvider,
+  disconnectWorkspaceCrmProvider,
+  processLeadCrmDelivery,
+  queueLeadForCrmDelivery,
+  saveWorkspaceCrmRoutingRule,
+} from "@/lib/crm-integration";
 
 const authSchema = z.object({
   email: z.string().email(),
@@ -1941,11 +1948,12 @@ export async function submitLeadAction(formData: FormData) {
     serviceInterest: String(formData.get("serviceInterest") || ""),
     message: String(formData.get("message") || ""),
   };
+  const successRedirect = payload.funnelSlug ? `/f/${payload.funnelSlug}?submitted=1` : "/?submitted=1";
 
   if (isSupabaseServerConfigured()) {
     const admin = createSupabaseAdminClient();
     if (!admin) {
-      redirect("/leads?submitted=1");
+      redirect(successRedirect);
     }
 
     const campaignResult = await admin
@@ -1986,13 +1994,13 @@ export async function submitLeadAction(formData: FormData) {
       status: "new",
     };
 
-    const insertResult = await admin.from("leads").insert(leadInsertPayload);
+    const insertResult = await admin.from("leads").insert(leadInsertPayload).select("*").single();
     if (insertResult.error) {
       const missingColumnMatch = insertResult.error.message.match(/Could not find the '([^']+)' column of 'leads'/i);
       if (!missingColumnMatch) {
         throw new Error(insertResult.error.message);
       }
-      await admin.from("leads").insert({
+      const fallbackInsert = await admin.from("leads").insert({
         user_id: payload.userId,
         workspace_id: workspaceId,
         campaign_id: payload.campaignId,
@@ -2003,6 +2011,18 @@ export async function submitLeadAction(formData: FormData) {
         service_interest: payload.serviceInterest,
         message: payload.message,
         status: "new",
+      }).select("*").single();
+      if (fallbackInsert.error) {
+        throw new Error(fallbackInsert.error.message);
+      }
+      await queueLeadForCrmDelivery({
+        admin,
+        lead: fallbackInsert.data as typeof fallbackInsert.data & { id: string },
+      });
+    } else if (insertResult.data) {
+      await queueLeadForCrmDelivery({
+        admin,
+        lead: insertResult.data as typeof insertResult.data & { id: string },
       });
     }
 
@@ -2022,7 +2042,7 @@ export async function submitLeadAction(formData: FormData) {
     }
   }
 
-  redirect("/leads?submitted=1");
+  redirect(successRedirect);
 }
 
 export async function updateLeadStatusAction(formData: FormData) {
@@ -2637,6 +2657,188 @@ export async function disconnectMetaIntegrationAction() {
 
   revalidatePath("/workspace/settings");
   redirect("/workspace/settings?section=integrations&saved=1");
+}
+
+export async function saveCrmConnectionAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!isSupabaseServerConfigured()) {
+    redirect("/integrations?error=Supabase server access is not configured.");
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect("/integrations?error=Supabase server access is not configured.");
+  }
+
+  let workspaceContext;
+  try {
+    workspaceContext = await ensureWorkspaceContextForUser(user);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Workspace could not be loaded.";
+    redirect(`/integrations?error=${encodeURIComponent(msg)}`);
+  }
+
+  const workspaceId = workspaceContext?.activeWorkspace.id;
+  if (!workspaceId) {
+    redirect("/integrations?error=No active workspace found.");
+  }
+
+  const provider = String(formData.get("provider") || "").trim();
+  const accessToken = String(formData.get("accessToken") || "").trim();
+  const locationId = String(formData.get("locationId") || "").trim();
+
+  if (!provider || !accessToken) {
+    redirect("/integrations?error=Provider and access token are required.");
+  }
+
+  try {
+    await connectWorkspaceCrmProvider({
+      admin,
+      workspaceId,
+      userId: user.id,
+      provider: provider as "gohighlevel" | "hubspot",
+      accessToken,
+      metadata: locationId ? { locationId } : {},
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not save CRM connection.";
+    redirect(`/integrations?error=${encodeURIComponent(message)}`);
+  }
+
+  revalidatePath("/integrations");
+  revalidatePath("/dashboard");
+  revalidatePath("/performance");
+  redirect(`/integrations?saved=${encodeURIComponent(`${provider} connected`)}`);
+}
+
+export async function disconnectCrmConnectionAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!isSupabaseServerConfigured()) {
+    redirect("/integrations?error=Supabase server access is not configured.");
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect("/integrations?error=Supabase server access is not configured.");
+  }
+
+  let workspaceContext;
+  try {
+    workspaceContext = await ensureWorkspaceContextForUser(user);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Workspace could not be loaded.";
+    redirect(`/integrations?error=${encodeURIComponent(msg)}`);
+  }
+
+  const workspaceId = workspaceContext?.activeWorkspace.id;
+  const provider = String(formData.get("provider") || "").trim();
+  if (!workspaceId || !provider) {
+    redirect("/integrations?error=Missing workspace or provider.");
+  }
+
+  try {
+    await disconnectWorkspaceCrmProvider({
+      admin,
+      workspaceId,
+      provider: provider as "gohighlevel" | "hubspot",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not disconnect CRM.";
+    redirect(`/integrations?error=${encodeURIComponent(message)}`);
+  }
+
+  revalidatePath("/integrations");
+  redirect(`/integrations?saved=${encodeURIComponent(`${provider} disconnected`)}`);
+}
+
+export async function saveCrmRoutingAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!isSupabaseServerConfigured()) {
+    redirect("/integrations?error=Supabase server access is not configured.");
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect("/integrations?error=Supabase server access is not configured.");
+  }
+
+  let workspaceContext;
+  try {
+    workspaceContext = await ensureWorkspaceContextForUser(user);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Workspace could not be loaded.";
+    redirect(`/integrations?error=${encodeURIComponent(msg)}`);
+  }
+
+  const workspaceId = workspaceContext?.activeWorkspace.id;
+  const routeTarget = String(formData.get("routeTarget") || "").trim();
+  const [provider, destinationAssetId] = routeTarget.split("::");
+  if (!workspaceId || !provider || !destinationAssetId) {
+    redirect("/integrations?error=Choose a CRM destination before saving routing.");
+  }
+
+  try {
+    await saveWorkspaceCrmRoutingRule({
+      admin,
+      workspaceId,
+      provider: provider as "gohighlevel" | "hubspot",
+      destinationAssetId,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not save routing.";
+    redirect(`/integrations?error=${encodeURIComponent(message)}`);
+  }
+
+  revalidatePath("/integrations");
+  revalidatePath("/dashboard");
+  redirect("/integrations?saved=Routing%20saved");
+}
+
+export async function retryCrmDeliveryAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!isSupabaseServerConfigured()) {
+    redirect("/integrations?error=Supabase server access is not configured.");
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect("/integrations?error=Supabase server access is not configured.");
+  }
+
+  const deliveryId = String(formData.get("deliveryId") || "").trim();
+  if (!deliveryId) {
+    redirect("/integrations?error=Delivery ID is required.");
+  }
+
+  try {
+    await processLeadCrmDelivery({
+      admin,
+      deliveryId,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not retry delivery.";
+    redirect(`/integrations?error=${encodeURIComponent(message)}`);
+  }
+
+  revalidatePath("/integrations");
+  revalidatePath("/performance");
+  redirect("/integrations?saved=Delivery%20retried");
 }
 
 export async function completeOnboardingAction(formData: FormData) {

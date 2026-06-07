@@ -26,6 +26,7 @@ export const env = {
   metaWebhookVerifyToken: readEnv("META_WEBHOOK_VERIFY_TOKEN"),
   metaGraphApiVersion: readEnv("META_GRAPH_API_VERSION") || "v25.0",
   metaTokenEncryptionKey: readEnv("META_TOKEN_ENCRYPTION_KEY"),
+  crmTokenEncryptionKey: readEnv("CRM_TOKEN_ENCRYPTION_KEY"),
 } as const;
 
 export function getSupabasePublicEnvStatus() {

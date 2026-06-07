@@ -30,6 +30,9 @@ export type TemplateLibraryStatus = "active" | "archived";
 
 export type UserRole = "admin" | "user";
 export type TemplateStatus = "draft" | "published" | "archived";
+export type CrmProvider = "gohighlevel" | "hubspot" | "pipedrive" | "salesforce";
+export type CrmConnectionStatus = "connected" | "expired" | "revoked" | "disconnected" | "error";
+export type CrmDeliveryState = "pending" | "delivered" | "failed" | "retrying" | "skipped";
 export type LeadStatus =
   | "new"
   | "contacted"
