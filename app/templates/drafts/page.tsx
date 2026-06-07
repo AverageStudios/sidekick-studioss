@@ -26,7 +26,7 @@ export default async function DraftCampaignsPage() {
   const draftCampaigns = snapshot.campaigns.filter((campaign) => campaign.status === "draft");
 
   return (
-    <AppShell currentPath="/templates">
+    <AppShell currentPath="/campaigns">
       <div className="space-y-10">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -39,7 +39,7 @@ export default async function DraftCampaignsPage() {
 
           <div className="flex gap-3">
             <Button asChild variant="outline" className="rounded-[18px] px-5">
-              <Link href="/templates">Back to campaigns</Link>
+              <Link href="/campaigns">Back to campaigns</Link>
             </Button>
             <Button asChild className="rounded-[18px] px-5">
               <Link href="/templates/new">New Campaign</Link>

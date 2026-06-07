@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, Building2, ChevronDown, CircleHelp, LayoutDashboard, LayoutGrid, LayoutTemplate, LifeBuoy, LogOut, Plus, Shield, SlidersHorizontal, UserCircle2, Users } from "lucide-react";
+import { BarChart3, Building2, ChevronDown, CircleHelp, LayoutDashboard, LayoutGrid, LayoutTemplate, LifeBuoy, LogOut, Megaphone, Plus, Plug, Shield, SlidersHorizontal, UserCircle2, Users } from "lucide-react";
 import { ConfigNotice } from "@/components/config-notice";
 import { InitialsAvatar } from "@/components/initials-avatar";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
@@ -15,9 +15,10 @@ import {
 
 const navItems = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard },
-  { href: "/templates", label: "Campaigns", icon: LayoutTemplate },
-  { href: "/leads", label: "Leads", icon: Users },
+  { href: "/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/performance", label: "Performance", icon: BarChart3 },
+  { href: "/templates", label: "Templates", icon: LayoutTemplate },
+  { href: "/integrations", label: "Integrations", icon: Plug },
 ];
 
 export async function AppShell({

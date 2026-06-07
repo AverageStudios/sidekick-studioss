@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, Clock3, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, RefreshCcw, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
@@ -8,7 +8,6 @@ import { Card } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
 import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
 import { getDashboardSnapshot, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
-import { getLeadDisplayName, getLeadSubmittedAt } from "@/lib/leads";
 import { getWorkspaceLeadSyncHealth } from "@/lib/meta-leads";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { formatDate } from "@/lib/utils";
@@ -61,10 +60,6 @@ function joinNames(values: string[]) {
   if (values.length === 1) return values[0];
   if (values.length === 2) return `${values[0]} and ${values[1]}`;
   return `${values[0]}, ${values[1]}, and ${values.length - 2} more`;
-}
-
-function getCampaignSourceLabel(campaignName?: string | null) {
-  return campaignName?.trim() || "Unknown campaign";
 }
 
 function buildAttentionItems({
@@ -133,9 +128,9 @@ function buildAttentionItems({
 
     items.unshift({
       key: "lead-sync",
-      title: "Sync issue",
+      title: "Capture sync issue",
       detail,
-      href: "/leads",
+      href: "/integrations",
       tone: "danger",
     });
   }
@@ -167,7 +162,7 @@ function DashboardConnectState() {
                   Meta is not connected yet
                 </h2>
                 <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-[15px]">
-                  Connect Meta to unlock live campaign status and recent leads.
+                  Connect Meta to unlock live campaign status, campaign capture, and CRM handoff readiness.
                 </p>
               </div>
 
@@ -175,7 +170,7 @@ function DashboardConnectState() {
                 <div className="flex items-start gap-3 rounded-[22px] bg-[var(--soft-panel)] px-4 py-4">
                   <Sparkles className="mt-0.5 h-4 w-4 text-[var(--brand)]" />
                   <p className="text-sm leading-6 text-[var(--muted-strong)]">
-                    Campaign status, attention items, and recent leads.
+                    Campaign status, capture readiness, and integration health.
                   </p>
                 </div>
                 <div className="flex items-start gap-3 rounded-[22px] bg-[var(--soft-panel)] px-4 py-4">
@@ -238,13 +233,10 @@ export default async function DashboardPage({
 
   const campaigns = snapshot.campaigns.slice().sort((left, right) => +new Date(right.updated_at) - +new Date(left.updated_at));
   const recentCampaigns = campaigns.slice(0, 5);
-  const recentLeads = snapshot.recentLeads.slice(0, 5);
-
   const activeCampaigns = campaigns.filter((campaign) => getCampaignLifecycleState(campaign) === "active");
   const pausedCampaigns = campaigns.filter((campaign) => getCampaignLifecycleState(campaign) === "paused");
   const draftCampaigns = campaigns.filter((campaign) => getCampaignLifecycleState(campaign) === "draft");
   const attentionItems = buildAttentionItems({ campaigns, leadSyncHealth });
-  const campaignMap = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
   return (
     <AppShell currentPath="/dashboard">
       {success ? (
@@ -258,14 +250,14 @@ export default async function DashboardPage({
           variant="plain"
           badge="Home"
           title="Operational overview"
-          description="A compact view of what is active, what needs attention, and which leads just came in."
+          description="A compact view of what is active, what needs attention, and whether campaign capture is ready for CRM handoff."
           actions={
             <>
               <Button asChild variant="outline">
-                <Link href="/leads">Open leads</Link>
+                <Link href="/integrations">Open integrations</Link>
               </Button>
               <Button asChild>
-                <Link href="/templates">Launch campaign</Link>
+                <Link href="/templates">Browse templates</Link>
               </Button>
             </>
           }
@@ -279,7 +271,7 @@ export default async function DashboardPage({
           />
           <StatCard label="Paused Campaigns" value={pausedCampaigns.length} helper="On hold" />
           <StatCard label="Draft Campaigns" value={draftCampaigns.length} helper="Saved for later" />
-          <StatCard label="New Leads" value={snapshot.newLeads} helper="Unread leads" />
+          <StatCard label="Captured Inquiries" value={snapshot.newLeads} helper="Campaign intake" />
         </section>
 
         <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
@@ -333,7 +325,7 @@ export default async function DashboardPage({
                     Start from a template and this section will show your active, paused, and draft campaigns.
                   </p>
                   <Button asChild variant="outline" className="mt-5">
-                    <Link href="/templates">Browse campaigns</Link>
+                    <Link href="/templates">Browse templates</Link>
                   </Button>
                 </div>
               )}
@@ -403,47 +395,53 @@ export default async function DashboardPage({
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
-                Recent leads
+                CRM handoff
               </p>
               <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
-                Latest incoming leads
+                Keep lead handling outside SideKick
               </h2>
             </div>
-            <Link href="/leads" className="text-sm font-medium text-[var(--brand)]">
-              View all
+            <Link href="/integrations" className="text-sm font-medium text-[var(--brand)]">
+              Open hub
             </Link>
           </div>
 
-          <div className="mt-5 space-y-3">
-            {recentLeads.length ? (
-              recentLeads.map((lead) => {
-                const campaign = lead.campaign_id ? campaignMap.get(lead.campaign_id) : null;
-                return (
-                  <div
-                    key={lead.id}
-                    className="flex flex-col gap-3 rounded-[22px] border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-[var(--ink)]">{getLeadDisplayName(lead)}</p>
-                      <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                        {getCampaignSourceLabel(campaign?.name)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-[var(--muted)]">
-                      <Clock3 className="h-4 w-4" />
-                      <span>{formatRelativeTime(getLeadSubmittedAt(lead))}</span>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="rounded-[24px] border border-dashed border-[var(--line)] px-5 py-10 text-center">
-                <p className="text-base font-medium text-[var(--ink)]">No leads yet</p>
-                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
-                  Once Meta starts sending inquiries, the newest leads will appear here in a lightweight list.
-                </p>
+          <div className="mt-5 grid gap-3 lg:grid-cols-3">
+            <div className="rounded-[22px] border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-4">
+              <div className="flex items-center gap-2">
+                {leadSyncHealth?.canReadLeads ? (
+                  <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600" />
+                ) : (
+                  <AlertTriangle className="h-4.5 w-4.5 text-amber-600" />
+                )}
+                <p className="text-sm font-semibold text-[var(--ink)]">Capture source</p>
               </div>
-            )}
+              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                {leadSyncHealth?.canReadLeads
+                  ? "Meta lead capture is connected and ready to feed the delivery layer."
+                  : "Meta capture still needs attention before reliable CRM handoff can happen."}
+              </p>
+            </div>
+
+            <div className="rounded-[22px] border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-4">
+              <div className="flex items-center gap-2">
+                <RefreshCcw className="h-4.5 w-4.5 text-[var(--brand)]" />
+                <p className="text-sm font-semibold text-[var(--ink)]">Routing direction</p>
+              </div>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                Workspace-level CRM routing replaces the old internal Leads inbox as the main handling path.
+              </p>
+            </div>
+
+            <div className="rounded-[22px] border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-4">
+              <div className="flex items-center gap-2">
+                <Users className="h-4.5 w-4.5 text-[var(--brand)]" />
+                <p className="text-sm font-semibold text-[var(--ink)]">Captured inquiries</p>
+              </div>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                {snapshot.newLeads} new captured inquir{snapshot.newLeads === 1 ? "y" : "ies"} currently tracked for campaign reporting, not inbox management.
+              </p>
+            </div>
           </div>
         </Card>
       </div>
