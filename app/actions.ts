@@ -56,6 +56,7 @@ import {
   disconnectWorkspaceCrmProvider,
   processLeadCrmDelivery,
   queueLeadForCrmDelivery,
+  retryFailedCrmDeliveriesForWorkspace,
   saveWorkspaceCrmRoutingRule,
 } from "@/lib/crm-integration";
 
@@ -2843,6 +2844,54 @@ export async function retryCrmDeliveryAction(formData: FormData) {
   revalidatePath("/workspace/settings");
   revalidatePath("/performance");
   redirect("/workspace/settings?section=integrations&saved=Delivery%20retried");
+}
+
+export async function retryFailedCrmDeliveriesAction() {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!isSupabaseServerConfigured()) {
+    redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");
+  }
+
+  let workspaceContext;
+  try {
+    workspaceContext = await ensureWorkspaceContextForUser(user);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Workspace could not be loaded.";
+    redirect(`/workspace/settings?section=integrations&error=${encodeURIComponent(msg)}`);
+  }
+
+  const workspaceId = workspaceContext?.activeWorkspace.id;
+  if (!workspaceId) {
+    redirect("/workspace/settings?section=integrations&error=No%20active%20workspace%20found.");
+  }
+
+  try {
+    const result = await retryFailedCrmDeliveriesForWorkspace({
+      admin,
+      workspaceId,
+    });
+    revalidatePath("/workspace/settings");
+    revalidatePath("/performance");
+    redirect(
+      `/workspace/settings?section=integrations&saved=${encodeURIComponent(
+        result.retried
+          ? `Retried ${result.retried} failed CRM ${result.retried === 1 ? "delivery" : "deliveries"}`
+          : "No failed CRM deliveries were waiting to retry",
+      )}`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not retry failed CRM deliveries.";
+    redirect(`/workspace/settings?section=integrations&error=${encodeURIComponent(message)}`);
+  }
 }
 
 export async function completeOnboardingAction(formData: FormData) {

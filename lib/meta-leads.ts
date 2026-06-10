@@ -85,6 +85,7 @@ type CampaignLeadMapping = {
   campaignId: string;
   campaignName: string;
   campaignUserId: string;
+  templateId: string | null;
   adType: CampaignAdType | null;
   metaCampaignId: string | null;
   metaAdSetId: string | null;
@@ -241,6 +242,7 @@ async function loadCampaignLeadMappings(admin: SupabaseAdmin, workspaceId: strin
     "user_id",
     "workspace_id",
     "name",
+    "template_id",
     "meta_campaign_id",
     "meta_adset_id",
     "meta_ad_id",
@@ -323,6 +325,7 @@ async function loadCampaignLeadMappings(admin: SupabaseAdmin, workspaceId: strin
       campaignId,
       campaignName: String(campaign.name || "Campaign"),
       campaignUserId: String(campaign.user_id || ""),
+      templateId: typeof campaign.template_id === "string" ? campaign.template_id : null,
       adType:
         typeof snapshotSelection.adType === "string"
           ? (snapshotSelection.adType as CampaignAdType)
@@ -672,16 +675,24 @@ async function ingestMetaLeadDetails({
     pageId,
   });
 
-  if (upserted.created) {
-    await queueLeadForCrmDelivery({
-      admin,
-      lead: upserted.lead,
-    }).catch((error) => {
-      console.error("[crm delivery] could not queue lead after Meta ingestion", {
-        workspaceId,
-        metaLeadId: leadDetails.id,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
+  const queueResult = await queueLeadForCrmDelivery({
+    admin,
+    lead: upserted.lead,
+  }).catch((error) => {
+    console.error("[crm delivery] could not queue lead after Meta ingestion", {
+      workspaceId,
+      metaLeadId: leadDetails.id,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    return null;
+  });
+
+  if (queueResult && !queueResult.ok && "skipped" in queueResult && queueResult.skipped) {
+    console.warn("[crm delivery] Meta lead captured without active CRM handoff", {
+      workspaceId,
+      metaLeadId: leadDetails.id,
+      campaignId: matchedCampaign?.campaignId || null,
+      reason: queueResult.error,
     });
   }
 

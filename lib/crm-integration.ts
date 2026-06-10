@@ -1,7 +1,15 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { decryptCrmSecret, decryptEncryptedSecret, encryptCrmSecret } from "@/lib/crm-security";
 import { env, isGhlConfigured } from "@/lib/env";
-import { CrmConnectionStatus, CrmDeliveryState, CrmProvider, LeadRecord } from "@/types";
+import {
+  CampaignRecord,
+  CrmConnectionStatus,
+  CrmDeliveryState,
+  CrmProvider,
+  LeadRecord,
+  NormalizedLeadCustomAnswer,
+  NormalizedMetaLeadDeliveryRecord,
+} from "@/types";
 
 type SupabaseAdmin = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
 
@@ -82,6 +90,23 @@ export type LeadDeliveryRow = {
   updated_at: string;
 };
 
+export type LeadDeliverySummary = LeadDeliveryRow & {
+  leadName: string | null;
+  leadSource: string | null;
+  formName: string | null;
+  pageName: string | null;
+  campaignName: string | null;
+};
+
+export type WorkspaceCrmState = {
+  connections: WorkspaceCrmConnectionRow[];
+  destinations: WorkspaceCrmAssetRow[];
+  routingRules: CrmRoutingRuleRow[];
+  activeRoutingRule: CrmRoutingRuleRow | null;
+  deliveries: LeadDeliverySummary[];
+  deliveryCounts: Record<CrmDeliveryState, number>;
+};
+
 type CrmDestinationSeed = {
   assetId: string;
   name: string;
@@ -137,6 +162,44 @@ function getFirstString(...values: unknown[]) {
     if (typeof value === "string" && value.trim()) return value.trim();
   }
   return null;
+}
+
+function getLeadCustomAnswers(lead: LeadRecord): NormalizedLeadCustomAnswer[] {
+  const rows = Array.isArray(lead.field_data_json) ? lead.field_data_json : [];
+  return rows
+    .map((row) => {
+      const record = getObjectRecord(row);
+      const key = getFirstString(record.key, record.name, record.fieldKey) || "field";
+      const label = getFirstString(record.label, record.name, key) || key;
+      const values = Array.isArray(record.values)
+        ? record.values.filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim())
+        : [];
+      return { key, label, values };
+    })
+    .filter((answer) => answer.values.length > 0);
+}
+
+function buildNormalizedMetaLeadDeliveryRecord({
+  lead,
+  campaign,
+}: {
+  lead: LeadRecord;
+  campaign: Pick<CampaignRecord, "template_id"> | null;
+}): NormalizedMetaLeadDeliveryRecord {
+  return {
+    workspace_id: lead.workspace_id || "",
+    campaign_id: lead.campaign_id || null,
+    template_id: campaign?.template_id || null,
+    meta_lead_id: lead.meta_lead_id || null,
+    meta_form_id: lead.meta_form_id || null,
+    meta_page_id: lead.meta_page_id || null,
+    name: lead.full_name || lead.name || null,
+    email: lead.email || null,
+    phone: lead.phone || null,
+    custom_answers: getLeadCustomAnswers(lead),
+    source: lead.source || null,
+    created_at: lead.meta_created_time || lead.created_at || null,
+  };
 }
 
 function isMissingTableError(error: { message?: string | null } | null | undefined, tableName: string) {
@@ -595,7 +658,7 @@ async function listRecentLeadDeliveries(admin: SupabaseAdmin, workspaceId: strin
     .select("*")
     .eq("workspace_id", workspaceId)
     .order("updated_at", { ascending: false })
-    .limit(12);
+    .limit(50);
 
   if (error) {
     if (isMissingTableError(error, "lead_deliveries")) {
@@ -606,13 +669,63 @@ async function listRecentLeadDeliveries(admin: SupabaseAdmin, workspaceId: strin
   return (data || []) as LeadDeliveryRow[];
 }
 
+async function enrichLeadDeliveries({
+  admin,
+  deliveries,
+}: {
+  admin: SupabaseAdmin;
+  deliveries: LeadDeliveryRow[];
+}) {
+  if (!deliveries.length) return [] as LeadDeliverySummary[];
+
+  const leadIds = Array.from(new Set(deliveries.map((delivery) => delivery.lead_id).filter(Boolean)));
+  const campaignIds = Array.from(new Set(deliveries.map((delivery) => delivery.campaign_id).filter((value): value is string => Boolean(value))));
+
+  const [leadsResult, campaignsResult] = await Promise.all([
+    leadIds.length
+      ? admin.from("leads").select("id, name, full_name, source, meta_form_name, meta_page_name").in("id", leadIds)
+      : Promise.resolve({ data: [], error: null }),
+    campaignIds.length
+      ? admin.from("campaigns").select("id, name").in("id", campaignIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (leadsResult.error) throw new Error(leadsResult.error.message);
+  if (campaignsResult.error) throw new Error(campaignsResult.error.message);
+
+  const leadMap = new Map<string, Record<string, unknown>>();
+  for (const lead of (leadsResult.data || []) as Array<Record<string, unknown>>) {
+    const leadId = getFirstString(lead.id);
+    if (leadId) leadMap.set(leadId, lead);
+  }
+
+  const campaignMap = new Map<string, Record<string, unknown>>();
+  for (const campaign of (campaignsResult.data || []) as Array<Record<string, unknown>>) {
+    const campaignId = getFirstString(campaign.id);
+    if (campaignId) campaignMap.set(campaignId, campaign);
+  }
+
+  return deliveries.map((delivery) => {
+    const lead = leadMap.get(delivery.lead_id) || {};
+    const campaign = delivery.campaign_id ? campaignMap.get(delivery.campaign_id) || {} : {};
+    return {
+      ...delivery,
+      leadName: getFirstString(lead.full_name, lead.name),
+      leadSource: getFirstString(lead.source),
+      formName: getFirstString(lead.meta_form_name),
+      pageName: getFirstString(lead.meta_page_name),
+      campaignName: getFirstString(campaign.name),
+    } satisfies LeadDeliverySummary;
+  });
+}
+
 export async function getWorkspaceCrmState({
   admin,
   workspaceId,
 }: {
   admin: SupabaseAdmin;
   workspaceId: string;
-}) {
+}): Promise<WorkspaceCrmState> {
   const [connections, destinations, routingRules, deliveries] = await Promise.all([
     listCrmConnections(admin, workspaceId),
     listCrmDestinations(admin, workspaceId),
@@ -622,13 +735,28 @@ export async function getWorkspaceCrmState({
 
   const activeRoutingRule =
     routingRules.find((rule) => rule.rule_scope === "workspace_default" && rule.is_active) || null;
+  const enrichedDeliveries = await enrichLeadDeliveries({ admin, deliveries });
+  const deliveryCounts = deliveries.reduce<Record<CrmDeliveryState, number>>(
+    (counts, delivery) => {
+      counts[delivery.state] += 1;
+      return counts;
+    },
+    {
+      pending: 0,
+      delivered: 0,
+      failed: 0,
+      retrying: 0,
+      skipped: 0,
+    },
+  );
 
   return {
     connections,
     destinations,
     routingRules,
     activeRoutingRule,
-    deliveries,
+    deliveries: enrichedDeliveries,
+    deliveryCounts,
   };
 }
 
@@ -1003,7 +1131,10 @@ async function deliverLeadToGoHighLevel({
     phone: lead.phone || undefined,
     companyName: lead.company_name || undefined,
     source: "SideKick",
-    tags: ["sidekick"],
+    tags: [
+      "sidekick",
+      ...(lead.source === "meta_lead_ad" ? ["meta-lead-form"] : []),
+    ],
   };
 
   const response = await crmFetch<Record<string, unknown>>(
@@ -1133,14 +1264,22 @@ export async function queueLeadForCrmDelivery({
   admin: SupabaseAdmin;
   lead: LeadRecord;
 }) {
-  if (!lead.workspace_id) return null;
+  if (!lead.workspace_id) {
+    return { ok: false as const, skipped: true as const, error: "Lead is not attached to a workspace." };
+  }
   const routingRule = await resolveCrmRoutingRule({
     admin,
     workspaceId: lead.workspace_id,
     campaignId: lead.campaign_id || null,
   });
 
-  if (!routingRule) return null;
+  if (!routingRule) {
+    return {
+      ok: false as const,
+      skipped: true as const,
+      error: "No active CRM destination is configured for this workspace.",
+    };
+  }
 
   const { data: existing, error: existingError } = await admin
     .from("lead_deliveries")
@@ -1188,6 +1327,49 @@ export async function queueLeadForCrmDelivery({
   return processLeadCrmDelivery({ admin, deliveryId: delivery.id, lead });
 }
 
+export async function retryFailedCrmDeliveriesForWorkspace({
+  admin,
+  workspaceId,
+  limit = 25,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+  limit?: number;
+}) {
+  const { data, error } = await admin
+    .from("lead_deliveries")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("state", "failed")
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    if (isMissingTableError(error, "lead_deliveries")) {
+      return { retried: 0, failed: 0 };
+    }
+    throw new Error(error.message);
+  }
+
+  let retried = 0;
+  let failed = 0;
+
+  for (const row of (data || []) as Array<{ id: string }>) {
+    const result = await processLeadCrmDelivery({
+      admin,
+      deliveryId: row.id,
+    }).catch(() => ({ ok: false as const }));
+
+    if (result.ok) {
+      retried += 1;
+    } else {
+      failed += 1;
+    }
+  }
+
+  return { retried, failed };
+}
+
 export async function processLeadCrmDelivery({
   admin,
   deliveryId,
@@ -1213,6 +1395,15 @@ export async function processLeadCrmDelivery({
   const lead = providedLead || (
     (await admin.from("leads").select("*").eq("id", delivery.lead_id).single()).data as LeadRecord
   );
+  const campaign = lead.campaign_id
+    ? (
+        await admin
+          .from("campaigns")
+          .select("id, template_id")
+          .eq("id", lead.campaign_id)
+          .maybeSingle()
+      ).data as Pick<CampaignRecord, "id" | "template_id"> | null
+    : null;
   const { data: connectionData } = await admin
     .from("workspace_provider_connections")
     .select("*")
@@ -1228,9 +1419,22 @@ export async function processLeadCrmDelivery({
           .maybeSingle()
       ).data as WorkspaceCrmAssetRow | null
     : null;
+  const normalizedLead = buildNormalizedMetaLeadDeliveryRecord({
+    lead,
+    campaign,
+  });
 
   const attemptNumber = (delivery.attempts_count || 0) + 1;
   const attemptedAt = new Date().toISOString();
+
+  await admin
+    .from("lead_deliveries")
+    .update({
+      state: attemptNumber > 1 ? "retrying" : "pending",
+      attempts_count: Math.max(delivery.attempts_count || 0, attemptNumber - 1),
+      last_attempt_at: attemptedAt,
+    })
+    .eq("id", delivery.id);
 
   try {
     const result = await deliverLeadViaProvider({ admin, connection, destination, lead });
@@ -1239,7 +1443,10 @@ export async function processLeadCrmDelivery({
       attempt_number: attemptNumber,
       state: "delivered",
       http_status: 200,
-      request_payload_json: result.requestPayload,
+      request_payload_json: {
+        normalizedLead,
+        providerRequest: result.requestPayload,
+      },
       response_payload_json: result.responsePayload,
     });
     if (attemptInsertError && !isMissingTableError(attemptInsertError, "lead_delivery_attempts")) {
@@ -1255,7 +1462,10 @@ export async function processLeadCrmDelivery({
         delivered_at: attemptedAt,
         last_error: null,
         last_error_detail_json: {},
-        request_payload_json: result.requestPayload,
+        request_payload_json: {
+          normalizedLead,
+          providerRequest: result.requestPayload,
+        },
         response_payload_json: result.responsePayload,
       })
       .eq("id", delivery.id);
@@ -1266,7 +1476,9 @@ export async function processLeadCrmDelivery({
       delivery_id: delivery.id,
       attempt_number: attemptNumber,
       state: "failed",
-      request_payload_json: {},
+      request_payload_json: {
+        normalizedLead,
+      },
       response_payload_json: {},
       error_message: message,
     });
@@ -1280,7 +1492,10 @@ export async function processLeadCrmDelivery({
         attempts_count: attemptNumber,
         last_attempt_at: attemptedAt,
         last_error: message,
-        last_error_detail_json: { message },
+        last_error_detail_json: { message, normalizedLead },
+        request_payload_json: {
+          normalizedLead,
+        },
       })
       .eq("id", delivery.id);
     return { ok: false as const, error: message };

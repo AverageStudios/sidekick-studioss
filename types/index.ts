@@ -50,6 +50,25 @@ export type CampaignAdType =
   | "call_now"
   | "messenger_leads"
   | "messenger_engagement";
+export type NormalizedLeadCustomAnswer = {
+  key: string;
+  label: string;
+  values: string[];
+};
+export type NormalizedMetaLeadDeliveryRecord = {
+  workspace_id: string;
+  campaign_id: string | null;
+  template_id: string | null;
+  meta_lead_id: string | null;
+  meta_form_id: string | null;
+  meta_page_id: string | null;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  custom_answers: NormalizedLeadCustomAnswer[];
+  source: LeadSource | null;
+  created_at: string | null;
+};
 export type MetaLocationClassification =
   | "world"
   | "country"

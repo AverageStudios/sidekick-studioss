@@ -19,9 +19,11 @@ import {
   disconnectMetaIntegrationAction,
   refreshMetaIntegrationAssetsAction,
   retryCrmDeliveryAction,
+  retryFailedCrmDeliveriesAction,
   saveCrmConnectionAction,
   saveCrmRoutingAction,
   saveMetaIntegrationSelectionsAction,
+  syncMetaLeadsAction,
   updateWorkspaceMemberRoleAction,
   updateWorkspaceGeneralAction,
   updateWorkspaceIconAction,
@@ -37,6 +39,7 @@ import { getCurrentWorkspaceContext, getCurrentWorkspaceMembers } from "@/lib/wo
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isMetaConfigured } from "@/lib/meta";
 import { getWorkspaceMetaIntegrationState } from "@/lib/meta-integration";
+import { getWorkspaceLeadSyncHealth } from "@/lib/meta-leads";
 import { env, getGhlEnvStatus, isSupabaseServerConfigured } from "@/lib/env";
 
 const workspaceSections = [
@@ -101,10 +104,18 @@ export default async function WorkspaceSettingsPage({
   const admin = createSupabaseAdminClient();
   let integrationError: string | null = null;
   let crmIntegrationError: string | null = null;
+  let leadSyncError: string | null = null;
   const integrationState =
     admin && workspaceId
       ? await getWorkspaceMetaIntegrationState({ admin, workspaceId }).catch((err) => {
           integrationError = err instanceof Error ? err.message : "Meta integration data could not be loaded.";
+          return null;
+        })
+      : null;
+  const leadSyncHealth =
+    admin && workspaceId
+      ? await getWorkspaceLeadSyncHealth({ admin, workspaceId }).catch((err) => {
+          leadSyncError = err instanceof Error ? err.message : "Lead sync status could not be loaded.";
           return null;
         })
       : null;
@@ -118,6 +129,13 @@ export default async function WorkspaceSettingsPage({
             routingRules: [],
             activeRoutingRule: null,
             deliveries: [],
+            deliveryCounts: {
+              pending: 0,
+              delivered: 0,
+              failed: 0,
+              retrying: 0,
+              skipped: 0,
+            },
           };
         })
       : {
@@ -126,6 +144,13 @@ export default async function WorkspaceSettingsPage({
           routingRules: [],
           activeRoutingRule: null,
           deliveries: [],
+          deliveryCounts: {
+            pending: 0,
+            delivered: 0,
+            failed: 0,
+            retrying: 0,
+            skipped: 0,
+          },
         };
   const connection = integrationState?.connection || null;
   const adAccounts = integrationState?.assets.adAccounts || [];
@@ -153,6 +178,12 @@ export default async function WorkspaceSettingsPage({
     : [];
   const needsLeadFormReconnect = selectedPageLeadFormMissingPermissions.includes("pages_manage_ads");
   const metaConnectHref = `/api/meta/connect?next=${metaConnectNext}${needsLeadFormReconnect ? "&scopeSet=lead_forms" : ""}${metaConnected || needsLeadFormReconnect ? "&reconnect=1" : ""}`;
+  const leadSyncStatusLabel =
+    leadSyncHealth?.webhookSubscriptionReady
+      ? "Real-time lead form sync is ready."
+      : leadSyncHealth?.canReadLeads
+        ? "Lead recovery sync is available."
+        : "Lead form sync needs reconnect permissions.";
   const campaigns = dashboardSnapshot.campaigns || [];
   const publishedCampaigns = campaigns.filter((campaign) => campaign.status === "published");
   const draftCampaigns = campaigns.filter((campaign) => campaign.status === "draft");
@@ -608,6 +639,11 @@ export default async function WorkspaceSettingsPage({
                       {crmIntegrationError}
                     </div>
                   ) : null}
+                  {leadSyncError ? (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                      {leadSyncError}
+                    </div>
+                  ) : null}
 
                   <div className="rounded-[1.75rem] border border-[var(--line)] bg-white p-6 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
                     <div className="flex items-start justify-between gap-4">
@@ -638,6 +674,9 @@ export default async function WorkspaceSettingsPage({
                             {connection?.provider_user_name ? (
                               <p className="mt-1 text-xs text-[var(--muted)]">Connected as {connection.provider_user_name}</p>
                             ) : null}
+                            {leadSyncHealth ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">{leadSyncStatusLabel}</p>
+                            ) : null}
                           </div>
                           <ChevronDown className="h-4 w-4 shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180" />
                         </summary>
@@ -654,6 +693,16 @@ export default async function WorkspaceSettingsPage({
                                 </form>
                                 <form action={disconnectMetaIntegrationAction}>
                                   <Button type="submit" variant="outline">Disconnect</Button>
+                                </form>
+                                <form action={syncMetaLeadsAction}>
+                                  <input type="hidden" name="mode" value="incremental" />
+                                  <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
+                                  <Button type="submit" variant="outline">Sync recent leads</Button>
+                                </form>
+                                <form action={syncMetaLeadsAction}>
+                                  <input type="hidden" name="mode" value="backfill" />
+                                  <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
+                                  <Button type="submit" variant="outline">Backfill lead forms</Button>
                                 </form>
                               </>
                             ) : null}
@@ -734,7 +783,7 @@ export default async function WorkspaceSettingsPage({
                               </span>
                             </div>
                             <p className="mt-2 text-sm text-[var(--muted)]">
-                              Send new leads from this workspace directly into GoHighLevel.
+                              Send new Meta lead form submissions from this workspace directly into GoHighLevel.
                             </p>
                             {ghlConnection ? (
                               <p className="mt-1 text-xs text-[var(--muted)]">
@@ -776,7 +825,7 @@ export default async function WorkspaceSettingsPage({
                               </span>
                             </div>
                             <p className="mt-2 text-sm text-[var(--muted)]">
-                              Send captured leads from this workspace into HubSpot contacts.
+                              Send new Meta lead form submissions from this workspace into HubSpot contacts.
                             </p>
                             {hubspotConnection ? (
                               <p className="mt-1 text-xs text-[var(--muted)]">
@@ -816,8 +865,25 @@ export default async function WorkspaceSettingsPage({
                     <div className="rounded-[1.75rem] border border-[var(--line)] bg-white p-6 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
                       <p className="text-sm font-semibold text-[var(--ink)]">Default CRM destination</p>
                       <p className="mt-1 text-sm text-[var(--muted)]">
-                        Choose where this workspace should send new leads by default.
+                        Choose where Meta lead form submissions should be handed off by default.
                       </p>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <span
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-xs font-semibold",
+                            crmState.activeRoutingRule
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-amber-200 bg-amber-50 text-amber-700",
+                          )}
+                        >
+                          {crmState.activeRoutingRule ? "CRM handoff active" : "CRM handoff inactive"}
+                        </span>
+                        {crmState.activeRoutingRule ? (
+                          <span className="rounded-full border border-[var(--line)] bg-[var(--soft-panel)] px-3 py-1 text-xs font-semibold text-[var(--muted-strong)]">
+                            {crmState.activeRoutingRule.provider === "gohighlevel" ? "GoHighLevel" : "HubSpot"}
+                          </span>
+                        ) : null}
+                      </div>
 
                       {providerDestinations.length ? (
                         <form action={saveCrmRoutingAction} className="mt-6 space-y-4">
@@ -854,12 +920,38 @@ export default async function WorkspaceSettingsPage({
                         <div>
                           <p className="text-sm font-semibold text-[var(--ink)]">Recent sync activity</p>
                           <p className="mt-1 text-sm text-[var(--muted)]">
-                            A quick view of recent lead delivery results.
+                            Recent CRM handoff results for Meta lead form submissions.
                           </p>
                         </div>
-                        <span className="rounded-full bg-[var(--soft-panel)] px-3 py-1 text-xs font-semibold text-[var(--muted-strong)]">
-                          {crmState.deliveries.length} recent
-                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="rounded-full bg-[var(--soft-panel)] px-3 py-1 text-xs font-semibold text-[var(--muted-strong)]">
+                            {crmState.deliveries.length} recent
+                          </span>
+                          {crmState.deliveryCounts.failed ? (
+                            <form action={retryFailedCrmDeliveriesAction}>
+                              <Button type="submit" size="sm" variant="outline">
+                                Retry failed
+                              </Button>
+                            </form>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Delivered</p>
+                          <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">{crmState.deliveryCounts.delivered}</p>
+                        </div>
+                        <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Failed</p>
+                          <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">{crmState.deliveryCounts.failed}</p>
+                        </div>
+                        <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Pending / retrying</p>
+                          <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
+                            {crmState.deliveryCounts.pending + crmState.deliveryCounts.retrying}
+                          </p>
+                        </div>
                       </div>
 
                       <div className="mt-5 space-y-3">
@@ -874,8 +966,14 @@ export default async function WorkspaceSettingsPage({
                                       {delivery.state}
                                     </span>
                                   </div>
+                                  <p className="mt-1 text-sm text-[var(--muted-strong)]">
+                                    {delivery.campaignName || delivery.formName || delivery.leadName || "Meta lead form"}
+                                  </p>
                                   <p className="mt-1 text-xs text-[var(--muted)]">
                                     {formatShortDate(delivery.updated_at) || "Recently updated"} • {delivery.attempts_count} attempt{delivery.attempts_count === 1 ? "" : "s"}
+                                  </p>
+                                  <p className="mt-1 text-xs text-[var(--muted)]">
+                                    {delivery.formName || "Lead form"}{delivery.pageName ? ` • ${delivery.pageName}` : ""}{delivery.leadName ? ` • ${delivery.leadName}` : ""}
                                   </p>
                                   {delivery.last_error ? (
                                     <p className="mt-2 text-xs text-rose-700">{delivery.last_error}</p>
