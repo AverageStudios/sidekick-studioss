@@ -21,7 +21,6 @@ import {
   retryCrmDeliveryAction,
   retryFailedCrmDeliveriesAction,
   saveCrmConnectionAction,
-  saveCrmRoutingAction,
   saveMetaIntegrationSelectionsAction,
   syncMetaLeadsAction,
   updateWorkspaceMemberRoleAction,
@@ -126,8 +125,6 @@ export default async function WorkspaceSettingsPage({
           return {
             connections: [],
             destinations: [],
-            routingRules: [],
-            activeRoutingRule: null,
             deliveries: [],
             deliveryCounts: {
               pending: 0,
@@ -141,8 +138,6 @@ export default async function WorkspaceSettingsPage({
       : {
           connections: [],
           destinations: [],
-          routingRules: [],
-          activeRoutingRule: null,
           deliveries: [],
           deliveryCounts: {
             pending: 0,
@@ -863,54 +858,47 @@ export default async function WorkspaceSettingsPage({
 
                   <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
                     <div className="rounded-[1.75rem] border border-[var(--line)] bg-white p-6 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
-                      <p className="text-sm font-semibold text-[var(--ink)]">Default CRM destination</p>
+                      <p className="text-sm font-semibold text-[var(--ink)]">Connected CRM destinations</p>
                       <p className="mt-1 text-sm text-[var(--muted)]">
-                        Choose where Meta lead form submissions should be handed off by default.
+                        SideKick delivers Meta lead form submissions to every connected CRM in this workspace.
                       </p>
                       <div className="mt-4 flex flex-wrap gap-2">
                         <span
                           className={cn(
                             "rounded-full border px-3 py-1 text-xs font-semibold",
-                            crmState.activeRoutingRule
+                            providerDestinations.length
                               ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                               : "border-amber-200 bg-amber-50 text-amber-700",
                           )}
                         >
-                          {crmState.activeRoutingRule ? "CRM handoff active" : "CRM handoff inactive"}
+                          {providerDestinations.length ? "Fan-out handoff active" : "No CRM destinations connected"}
                         </span>
-                        {crmState.activeRoutingRule ? (
-                          <span className="rounded-full border border-[var(--line)] bg-[var(--soft-panel)] px-3 py-1 text-xs font-semibold text-[var(--muted-strong)]">
-                            {crmState.activeRoutingRule.provider === "gohighlevel" ? "GoHighLevel" : "HubSpot"}
-                          </span>
-                        ) : null}
                       </div>
 
                       {providerDestinations.length ? (
-                        <form action={saveCrmRoutingAction} className="mt-6 space-y-4">
-                          <div className="space-y-2">
-                            <label className="block text-sm font-medium text-[var(--ink)]">Destination</label>
-                            <select
-                              name="routeTarget"
-                              defaultValue={
-                                crmState.activeRoutingRule
-                                  ? `${crmState.activeRoutingRule.provider}::${crmState.activeRoutingRule.destination_asset_id || ""}`
-                                  : ""
-                              }
-                              className="h-12 w-full rounded-[14px] border border-[var(--line)] bg-white px-4 text-sm text-[var(--ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand)]"
+                        <div className="mt-6 space-y-3">
+                          {providerDestinations.map((destination) => (
+                            <div
+                              key={destination.id}
+                              className="flex items-center justify-between gap-4 rounded-[1.15rem] border border-[var(--line)] bg-[var(--surface)] px-4 py-4"
                             >
-                              <option value="">Choose a destination</option>
-                              {providerDestinations.map((destination) => (
-                                <option key={destination.id} value={`${destination.provider}::${destination.id}`}>
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-[var(--ink)]">
+                                  {destination.provider === "gohighlevel" ? "GoHighLevel" : destination.provider === "hubspot" ? "HubSpot" : destination.provider}
+                                </p>
+                                <p className="mt-1 text-sm text-[var(--muted)]">
                                   {destination.name || destination.asset_id}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <Button type="submit">Save destination</Button>
-                        </form>
+                                </p>
+                              </div>
+                              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                                Active
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       ) : (
                         <div className="mt-6 rounded-2xl border border-dashed border-[var(--line)] bg-[var(--soft-panel)] px-5 py-6 text-sm text-[var(--muted)]">
-                          Connect a CRM first to choose a default destination.
+                          Connect a CRM first. Once connected, new Meta lead form submissions will be delivered automatically.
                         </div>
                       )}
                     </div>

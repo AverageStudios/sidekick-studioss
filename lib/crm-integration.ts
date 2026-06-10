@@ -101,8 +101,6 @@ export type LeadDeliverySummary = LeadDeliveryRow & {
 export type WorkspaceCrmState = {
   connections: WorkspaceCrmConnectionRow[];
   destinations: WorkspaceCrmAssetRow[];
-  routingRules: CrmRoutingRuleRow[];
-  activeRoutingRule: CrmRoutingRuleRow | null;
   deliveries: LeadDeliverySummary[];
   deliveryCounts: Record<CrmDeliveryState, number>;
 };
@@ -726,15 +724,11 @@ export async function getWorkspaceCrmState({
   admin: SupabaseAdmin;
   workspaceId: string;
 }): Promise<WorkspaceCrmState> {
-  const [connections, destinations, routingRules, deliveries] = await Promise.all([
+  const [connections, destinations, deliveries] = await Promise.all([
     listCrmConnections(admin, workspaceId),
     listCrmDestinations(admin, workspaceId),
-    listCrmRoutingRules(admin, workspaceId),
     listRecentLeadDeliveries(admin, workspaceId),
   ]);
-
-  const activeRoutingRule =
-    routingRules.find((rule) => rule.rule_scope === "workspace_default" && rule.is_active) || null;
   const enrichedDeliveries = await enrichLeadDeliveries({ admin, deliveries });
   const deliveryCounts = deliveries.reduce<Record<CrmDeliveryState, number>>(
     (counts, delivery) => {
@@ -753,11 +747,38 @@ export async function getWorkspaceCrmState({
   return {
     connections,
     destinations,
-    routingRules,
-    activeRoutingRule,
     deliveries: enrichedDeliveries,
     deliveryCounts,
   };
+}
+
+function getWorkspaceCrmTargets({
+  connections,
+  destinations,
+}: {
+  connections: WorkspaceCrmConnectionRow[];
+  destinations: WorkspaceCrmAssetRow[];
+}) {
+  return connections
+    .filter((connection) => connection.is_active && connection.status === "connected")
+    .map((connection) => {
+      const providerDestinations = destinations.filter(
+        (destination) =>
+          destination.provider === connection.provider &&
+          destination.is_available &&
+          (destination.connection_id === connection.id || destination.connection_id === null),
+      );
+      const selectedDestination =
+        providerDestinations.find((destination) => destination.is_selected) ||
+        providerDestinations[0] ||
+        null;
+
+      return {
+        connection,
+        destination: selectedDestination,
+      };
+    })
+    .filter((target) => Boolean(target.destination));
 }
 
 export async function connectWorkspaceCrmProvider({
@@ -1267,64 +1288,81 @@ export async function queueLeadForCrmDelivery({
   if (!lead.workspace_id) {
     return { ok: false as const, skipped: true as const, error: "Lead is not attached to a workspace." };
   }
-  const routingRule = await resolveCrmRoutingRule({
-    admin,
-    workspaceId: lead.workspace_id,
-    campaignId: lead.campaign_id || null,
+  const [connections, destinations] = await Promise.all([
+    listCrmConnections(admin, lead.workspace_id),
+    listCrmDestinations(admin, lead.workspace_id),
+  ]);
+  const targets = getWorkspaceCrmTargets({
+    connections,
+    destinations,
   });
 
-  if (!routingRule) {
+  if (!targets.length) {
     return {
       ok: false as const,
       skipped: true as const,
-      error: "No active CRM destination is configured for this workspace.",
+      error: "No connected CRM destination is configured for this workspace.",
     };
   }
+  const results: Array<{ provider: CrmProvider; ok: boolean; error?: string }> = [];
 
-  const { data: existing, error: existingError } = await admin
-    .from("lead_deliveries")
-    .select("*")
-    .eq("lead_id", lead.id)
-    .eq("provider", routingRule.provider)
-    .eq("connection_id", routingRule.connection_id)
-    .maybeSingle();
-  if (existingError) {
-    if (isMissingTableError(existingError, "lead_deliveries")) {
-      return null;
-    }
-    throw new Error(existingError.message);
-  }
-
-  let delivery: LeadDeliveryRow | null = existing ? (existing as LeadDeliveryRow) : null;
-  if (!delivery) {
-    const { data: insertedDelivery, error: insertError } = await admin
+  for (const target of targets) {
+    const { data: existing, error: existingError } = await admin
       .from("lead_deliveries")
-      .insert({
-        workspace_id: lead.workspace_id,
-        lead_id: lead.id,
-        campaign_id: lead.campaign_id || null,
-        provider: routingRule.provider,
-        connection_id: routingRule.connection_id,
-        destination_asset_id: routingRule.destination_asset_id,
-        state: "pending",
-        last_error_detail_json: {},
-        request_payload_json: {},
-        response_payload_json: {},
-      })
       .select("*")
-      .single();
-
-    if (insertError) {
-      if (isMissingTableError(insertError, "lead_deliveries")) {
+      .eq("lead_id", lead.id)
+      .eq("provider", target.connection.provider)
+      .eq("connection_id", target.connection.id)
+      .maybeSingle();
+    if (existingError) {
+      if (isMissingTableError(existingError, "lead_deliveries")) {
         return null;
       }
-      throw new Error(insertError.message);
+      throw new Error(existingError.message);
     }
-    delivery = insertedDelivery as LeadDeliveryRow;
+
+    let delivery: LeadDeliveryRow | null = existing ? (existing as LeadDeliveryRow) : null;
+    if (!delivery) {
+      const { data: insertedDelivery, error: insertError } = await admin
+        .from("lead_deliveries")
+        .insert({
+          workspace_id: lead.workspace_id,
+          lead_id: lead.id,
+          campaign_id: lead.campaign_id || null,
+          provider: target.connection.provider,
+          connection_id: target.connection.id,
+          destination_asset_id: target.destination?.id || null,
+          state: "pending",
+          last_error_detail_json: {},
+          request_payload_json: {},
+          response_payload_json: {},
+        })
+        .select("*")
+        .single();
+
+      if (insertError) {
+        if (isMissingTableError(insertError, "lead_deliveries")) {
+          return null;
+        }
+        throw new Error(insertError.message);
+      }
+      delivery = insertedDelivery as LeadDeliveryRow;
+    }
+
+    if (!delivery) continue;
+    const result = await processLeadCrmDelivery({ admin, deliveryId: delivery.id, lead });
+    results.push({
+      provider: target.connection.provider,
+      ok: result.ok,
+      ...(result.ok ? {} : { error: result.error }),
+    });
   }
 
-  if (!delivery) return null;
-  return processLeadCrmDelivery({ admin, deliveryId: delivery.id, lead });
+  return {
+    ok: results.every((result) => result.ok),
+    skipped: false as const,
+    results,
+  };
 }
 
 export async function retryFailedCrmDeliveriesForWorkspace({
