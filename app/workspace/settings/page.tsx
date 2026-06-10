@@ -854,15 +854,10 @@ export default async function WorkspaceSettingsPage({
                         </div>
                       </details>
                     </div>
-                  </div>
 
-                  <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-                    <div className="rounded-[1.75rem] border border-[var(--line)] bg-white p-6 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
-                      <p className="text-sm font-semibold text-[var(--ink)]">Connected CRM destinations</p>
-                      <p className="mt-1 text-sm text-[var(--muted)]">
-                        SideKick delivers Meta lead form submissions to every connected CRM in this workspace.
-                      </p>
-                      <div className="mt-4 flex flex-wrap gap-2">
+                    <div className="mt-6 rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] p-5">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <p className="text-sm font-semibold text-[var(--ink)]">CRM handoff</p>
                         <span
                           className={cn(
                             "rounded-full border px-3 py-1 text-xs font-semibold",
@@ -871,38 +866,32 @@ export default async function WorkspaceSettingsPage({
                               : "border-amber-200 bg-amber-50 text-amber-700",
                           )}
                         >
-                          {providerDestinations.length ? "Fan-out handoff active" : "No CRM destinations connected"}
+                          {providerDestinations.length ? "Send to all connected CRMs" : "No CRMs connected yet"}
                         </span>
                       </div>
-
+                      <p className="mt-2 text-sm text-[var(--muted)]">
+                        SideKick automatically sends Meta lead form submissions to every connected CRM in this workspace. No default CRM selection is required.
+                      </p>
                       {providerDestinations.length ? (
-                        <div className="mt-6 space-y-3">
+                        <div className="mt-4 flex flex-wrap gap-2">
                           {providerDestinations.map((destination) => (
-                            <div
+                            <span
                               key={destination.id}
-                              className="flex items-center justify-between gap-4 rounded-[1.15rem] border border-[var(--line)] bg-[var(--surface)] px-4 py-4"
+                              className="rounded-full border border-[var(--line)] bg-white px-3 py-1 text-xs font-semibold text-[var(--muted-strong)]"
                             >
-                              <div className="min-w-0">
-                                <p className="text-sm font-semibold text-[var(--ink)]">
-                                  {destination.provider === "gohighlevel" ? "GoHighLevel" : destination.provider === "hubspot" ? "HubSpot" : destination.provider}
-                                </p>
-                                <p className="mt-1 text-sm text-[var(--muted)]">
-                                  {destination.name || destination.asset_id}
-                                </p>
-                              </div>
-                              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                                Active
-                              </span>
-                            </div>
+                              {destination.provider === "gohighlevel"
+                                ? "GoHighLevel"
+                                : destination.provider === "hubspot"
+                                  ? "HubSpot"
+                                  : destination.provider}
+                            </span>
                           ))}
                         </div>
-                      ) : (
-                        <div className="mt-6 rounded-2xl border border-dashed border-[var(--line)] bg-[var(--soft-panel)] px-5 py-6 text-sm text-[var(--muted)]">
-                          Connect a CRM first. Once connected, new Meta lead form submissions will be delivered automatically.
-                        </div>
-                      )}
+                      ) : null}
                     </div>
+                  </div>
 
+                  <div className="grid gap-6">
                     <div className="rounded-[1.75rem] border border-[var(--line)] bg-white p-6 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
                       <div className="flex items-start justify-between gap-4">
                         <div>
