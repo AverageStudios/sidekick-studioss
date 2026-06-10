@@ -1,9 +1,11 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { env } from "@/lib/env";
+import { CrmProvider } from "@/types";
 
-type GhlOAuthStatePayload = {
+type CrmOAuthStatePayload = {
   version: 1;
   nonce: string;
+  provider: CrmProvider;
   workspaceId: string;
   next: string;
   issuedAt: number;
@@ -17,30 +19,44 @@ function fromBase64Url(value: string) {
   return Buffer.from(value, "base64url").toString("utf8");
 }
 
-function getGhlOauthStateSecret() {
+function getCrmOauthStateSecret() {
   const secret =
-    env.ghlClientSecret ||
     env.crmTokenEncryptionKey ||
+    env.ghlClientSecret ||
     env.metaTokenEncryptionKey ||
     env.supabaseServiceKey;
   if (!secret) {
-    throw new Error("GoHighLevel OAuth state secret is not configured.");
+    throw new Error("CRM OAuth state secret is not configured.");
   }
   return secret;
 }
 
 function signEncodedPayload(encodedPayload: string) {
-  return createHmac("sha256", getGhlOauthStateSecret()).update(encodedPayload).digest("base64url");
+  return createHmac("sha256", getCrmOauthStateSecret()).update(encodedPayload).digest("base64url");
 }
 
-export function createGhlOAuthState(input: {
+function normalizeProvider(provider: string | null | undefined): CrmProvider | null {
+  switch (provider) {
+    case "gohighlevel":
+    case "hubspot":
+    case "pipedrive":
+    case "salesforce":
+      return provider;
+    default:
+      return null;
+  }
+}
+
+export function createCrmOAuthState(input: {
   nonce: string;
+  provider: CrmProvider;
   workspaceId: string;
   next: string;
 }) {
-  const payload: GhlOAuthStatePayload = {
+  const payload: CrmOAuthStatePayload = {
     version: 1,
     nonce: input.nonce,
+    provider: input.provider,
     workspaceId: input.workspaceId,
     next: input.next,
     issuedAt: Date.now(),
@@ -51,7 +67,7 @@ export function createGhlOAuthState(input: {
   return `${encodedPayload}.${signature}`;
 }
 
-export function parseGhlOAuthState(value: string | null | undefined): GhlOAuthStatePayload | null {
+export function parseCrmOAuthState(value: string | null | undefined): CrmOAuthStatePayload | null {
   if (!value) return null;
   const [encodedPayload, signature] = value.split(".");
   if (!encodedPayload || !signature) return null;
@@ -75,10 +91,12 @@ export function parseGhlOAuthState(value: string | null | undefined): GhlOAuthSt
   }
 
   if (!parsed || typeof parsed !== "object") return null;
-  const candidate = parsed as Partial<GhlOAuthStatePayload>;
+  const candidate = parsed as Partial<CrmOAuthStatePayload>;
+  const provider = normalizeProvider(typeof candidate.provider === "string" ? candidate.provider : null);
 
   if (
     candidate.version !== 1 ||
+    !provider ||
     typeof candidate.nonce !== "string" ||
     typeof candidate.workspaceId !== "string" ||
     typeof candidate.next !== "string" ||
@@ -90,6 +108,7 @@ export function parseGhlOAuthState(value: string | null | undefined): GhlOAuthSt
   return {
     version: 1,
     nonce: candidate.nonce,
+    provider,
     workspaceId: candidate.workspaceId,
     next: candidate.next.startsWith("/") ? candidate.next : "/integrations",
     issuedAt: candidate.issuedAt,

@@ -27,9 +27,9 @@ export const env = {
   metaGraphApiVersion: readEnv("META_GRAPH_API_VERSION") || "v25.0",
   metaTokenEncryptionKey: readEnv("META_TOKEN_ENCRYPTION_KEY"),
   crmTokenEncryptionKey: readEnv("CRM_TOKEN_ENCRYPTION_KEY"),
+  crmOAuthRedirectUri: readEnv("CRM_OAUTH_REDIRECT_URI") || readEnv("GHL_REDIRECT_URI"),
   ghlClientId: readEnv("GHL_CLIENT_ID"),
   ghlClientSecret: readEnv("GHL_CLIENT_SECRET"),
-  ghlRedirectUri: readEnv("GHL_REDIRECT_URI"),
   ghlInstallUrl: readEnv("GHL_INSTALL_URL"),
 } as const;
 
@@ -76,7 +76,7 @@ export function getMetaEnvStatus() {
 }
 
 export function getGhlEnvStatus() {
-  const missingKeys = missing(["GHL_CLIENT_ID", "GHL_CLIENT_SECRET", "GHL_REDIRECT_URI", "GHL_INSTALL_URL"]);
+  const missingKeys = missing(["GHL_CLIENT_ID", "GHL_CLIENT_SECRET", "CRM_OAUTH_REDIRECT_URI", "GHL_INSTALL_URL"]);
   return {
     configured: missingKeys.length === 0,
     missingKeys,

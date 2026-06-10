@@ -351,7 +351,7 @@ async function exchangeGoHighLevelCodeForToken({
   code: string;
   userType: "Location" | "Company";
 }) {
-  if (!isGhlConfigured() || !env.ghlClientId || !env.ghlClientSecret || !env.ghlRedirectUri) {
+  if (!isGhlConfigured() || !env.ghlClientId || !env.ghlClientSecret || !env.crmOAuthRedirectUri) {
     throw new Error("GoHighLevel OAuth env vars are missing.");
   }
 
@@ -369,7 +369,7 @@ async function exchangeGoHighLevelCodeForToken({
         grant_type: "authorization_code",
         code,
         user_type: userType,
-        redirect_uri: env.ghlRedirectUri,
+        redirect_uri: env.crmOAuthRedirectUri,
       }).toString(),
     },
     "GoHighLevel OAuth exchange failed",
@@ -391,7 +391,7 @@ async function refreshGoHighLevelToken({
   connection: WorkspaceCrmConnectionRow;
   refreshToken: string;
 }) {
-  if (!isGhlConfigured() || !env.ghlClientId || !env.ghlClientSecret || !env.ghlRedirectUri) {
+  if (!isGhlConfigured() || !env.ghlClientId || !env.ghlClientSecret || !env.crmOAuthRedirectUri) {
     throw new Error("GoHighLevel OAuth env vars are missing.");
   }
 
@@ -412,7 +412,7 @@ async function refreshGoHighLevelToken({
           getFirstString(connection.metadata_json.user_type, "Location") === "Company"
             ? "Company"
             : "Location",
-        redirect_uri: env.ghlRedirectUri,
+        redirect_uri: env.crmOAuthRedirectUri,
       }).toString(),
     },
     "GoHighLevel token refresh failed",

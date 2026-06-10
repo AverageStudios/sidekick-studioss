@@ -222,7 +222,7 @@ export default async function IntegrationsPage({
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <Button asChild>
-                    <Link href="/api/gohighlevel/connect?next=/integrations">Reconnect GoHighLevel</Link>
+                    <Link href="/api/integrations/crm/connect?provider=gohighlevel&next=/integrations">Reconnect GoHighLevel</Link>
                   </Button>
                   <form action={disconnectCrmConnectionAction}>
                     <input type="hidden" name="provider" value="gohighlevel" />
@@ -241,7 +241,7 @@ export default async function IntegrationsPage({
                   This follows the same pattern users expect from tools like UpHex: click connect, sign in with GoHighLevel, choose the sub-account, and return with this workspace linked.
                 </p>
                 <Button asChild>
-                  <Link href="/api/gohighlevel/connect?next=/integrations">Connect GoHighLevel</Link>
+                  <Link href="/api/integrations/crm/connect?provider=gohighlevel&next=/integrations">Connect GoHighLevel</Link>
                 </Button>
                 <p className="text-xs leading-5 text-[var(--muted)]">
                   The connection is stored per workspace so each SideKick workspace can route leads to its own GoHighLevel destination.

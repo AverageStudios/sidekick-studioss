@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { env } from "@/lib/env";
 import { getCurrentUser } from "@/lib/auth";
-import { parseGhlOAuthState } from "@/lib/ghl-oauth-state";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { parseCrmOAuthState } from "@/lib/crm-oauth-state";
 import { connectWorkspaceGoHighLevelOAuthProvider } from "@/lib/crm-integration";
+import { env } from "@/lib/env";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 
 function buildIntegrationsUrl() {
@@ -11,27 +11,34 @@ function buildIntegrationsUrl() {
 }
 
 function clearOauthCookies(response: NextResponse) {
-  response.cookies.delete("ghl_oauth_state");
-  response.cookies.delete("ghl_oauth_next");
-  response.cookies.delete("ghl_oauth_workspace");
+  response.cookies.delete("crm_oauth_state");
+  response.cookies.delete("crm_oauth_next");
+  response.cookies.delete("crm_oauth_workspace");
+  response.cookies.delete("crm_oauth_provider");
 }
 
 export async function GET(request: NextRequest) {
   const integrationsUrl = buildIntegrationsUrl();
   const code = request.nextUrl.searchParams.get("code");
   const state = request.nextUrl.searchParams.get("state");
-  const stateCookie = request.cookies.get("ghl_oauth_state")?.value;
-  const nextCookie = request.cookies.get("ghl_oauth_next")?.value;
-  const workspaceCookie = request.cookies.get("ghl_oauth_workspace")?.value;
-  const statePayload = parseGhlOAuthState(state || stateCookie);
+  const stateCookie = request.cookies.get("crm_oauth_state")?.value;
+  const nextCookie = request.cookies.get("crm_oauth_next")?.value;
+  const workspaceCookie = request.cookies.get("crm_oauth_workspace")?.value;
+  const providerCookie = request.cookies.get("crm_oauth_provider")?.value;
+  const statePayload = parseCrmOAuthState(state || stateCookie);
   const safeNext =
     statePayload?.next ||
     (nextCookie?.startsWith("/") ? nextCookie : "/integrations");
 
-  if (!code || !statePayload || (state && stateCookie && state !== stateCookie)) {
+  if (
+    !code ||
+    !statePayload ||
+    (state && stateCookie && state !== stateCookie) ||
+    (providerCookie && statePayload.provider !== providerCookie)
+  ) {
     integrationsUrl.searchParams.set(
       "error",
-      "GoHighLevel connection was canceled or expired. Please try again.",
+      "CRM connection was canceled or expired. Please try again.",
     );
     const response = NextResponse.redirect(integrationsUrl);
     clearOauthCookies(response);
@@ -41,7 +48,7 @@ export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     const loginUrl = new URL("/login", env.appUrl);
-    loginUrl.searchParams.set("error", "Sign in before connecting GoHighLevel.");
+    loginUrl.searchParams.set("error", "Sign in before connecting a CRM.");
     const response = NextResponse.redirect(loginUrl);
     clearOauthCookies(response);
     return response;
@@ -90,15 +97,21 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    await connectWorkspaceGoHighLevelOAuthProvider({
-      admin,
-      workspaceId,
-      userId: user.id,
-      code,
-    });
+    switch (statePayload.provider) {
+      case "gohighlevel":
+        await connectWorkspaceGoHighLevelOAuthProvider({
+          admin,
+          workspaceId,
+          userId: user.id,
+          code,
+        });
+        break;
+      default:
+        throw new Error(`${statePayload.provider} callback handling is not implemented yet.`);
+    }
 
     const redirectUrl = new URL(safeNext, env.appUrl);
-    redirectUrl.searchParams.set("saved", "GoHighLevel connected");
+    redirectUrl.searchParams.set("saved", `${statePayload.provider} connected`);
     const response = NextResponse.redirect(redirectUrl);
     clearOauthCookies(response);
     return response;
@@ -106,7 +119,7 @@ export async function GET(request: NextRequest) {
     const message =
       error instanceof Error
         ? error.message
-        : "GoHighLevel connection failed. Please try again.";
+        : "CRM connection failed. Please try again.";
     integrationsUrl.searchParams.set("error", message);
     const response = NextResponse.redirect(integrationsUrl);
     clearOauthCookies(response);
