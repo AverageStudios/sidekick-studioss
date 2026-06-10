@@ -139,6 +139,15 @@ function getFirstString(...values: unknown[]) {
   return null;
 }
 
+function isMissingTableError(error: { message?: string | null } | null | undefined, tableName: string) {
+  const message = error?.message || "";
+  return (
+    message.includes(`Could not find the table 'public.${tableName}' in the schema cache`) ||
+    message.includes(`relation \"public.${tableName}\" does not exist`) ||
+    message.includes(`relation \"${tableName}\" does not exist`)
+  );
+}
+
 function getScopeList(value: unknown) {
   if (Array.isArray(value)) {
     return Array.from(
@@ -490,7 +499,12 @@ async function listCrmRoutingRules(admin: SupabaseAdmin, workspaceId: string) {
     .eq("is_active", true)
     .order("priority", { ascending: true });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isMissingTableError(error, "crm_routing_rules")) {
+      return [];
+    }
+    throw new Error(error.message);
+  }
   return (data || []) as CrmRoutingRuleRow[];
 }
 
@@ -502,7 +516,12 @@ async function listRecentLeadDeliveries(admin: SupabaseAdmin, workspaceId: strin
     .order("updated_at", { ascending: false })
     .limit(12);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isMissingTableError(error, "lead_deliveries")) {
+      return [];
+    }
+    throw new Error(error.message);
+  }
   return (data || []) as LeadDeliveryRow[];
 }
 
@@ -755,7 +774,9 @@ export async function disconnectWorkspaceCrmProvider({
     .eq("workspace_id", workspaceId)
     .eq("provider", provider);
 
-  if (routingError) throw new Error(routingError.message);
+  if (routingError && !isMissingTableError(routingError, "crm_routing_rules")) {
+    throw new Error(routingError.message);
+  }
 }
 
 export async function saveWorkspaceCrmRoutingRule({
@@ -786,10 +807,20 @@ export async function saveWorkspaceCrmRoutingRule({
 
   if (campaignId) {
     const { error } = await query.eq("campaign_id", campaignId);
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (isMissingTableError(error, "crm_routing_rules")) {
+        throw new Error("CRM routing is not available until the latest database migration is applied.");
+      }
+      throw new Error(error.message);
+    }
   } else {
     const { error } = await query.is("campaign_id", null);
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (isMissingTableError(error, "crm_routing_rules")) {
+        throw new Error("CRM routing is not available until the latest database migration is applied.");
+      }
+      throw new Error(error.message);
+    }
   }
 
   const { error: insertError } = await admin.from("crm_routing_rules").insert({
@@ -803,7 +834,12 @@ export async function saveWorkspaceCrmRoutingRule({
     is_active: true,
     metadata_json: {},
   });
-  if (insertError) throw new Error(insertError.message);
+  if (insertError) {
+    if (isMissingTableError(insertError, "crm_routing_rules")) {
+      throw new Error("CRM routing is not available until the latest database migration is applied.");
+    }
+    throw new Error(insertError.message);
+  }
 }
 
 export async function resolveCrmRoutingRule({
@@ -1024,34 +1060,47 @@ export async function queueLeadForCrmDelivery({
 
   if (!routingRule) return null;
 
-  const { data: existing } = await admin
+  const { data: existing, error: existingError } = await admin
     .from("lead_deliveries")
     .select("*")
     .eq("lead_id", lead.id)
     .eq("provider", routingRule.provider)
     .eq("connection_id", routingRule.connection_id)
     .maybeSingle();
+  if (existingError) {
+    if (isMissingTableError(existingError, "lead_deliveries")) {
+      return null;
+    }
+    throw new Error(existingError.message);
+  }
 
-  const delivery = existing
-    ? (existing as LeadDeliveryRow)
-    : (
-        await admin
-          .from("lead_deliveries")
-          .insert({
-            workspace_id: lead.workspace_id,
-            lead_id: lead.id,
-            campaign_id: lead.campaign_id || null,
-            provider: routingRule.provider,
-            connection_id: routingRule.connection_id,
-            destination_asset_id: routingRule.destination_asset_id,
-            state: "pending",
-            last_error_detail_json: {},
-            request_payload_json: {},
-            response_payload_json: {},
-          })
-          .select("*")
-          .single()
-      ).data as LeadDeliveryRow;
+  let delivery: LeadDeliveryRow | null = existing ? (existing as LeadDeliveryRow) : null;
+  if (!delivery) {
+    const { data: insertedDelivery, error: insertError } = await admin
+      .from("lead_deliveries")
+      .insert({
+        workspace_id: lead.workspace_id,
+        lead_id: lead.id,
+        campaign_id: lead.campaign_id || null,
+        provider: routingRule.provider,
+        connection_id: routingRule.connection_id,
+        destination_asset_id: routingRule.destination_asset_id,
+        state: "pending",
+        last_error_detail_json: {},
+        request_payload_json: {},
+        response_payload_json: {},
+      })
+      .select("*")
+      .single();
+
+    if (insertError) {
+      if (isMissingTableError(insertError, "lead_deliveries")) {
+        return null;
+      }
+      throw new Error(insertError.message);
+    }
+    delivery = insertedDelivery as LeadDeliveryRow;
+  }
 
   if (!delivery) return null;
   return processLeadCrmDelivery({ admin, deliveryId: delivery.id, lead });
@@ -1071,7 +1120,12 @@ export async function processLeadCrmDelivery({
     .select("*")
     .eq("id", deliveryId)
     .single();
-  if (deliveryError) throw new Error(deliveryError.message);
+  if (deliveryError) {
+    if (isMissingTableError(deliveryError, "lead_deliveries")) {
+      return { ok: false as const, error: "CRM delivery logging is not available until the latest database migration is applied." };
+    }
+    throw new Error(deliveryError.message);
+  }
   const delivery = deliveryData as LeadDeliveryRow;
 
   const lead = providedLead || (
@@ -1098,7 +1152,7 @@ export async function processLeadCrmDelivery({
 
   try {
     const result = await deliverLeadViaProvider({ admin, connection, destination, lead });
-    await admin.from("lead_delivery_attempts").insert({
+    const { error: attemptInsertError } = await admin.from("lead_delivery_attempts").insert({
       delivery_id: delivery.id,
       attempt_number: attemptNumber,
       state: "delivered",
@@ -1106,6 +1160,9 @@ export async function processLeadCrmDelivery({
       request_payload_json: result.requestPayload,
       response_payload_json: result.responsePayload,
     });
+    if (attemptInsertError && !isMissingTableError(attemptInsertError, "lead_delivery_attempts")) {
+      throw new Error(attemptInsertError.message);
+    }
     await admin
       .from("lead_deliveries")
       .update({
@@ -1123,7 +1180,7 @@ export async function processLeadCrmDelivery({
     return { ok: true as const };
   } catch (error) {
     const message = error instanceof Error ? error.message : "CRM delivery failed.";
-    await admin.from("lead_delivery_attempts").insert({
+    const { error: failedAttemptInsertError } = await admin.from("lead_delivery_attempts").insert({
       delivery_id: delivery.id,
       attempt_number: attemptNumber,
       state: "failed",
@@ -1131,6 +1188,9 @@ export async function processLeadCrmDelivery({
       response_payload_json: {},
       error_message: message,
     });
+    if (failedAttemptInsertError && !isMissingTableError(failedAttemptInsertError, "lead_delivery_attempts")) {
+      throw new Error(failedAttemptInsertError.message);
+    }
     await admin
       .from("lead_deliveries")
       .update({
