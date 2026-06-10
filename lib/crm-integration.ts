@@ -148,6 +148,24 @@ function isMissingTableError(error: { message?: string | null } | null | undefin
   );
 }
 
+function normalizeCrmDatabaseError(error: { message?: string | null } | null | undefined) {
+  const message = error?.message || "";
+
+  if (message.includes("workspace_provider_connections_provider_check")) {
+    return "CRM providers are not enabled in this database yet. Apply supabase/migrations/021_crm_integrations.sql, then try connecting again.";
+  }
+
+  if (message.includes("workspace_provider_assets_provider_check")) {
+    return "CRM provider assets are not enabled in this database yet. Apply supabase/migrations/021_crm_integrations.sql, then try again.";
+  }
+
+  if (message.includes("workspace_provider_assets_type_check")) {
+    return "CRM destination support is not enabled in this database yet. Apply supabase/migrations/021_crm_integrations.sql, then try again.";
+  }
+
+  return message;
+}
+
 function getScopeList(value: unknown) {
   if (Array.isArray(value)) {
     return Array.from(
@@ -668,7 +686,7 @@ export async function connectWorkspaceCrmProvider({
       })
       .eq("id", activeConnection.id);
 
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(normalizeCrmDatabaseError(error));
   } else {
     const { error } = await admin.from("workspace_provider_connections").insert({
       workspace_id: workspaceId,
@@ -694,7 +712,7 @@ export async function connectWorkspaceCrmProvider({
       last_synced_at: new Date().toISOString(),
     });
 
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(normalizeCrmDatabaseError(error));
   }
 
   const refreshedConnections = await listCrmConnections(admin, workspaceId);
@@ -710,7 +728,7 @@ export async function connectWorkspaceCrmProvider({
     .eq("provider", provider)
     .eq("asset_type", "crm_destination");
 
-  if (clearAssetsError) throw new Error(clearAssetsError.message);
+  if (clearAssetsError) throw new Error(normalizeCrmDatabaseError(clearAssetsError));
 
   if (validated.destinations.length) {
     const { error: destinationsError } = await admin.from("workspace_provider_assets").insert(
@@ -726,7 +744,7 @@ export async function connectWorkspaceCrmProvider({
         is_selected: Boolean(destination.selected),
       })),
     );
-    if (destinationsError) throw new Error(destinationsError.message);
+    if (destinationsError) throw new Error(normalizeCrmDatabaseError(destinationsError));
   }
 
   return savedConnection;
