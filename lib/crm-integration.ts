@@ -274,34 +274,92 @@ async function validateHubSpotConnection({
 }: {
   accessToken: string;
 }): Promise<ValidatedConnection> {
-  const details = await crmFetch<Record<string, unknown>>(
-    "https://api.hubapi.com/account-info/v3/details",
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-      },
-    },
-    "HubSpot connection failed",
-  );
+  let details: Record<string, unknown> | null = null;
+  let portalId: string | null = null;
+  let uiDomain: string | null = null;
+  let validationMode = "unverified";
 
-  const portalId =
-    getFirstString(details.portalId, details.hubId) ||
-    (typeof details.portalId === "number" ? String(details.portalId) : null) ||
-    (typeof details.hubId === "number" ? String(details.hubId) : null) ||
-    "hubspot-account";
-  const uiDomain = getFirstString(details.uiDomain, details.timeZone);
+  try {
+    const meDetails = await crmFetch<Record<string, unknown>>(
+      "https://api.hubapi.com/integrations/v1/me",
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json",
+        },
+      },
+      "HubSpot connection failed",
+    );
+    details = meDetails;
+    portalId =
+      getFirstString(meDetails.portalId, meDetails.hubId) ||
+      (typeof meDetails.portalId === "number" ? String(meDetails.portalId) : null) ||
+      (typeof meDetails.hubId === "number" ? String(meDetails.hubId) : null);
+    uiDomain = getFirstString(meDetails.hub_domain, meDetails.timeZone);
+    validationMode = "integrations_v1_me";
+  } catch (firstError) {
+    try {
+      const accountDetails = await crmFetch<Record<string, unknown>>(
+        "https://api.hubapi.com/account-info/v3/details",
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/json",
+          },
+        },
+        "HubSpot connection failed",
+      );
+      details = accountDetails;
+      portalId =
+        getFirstString(accountDetails.portalId, accountDetails.hubId) ||
+        (typeof accountDetails.portalId === "number" ? String(accountDetails.portalId) : null) ||
+        (typeof accountDetails.hubId === "number" ? String(accountDetails.hubId) : null);
+      uiDomain = getFirstString(accountDetails.uiDomain, accountDetails.timeZone);
+      validationMode = "account_info_v3_details";
+    } catch {
+      const firstMessage =
+        firstError instanceof Error ? firstError.message : "HubSpot verification could not be completed.";
+
+      return {
+        providerUserId: null,
+        providerUserName: "HubSpot account",
+        tokenType: "Bearer",
+        scopes: ["crm.objects.contacts.write"],
+        metadata: {
+          validated_at: new Date().toISOString(),
+          validation_mode: "unverified",
+          validation_warning: firstMessage,
+        },
+        destinations: [
+          {
+            assetId: "contacts",
+            name: "HubSpot contacts",
+            metadata: {
+              destinationType: "contacts",
+              objectType: "contacts",
+            },
+            selected: true,
+          },
+        ],
+      };
+    }
+  }
+
+  const resolvedPortalId = portalId || "hubspot-account";
+  const resolvedUiDomain = uiDomain || `Portal ${resolvedPortalId}`;
 
   return {
-    providerUserId: portalId,
-    providerUserName: uiDomain || `Portal ${portalId}`,
+    providerUserId: resolvedPortalId,
+    providerUserName: resolvedUiDomain,
     tokenType: "Bearer",
     scopes: ["crm.objects.contacts.write"],
     metadata: {
       validated_at: new Date().toISOString(),
-      portal_id: portalId,
-      account_details: details,
+      portal_id: resolvedPortalId,
+      validation_mode: validationMode,
+      account_details: details || {},
     },
     destinations: [
       {
