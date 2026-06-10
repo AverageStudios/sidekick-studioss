@@ -109,6 +109,23 @@ function createWorkspaceLogoFileFromDataUrl(dataUrl: string) {
 }
 
 const optionalText = z.string().trim().optional().default("");
+const supportCategories = [
+  "campaign_launch",
+  "meta_connection",
+  "crm_integration",
+  "billing",
+  "bug_report",
+  "general_question",
+] as const;
+const supportPriorities = ["low", "medium", "high"] as const;
+
+const supportTicketSchema = z.object({
+  subject: z.string().trim().min(3, "Add a short subject.").max(140, "Subject must be 140 characters or fewer."),
+  category: z.enum(supportCategories),
+  priority: z.enum(supportPriorities),
+  message: z.string().trim().min(10, "Tell us a little more so support can help.").max(5000, "Message must be 5,000 characters or fewer."),
+  currentRoute: z.string().trim().max(300).optional().default("/support"),
+});
 const headlineText = z
   .string()
   .trim()
@@ -785,6 +802,86 @@ export async function signOutAction() {
   }
 
   redirect(`/login?success=${encodeURIComponent(authSuccessMessages.signedOut)}`);
+}
+
+export async function submitSupportTicketAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  const values = supportTicketSchema.safeParse({
+    subject: String(formData.get("subject") || ""),
+    category: String(formData.get("category") || ""),
+    priority: String(formData.get("priority") || "medium"),
+    message: String(formData.get("message") || ""),
+    currentRoute: String(formData.get("currentRoute") || "/support"),
+  });
+
+  if (!values.success) {
+    const message = values.error.issues[0]?.message || "Complete the support ticket fields.";
+    redirect(`/support?error=${encodeURIComponent(message)}#ticket`);
+  }
+
+  if (!isSupabaseServerConfigured()) {
+    redirect(
+      `/support?error=${encodeURIComponent(
+        "Support ticket storage is not configured yet. Email support directly for now.",
+      )}#ticket`,
+    );
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(
+      `/support?error=${encodeURIComponent(
+        "Support ticket storage is not available right now. Email support directly for now.",
+      )}#ticket`,
+    );
+  }
+
+  const workspaceContext = await ensureWorkspaceContextForUser(user);
+  if (!workspaceContext?.activeWorkspace.id) {
+    redirect(`/support?error=${encodeURIComponent("Choose a workspace before submitting a ticket.")}#ticket`);
+  }
+
+  const workspaceId = workspaceContext.activeWorkspace.id;
+  const hasAccess = await userHasWorkspaceAccess(user.id, workspaceId);
+  if (!hasAccess) {
+    redirect(`/support?error=${encodeURIComponent("You do not have access to this workspace.")}#ticket`);
+  }
+
+  const userName = workspaceContext.userDisplayName || user.email || "SideKick user";
+  const userEmail = user.email || workspaceContext.userEmail || "";
+  const submittedAt = new Date().toISOString();
+  const context = {
+    workspaceName: workspaceContext.activeWorkspace.name,
+    workspaceId,
+    currentRoute: values.data.currentRoute || "/support",
+    submittedAt,
+    appEnvironment: process.env.VERCEL_ENV || process.env.NODE_ENV || "unknown",
+    appUrl: env.appUrl,
+  };
+
+  const { error } = await admin.from("support_tickets").insert({
+    workspace_id: workspaceId,
+    user_id: user.id,
+    user_name: userName,
+    user_email: userEmail,
+    subject: values.data.subject,
+    category: values.data.category,
+    priority: values.data.priority,
+    message: values.data.message,
+    status: "open",
+    context_json: context,
+  });
+
+  if (error) {
+    redirect(`/support?error=${encodeURIComponent(error.message)}#ticket`);
+  }
+
+  revalidatePath("/support");
+  redirect("/support?submitted=1");
 }
 
 type CampaignLifecycleControl = "pause" | "resume" | "archive";

@@ -2,6 +2,7 @@ import { AppShell } from "@/components/app-shell";
 import { InitialsAvatar } from "@/components/initials-avatar";
 import { ProfilePictureField } from "@/components/profile-picture-field";
 import Link from "next/link";
+import { LifeBuoy } from "lucide-react";
 import { signOutAction, updateProfileSettingsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +34,7 @@ export default async function SettingsPage({
 
   return (
     <AppShell currentPath="/settings">
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Account</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[var(--ink)]">Profile settings</h1>
@@ -41,9 +42,17 @@ export default async function SettingsPage({
             Personal profile details for your account inside this workspace.
           </p>
         </div>
-        <Button asChild variant="outline">
-          <Link href="/workspace/settings">Open workspace settings</Link>
-        </Button>
+        <div className="flex flex-wrap gap-3">
+          <Button asChild variant="outline">
+            <Link href="/workspace/settings">Open workspace settings</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/support?from=/settings">
+              <LifeBuoy className="h-4 w-4" />
+              Get Support
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {saved ? (

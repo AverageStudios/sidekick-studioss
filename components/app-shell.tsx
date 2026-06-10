@@ -17,6 +17,7 @@ const navItems = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard },
   { href: "/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/performance", label: "Performance", icon: BarChart3 },
+  { href: "/support", label: "Support", icon: LifeBuoy },
 ];
 
 export async function AppShell({
@@ -105,6 +106,13 @@ export async function AppShell({
                 >
                   <SlidersHorizontal className="h-4 w-4 text-[var(--muted)]" />
                   <span>Workspace settings</span>
+                </Link>
+                <Link
+                  href="/support?from=/workspace/settings"
+                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
+                >
+                  <LifeBuoy className="h-4 w-4 text-[var(--muted)]" />
+                  <span>Help & Support</span>
                 </Link>
               </div>
 
@@ -250,7 +258,7 @@ export async function AppShell({
                   className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
                 >
                   <LifeBuoy className="h-4 w-4 text-[var(--muted)]" />
-                  <span>Contact support</span>
+                  <span>Help & Support</span>
                 </Link>
                 <Link
                   href="/help"
