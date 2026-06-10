@@ -170,6 +170,11 @@ function buildTokenExpiry(expiresIn?: number) {
     : null;
 }
 
+function normalizeAccessToken(value: string) {
+  const trimmed = value.trim().replace(/^["']|["']$/g, "");
+  return trimmed.replace(/^Bearer\s+/i, "").trim();
+}
+
 async function crmFetch<T>(url: string, init: RequestInit & { headers?: HeadersInit }, errorPrefix: string) {
   const response = await fetch(url, init);
   const raw = await response.text();
@@ -568,10 +573,11 @@ export async function connectWorkspaceCrmProvider({
 }) {
   const validated = await validateCrmConnection({
     provider,
-    accessToken,
+    accessToken: normalizeAccessToken(accessToken),
     metadata,
   });
-  const encrypted = encryptCrmSecret(accessToken);
+  const normalizedAccessToken = normalizeAccessToken(accessToken);
+  const encrypted = encryptCrmSecret(normalizedAccessToken);
   const encryptedRefreshToken = validated.refreshToken
     ? encryptCrmSecret(validated.refreshToken)
     : null;
@@ -718,7 +724,7 @@ export async function connectWorkspaceGoHighLevelOAuthProvider({
     workspaceId,
     userId,
     provider: "gohighlevel",
-    accessToken: locationToken.access_token || "",
+    accessToken: normalizeAccessToken(locationToken.access_token || ""),
     metadata: {
       locationId,
       companyId: locationToken.companyId || null,
