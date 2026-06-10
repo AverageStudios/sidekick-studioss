@@ -6,15 +6,10 @@ import {
   LayoutTemplate,
   Plug,
   Settings2,
-  Users,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { InitialsAvatar } from "@/components/initials-avatar";
 import { WorkspaceLogoField } from "@/components/workspace-logo-field";
 import {
-  inviteWorkspaceMemberAction,
-  removeWorkspaceMemberAction,
-  revokeWorkspaceInvitationAction,
   disconnectCrmConnectionAction,
   disconnectMetaIntegrationAction,
   refreshMetaIntegrationAssetsAction,
@@ -23,7 +18,6 @@ import {
   saveCrmConnectionAction,
   saveMetaIntegrationSelectionsAction,
   syncMetaLeadsAction,
-  updateWorkspaceMemberRoleAction,
   updateWorkspaceGeneralAction,
   updateWorkspaceIconAction,
 } from "@/app/actions";
@@ -34,19 +28,18 @@ import { getDashboardSnapshot } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
 import { getWorkspaceCrmState } from "@/lib/crm-integration";
-import { getCurrentWorkspaceContext, getCurrentWorkspaceMembers } from "@/lib/workspaces";
+import { getCurrentWorkspaceContext } from "@/lib/workspaces";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isMetaConfigured } from "@/lib/meta";
 import { getWorkspaceMetaIntegrationState } from "@/lib/meta-integration";
 import { getWorkspaceLeadSyncHealth } from "@/lib/meta-leads";
-import { env, getGhlEnvStatus, isSupabaseServerConfigured } from "@/lib/env";
+import { getGhlEnvStatus, isSupabaseServerConfigured } from "@/lib/env";
 
 const workspaceSections = [
   { id: "general", label: "General", icon: Settings2 },
   { id: "icon", label: "Branding", icon: ImageIcon },
   { id: "integrations", label: "Integrations", icon: Plug },
   { id: "campaigns", label: "Campaigns", icon: LayoutTemplate },
-  { id: "members", label: "Members", icon: Users },
 ] as const;
 
 type WorkspaceSection = (typeof workspaceSections)[number]["id"];
@@ -88,10 +81,9 @@ export default async function WorkspaceSettingsPage({
   searchParams: Promise<{ section?: string; saved?: string; error?: string; created?: string }>;
 }) {
   const user = await requireUser();
-  const [{ section: rawSection, saved, error, created }, workspaceContext, members, dashboardSnapshot] = await Promise.all([
+  const [{ section: rawSection, saved, error, created }, workspaceContext, dashboardSnapshot] = await Promise.all([
     searchParams,
     getCurrentWorkspaceContext(),
-    getCurrentWorkspaceMembers(),
     getDashboardSnapshot(user.id),
   ]);
 
@@ -183,39 +175,6 @@ export default async function WorkspaceSettingsPage({
   const publishedCampaigns = campaigns.filter((campaign) => campaign.status === "published");
   const draftCampaigns = campaigns.filter((campaign) => campaign.status === "draft");
   const archivedCampaigns = campaigns.filter((campaign) => campaign.status === "archived");
-  const { data: membershipRaw } =
-    admin && workspaceId
-      ? await admin
-          .from("workspace_memberships")
-          .select("role")
-          .eq("workspace_id", workspaceId)
-          .eq("user_id", user.id)
-          .maybeSingle()
-      : { data: null };
-  const actorRole =
-    (membershipRaw?.role as "owner" | "admin" | "member" | undefined) ||
-    (workspaceContext?.activeWorkspace.owner_user_id === user.id ? "owner" : "member");
-  const isWorkspaceOwner = workspaceContext?.activeWorkspace.owner_user_id === user.id;
-  const canManageMembers = isWorkspaceOwner || actorRole === "owner" || actorRole === "admin";
-  const { data: invitesRaw } =
-    admin && workspaceId
-      ? await admin
-          .from("workspace_invitations")
-          .select("id, invited_email, invited_role, status, token, expires_at, created_at")
-          .eq("workspace_id", workspaceId)
-          .eq("status", "pending")
-          .order("created_at", { ascending: false })
-      : { data: [] };
-  const pendingInvites = (invitesRaw || []) as Array<{
-    id: string;
-    invited_email: string;
-    invited_role: "admin" | "member";
-    status: "pending";
-    token: string;
-    expires_at: string;
-    created_at: string;
-  }>;
-
   return (
     <AppShell currentPath="/settings">
       <div className="overflow-hidden rounded-[2rem] border border-[var(--line)] bg-white shadow-[0_18px_50px_rgba(15,23,42,0.05)]">
@@ -262,9 +221,9 @@ export default async function WorkspaceSettingsPage({
             </nav>
 
             <div className="mt-8 rounded-2xl border border-[var(--line)] bg-white p-4">
-              <p className="text-sm font-semibold text-[var(--ink)]">Visibility</p>
+              <p className="text-sm font-semibold text-[var(--ink)]">Workspace</p>
               <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                These settings affect the active workspace. Member invites and access controls can come next.
+                These settings affect the active workspace and business account.
               </p>
             </div>
           </aside>
@@ -977,136 +936,6 @@ export default async function WorkspaceSettingsPage({
               </section>
             ) : null}
 
-            {section === "members" ? (
-              <section className="max-w-4xl">
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Members</p>
-                <h2 className="mt-3 text-[2.2rem] font-semibold tracking-[-0.05em] text-[var(--ink)]">Members</h2>
-                <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-                  Invite teammates into this workspace, manage roles, and collaborate across devices.
-                </p>
-
-                <form action={inviteWorkspaceMemberAction} className="mt-8 rounded-2xl border border-[var(--line)] bg-white p-5">
-                  <p className="text-sm font-semibold text-[var(--ink)]">Invite member</p>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto]">
-                    <Input name="email" type="email" placeholder="name@company.com" required />
-                    <select
-                      name="role"
-                      defaultValue="member"
-                      className="h-11 rounded-[14px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--ink)]"
-                    >
-                      {isWorkspaceOwner || actorRole === "owner" ? <option value="admin">Admin</option> : null}
-                      <option value="member">Member</option>
-                    </select>
-                    <Button type="submit">Send invite</Button>
-                  </div>
-                  {!canManageMembers ? (
-                    <p className="mt-3 text-xs text-[var(--muted)]">
-                      If this is your workspace and this still appears, refresh once and try again.
-                    </p>
-                  ) : null}
-                </form>
-
-                <div className="mt-8">
-                  <h3 className="text-base font-semibold text-[var(--ink)]">Pending invites</h3>
-                  <div className="mt-3 space-y-3">
-                    {pendingInvites.length ? (
-                      pendingInvites.map((invite) => {
-                        const inviteLink = `${env.appUrl}/workspaces/invite?token=${invite.token}`;
-                        return (
-                          <div
-                            key={invite.id}
-                            className="flex flex-col gap-4 rounded-2xl border border-[var(--line)] bg-white p-5 sm:flex-row sm:items-center sm:justify-between"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-[var(--ink)]">{invite.invited_email}</p>
-                              <p className="mt-1 text-xs text-[var(--muted)]">
-                                Role: <span className="capitalize">{invite.invited_role}</span> • Expires{" "}
-                                {new Date(invite.expires_at).toLocaleDateString()}
-                              </p>
-                              <p className="mt-2 truncate text-xs text-[var(--muted)]">{inviteLink}</p>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button asChild variant="outline">
-                                <Link href={inviteLink}>Open</Link>
-                              </Button>
-                              {canManageMembers ? (
-                                <form action={revokeWorkspaceInvitationAction}>
-                                  <input type="hidden" name="invitationId" value={invite.id} />
-                                  <Button type="submit" variant="outline">Revoke</Button>
-                                </form>
-                              ) : null}
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="rounded-2xl border border-[var(--line)] bg-[var(--soft-panel)] p-5 text-sm text-[var(--muted)]">
-                        No pending invites.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-8 space-y-3">
-                  {members.map((member) => (
-                    <div
-                      key={member.membershipId}
-                      className="flex flex-col gap-4 rounded-2xl border border-[var(--line)] bg-white p-5 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="flex items-center gap-4">
-                        <InitialsAvatar
-                          initials={member.initials}
-                          label={member.displayName}
-                          src={member.avatarUrl}
-                          size="lg"
-                          tone={member.isCurrentUser ? "brand" : "subtle"}
-                        />
-                        <div>
-                          <p className="text-sm font-semibold text-[var(--ink)]">
-                            {member.displayName} {member.isCurrentUser ? <span className="text-[var(--muted)]">(You)</span> : null}
-                          </p>
-                          <p className="mt-1 text-sm text-[var(--muted)]">{member.email || "Email unavailable"}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {canManageMembers && member.role !== "owner" ? (
-                          <form action={updateWorkspaceMemberRoleAction} className="flex items-center gap-2">
-                            <input type="hidden" name="membershipId" value={member.membershipId} />
-                            <select
-                              name="role"
-                              defaultValue={member.role}
-                              className="h-9 rounded-[12px] border border-[var(--line)] bg-white px-2 text-xs font-medium text-[var(--ink)]"
-                            >
-                              {isWorkspaceOwner || actorRole === "owner" ? <option value="admin">Admin</option> : null}
-                              <option value="member">Member</option>
-                            </select>
-                            <Button type="submit" variant="outline">Save</Button>
-                          </form>
-                        ) : (
-                          <span className="rounded-full bg-[var(--soft-panel)] px-3 py-1 text-xs font-medium capitalize text-[var(--ink)]">
-                            {member.role}
-                          </span>
-                        )}
-                        {canManageMembers && !member.isCurrentUser && member.role !== "owner" ? (
-                          <form action={removeWorkspaceMemberAction}>
-                            <input type="hidden" name="membershipId" value={member.membershipId} />
-                            <Button type="submit" variant="outline">Remove</Button>
-                          </form>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-6 rounded-2xl border border-[var(--line)] bg-[var(--soft-panel)] p-5">
-                  <p className="text-sm font-medium text-[var(--ink)]">Workspace permissions</p>
-                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                    Owner can manage admins and members. Admins can invite and manage members.
-                  </p>
-                </div>
-              </section>
-            ) : null}
           </div>
         </div>
       </div>

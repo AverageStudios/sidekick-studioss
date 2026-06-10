@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, Building2, ChevronDown, CircleHelp, LayoutDashboard, LayoutGrid, LifeBuoy, LogOut, Megaphone, Plus, Shield, SlidersHorizontal, UserCircle2, Users } from "lucide-react";
+import { BarChart3, Building2, ChevronDown, CircleHelp, LayoutDashboard, LayoutGrid, LifeBuoy, LogOut, Megaphone, Plus, Shield, SlidersHorizontal, UserCircle2 } from "lucide-react";
 import { ConfigNotice } from "@/components/config-notice";
 import { InitialsAvatar } from "@/components/initials-avatar";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
@@ -46,7 +46,7 @@ export async function AppShell({
   const userDisplayName =
     getUserDisplayNameFromProfile(identityProfile, identityUser) ||
     workspaceContext?.userDisplayName ||
-    "Workspace member";
+    "Workspace owner";
   const workspaceName =
     workspaceContext?.activeWorkspace.name ||
     getWorkspaceDisplayName(undefined, userDisplayName);
@@ -99,13 +99,6 @@ export async function AppShell({
 
             <div className="absolute left-0 top-[calc(100%+10px)] z-40 hidden w-[19rem] rounded-[1.35rem] border border-[var(--line)] bg-white p-2 shadow-[0_18px_50px_rgba(15,23,42,0.12)] group-open:block">
               <div className="space-y-1">
-                <Link
-                  href="/workspace/settings?section=members"
-                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
-                >
-                  <Users className="h-4 w-4 text-[var(--muted)]" />
-                  <span>Manage members</span>
-                </Link>
                 <Link
                   href="/workspace/settings"
                   className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
@@ -220,7 +213,7 @@ export async function AppShell({
             <summary className="ml-auto flex cursor-pointer list-none items-center justify-end gap-3 rounded-2xl px-2 py-1.5 transition-colors hover:bg-[var(--soft-panel)] group-open:bg-[var(--soft-panel)]">
               <div className="hidden min-w-0 text-right md:block">
                 <p className="truncate text-sm font-semibold text-[var(--ink)]">{userDisplayName}</p>
-                <p className="truncate text-xs text-[var(--muted)]">{userEmail || "Workspace member"}</p>
+                <p className="truncate text-xs text-[var(--muted)]">{userEmail || "Workspace account"}</p>
               </div>
               <InitialsAvatar
                 initials={userInitials}
@@ -235,9 +228,9 @@ export async function AppShell({
                 <InitialsAvatar initials={userInitials} label={userDisplayName} src={userAvatarUrl} size="lg" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-base font-semibold text-[var(--ink)]">{userDisplayName}</p>
-                  <p className="mt-1 truncate text-sm text-[var(--muted)]">{userEmail || "Workspace member"}</p>
+                  <p className="mt-1 truncate text-sm text-[var(--muted)]">{userEmail || "Workspace account"}</p>
                   <p className="mt-3 text-sm font-medium text-[var(--muted-strong)]">
-                    Workspace member <span className="text-[var(--muted)]">• {workspaceName}</span>
+                    Workspace account <span className="text-[var(--muted)]">• {workspaceName}</span>
                   </p>
                 </div>
               </div>
