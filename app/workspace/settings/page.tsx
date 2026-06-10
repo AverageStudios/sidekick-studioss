@@ -14,8 +14,12 @@ import {
   inviteWorkspaceMemberAction,
   removeWorkspaceMemberAction,
   revokeWorkspaceInvitationAction,
+  disconnectCrmConnectionAction,
   disconnectMetaIntegrationAction,
   refreshMetaIntegrationAssetsAction,
+  retryCrmDeliveryAction,
+  saveCrmConnectionAction,
+  saveCrmRoutingAction,
   saveMetaIntegrationSelectionsAction,
   updateWorkspaceMemberRoleAction,
   updateWorkspaceGeneralAction,
@@ -27,15 +31,16 @@ import { requireUser } from "@/lib/auth";
 import { getDashboardSnapshot } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
+import { getWorkspaceCrmState } from "@/lib/crm-integration";
 import { getCurrentWorkspaceContext, getCurrentWorkspaceMembers } from "@/lib/workspaces";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isMetaConfigured } from "@/lib/meta";
 import { getWorkspaceMetaIntegrationState } from "@/lib/meta-integration";
-import { env, isSupabaseServerConfigured } from "@/lib/env";
+import { env, getGhlEnvStatus, isSupabaseServerConfigured } from "@/lib/env";
 
 const workspaceSections = [
   { id: "general", label: "General", icon: Settings2 },
-  { id: "icon", label: "Icon", icon: ImageIcon },
+  { id: "icon", label: "Branding", icon: ImageIcon },
   { id: "integrations", label: "Integrations", icon: Plug },
   { id: "campaigns", label: "Campaigns", icon: LayoutTemplate },
   { id: "members", label: "Members", icon: Users },
@@ -45,6 +50,33 @@ type WorkspaceSection = (typeof workspaceSections)[number]["id"];
 
 function getSection(section: string | undefined): WorkspaceSection {
   return workspaceSections.some((item) => item.id === section) ? (section as WorkspaceSection) : "general";
+}
+
+function formatStatusTone(connected: boolean) {
+  return connected
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+    : "border-amber-200 bg-amber-50 text-amber-700";
+}
+
+function formatDeliveryStateTone(state: string) {
+  switch (state) {
+    case "delivered":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "failed":
+      return "border-rose-200 bg-rose-50 text-rose-700";
+    default:
+      return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+}
+
+function formatShortDate(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(date);
 }
 
 export default async function WorkspaceSettingsPage({
@@ -67,6 +99,7 @@ export default async function WorkspaceSettingsPage({
   const workspaceContextMissing = !workspaceContext && isSupabaseServerConfigured();
   const admin = createSupabaseAdminClient();
   let integrationError: string | null = null;
+  let crmIntegrationError: string | null = null;
   const integrationState =
     admin && workspaceId
       ? await getWorkspaceMetaIntegrationState({ admin, workspaceId }).catch((err) => {
@@ -74,12 +107,36 @@ export default async function WorkspaceSettingsPage({
           return null;
         })
       : null;
+  const crmState =
+    admin && workspaceId
+      ? await getWorkspaceCrmState({ admin, workspaceId }).catch((err) => {
+          crmIntegrationError = err instanceof Error ? err.message : "CRM connections could not be loaded.";
+          return {
+            connections: [],
+            destinations: [],
+            routingRules: [],
+            activeRoutingRule: null,
+            deliveries: [],
+          };
+        })
+      : {
+          connections: [],
+          destinations: [],
+          routingRules: [],
+          activeRoutingRule: null,
+          deliveries: [],
+        };
   const connection = integrationState?.connection || null;
   const adAccounts = integrationState?.assets.adAccounts || [];
   const pages = integrationState?.assets.pages || [];
   const instagramActors = integrationState?.assets.instagramActors || [];
   const metaConnected =
     Boolean(connection && integrationState?.tokenAvailable && connection.status === "connected");
+  const crmConnections = crmState.connections.filter((item) => item.is_active);
+  const ghlConnection = crmConnections.find((item) => item.provider === "gohighlevel") || null;
+  const hubspotConnection = crmConnections.find((item) => item.provider === "hubspot") || null;
+  const ghlEnvStatus = getGhlEnvStatus();
+  const providerDestinations = crmState.destinations.filter((destination) => destination.is_available);
   const metaConnectNext = encodeURIComponent("/workspace/settings?section=integrations");
   const selectedPageLeadFormAccess =
     connection?.metadata_json &&
@@ -529,177 +586,314 @@ export default async function WorkspaceSettingsPage({
             {section === "integrations" ? (
               <section className="max-w-5xl">
                 <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Integrations</p>
-                <h2 className="mt-3 text-[2.2rem] font-semibold tracking-[-0.05em] text-[var(--ink)]">Meta / Facebook</h2>
+                <h2 className="mt-3 text-[2.2rem] font-semibold tracking-[-0.05em] text-[var(--ink)]">Connected accounts</h2>
                 <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-                  This connection is scoped to this workspace. New workspaces need their own Meta connection.
+                  Connect the services this workspace uses to launch campaigns and send new leads into your CRM.
                 </p>
 
-                <div className="mt-8">
-                  <div className="rounded-[1.5rem] border border-[var(--line)] bg-white px-6 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
-                    {workspaceContextMissing ? (
-                      <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                        <strong>Workspace could not be loaded.</strong> This usually means the required database migrations have not been applied to your Supabase project. Run migrations 004 and 011 from <code>supabase/migrations/</code> against your project.
-                      </div>
-                    ) : null}
-                    {!isMetaConfigured() ? (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                        Meta env vars are missing. Set <code>META_APP_ID</code>, <code>META_APP_SECRET</code>, and <code>META_REDIRECT_URI</code> in your environment.
-                      </div>
-                    ) : null}
-                    {integrationError ? (
-                      <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                        {integrationError}
-                      </div>
-                    ) : null}
+                <div className="mt-8 space-y-6">
+                  {workspaceContextMissing ? (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                      Workspace settings could not be loaded right now.
+                    </div>
+                  ) : null}
+                  {integrationError ? (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                      {integrationError}
+                    </div>
+                  ) : null}
+                  {crmIntegrationError ? (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                      {crmIntegrationError}
+                    </div>
+                  ) : null}
 
-                    <div className="flex flex-col gap-6">
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#f3f7ff] text-[#1877f2] shadow-[inset_0_0_0_1px_rgba(24,119,242,0.08)]">
-                            <span className="text-2xl font-black leading-none">∞</span>
-                          </div>
+                  <div className="rounded-[1.75rem] border border-[var(--line)] bg-white p-6 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-[var(--ink)]">Connected accounts</p>
+                        <p className="mt-1 text-sm text-[var(--muted)]">
+                          Manage the services this workspace uses for campaign launch and CRM handoff.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 space-y-4">
+                      <div className="rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] p-5">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <div className="flex flex-wrap items-center gap-3">
-                              <h3 className="text-[1.35rem] font-semibold tracking-[-0.04em] text-[var(--ink)]">Facebook</h3>
-                              <span
-                                className={cn(
-                                  "rounded-full border px-3 py-1 text-xs font-semibold",
-                                  metaConnected
-                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                    : "border-amber-300 bg-amber-50 text-amber-700",
-                                )}
-                              >
-                                {metaConnected ? "Connected" : "Needs Attention"}
+                              <p className="text-base font-semibold text-[var(--ink)]">Meta / Facebook</p>
+                              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", formatStatusTone(metaConnected))}>
+                                {metaConnected ? "Connected" : "Not connected"}
                               </span>
                             </div>
-                            <p className="mt-1 text-sm text-[var(--muted)]">Meta Ads Manager</p>
+                            <p className="mt-2 text-sm text-[var(--muted)]">
+                              Connect Meta to publish campaigns and receive lead form submissions.
+                            </p>
                             {connection?.provider_user_name ? (
                               <p className="mt-1 text-xs text-[var(--muted)]">Connected as {connection.provider_user_name}</p>
                             ) : null}
                           </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 sm:justify-end">
-                          {connection ? (
-                            <form action={disconnectMetaIntegrationAction}>
-                              <Button type="submit" variant="outline">Disconnect</Button>
-                            </form>
-                          ) : null}
+                          <div className="flex flex-wrap gap-2">
+                            <Button asChild disabled={!isMetaConfigured() || !workspaceId}>
+                              <Link href={metaConnectHref}>{metaConnected ? "Reconnect" : "Connect"}</Link>
+                            </Button>
+                            {metaConnected ? (
+                              <>
+                                <form action={refreshMetaIntegrationAssetsAction}>
+                                  <Button type="submit" variant="outline">Refresh</Button>
+                                </form>
+                                <form action={disconnectMetaIntegrationAction}>
+                                  <Button type="submit" variant="outline">Disconnect</Button>
+                                </form>
+                              </>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
-                        <Button asChild disabled={!isMetaConfigured() || !workspaceId}>
-                          <Link href={metaConnectHref}>
-                            {metaConnected ? "Reconnect" : "Connect Facebook"}
-                          </Link>
-                        </Button>
-
-                        {metaConnected ? (
-                          <form action={refreshMetaIntegrationAssetsAction}>
-                            <Button type="submit" variant="outline">Refresh assets</Button>
-                          </form>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    {connection ? (
-                      <form action={saveMetaIntegrationSelectionsAction} className="mt-6 border-t border-[var(--line)] pt-6">
-                        <div className="space-y-5">
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between gap-3">
-                              <label className="block text-sm font-medium text-[var(--ink)]">
-                                Ad Account
-                              </label>
-                              <span className="text-sm font-medium text-[var(--brand)]">
-                                create new
+                      <div className="rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] p-5">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-3">
+                              <p className="text-base font-semibold text-[var(--ink)]">GoHighLevel</p>
+                              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", formatStatusTone(Boolean(ghlConnection)))}>
+                                {ghlConnection ? "Connected" : "Not connected"}
                               </span>
                             </div>
+                            <p className="mt-2 text-sm text-[var(--muted)]">
+                              Send new leads from this workspace directly into GoHighLevel.
+                            </p>
+                            {ghlConnection ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">
+                                {typeof ghlConnection.metadata_json.location_name === "string"
+                                  ? ghlConnection.metadata_json.location_name
+                                  : ghlConnection.provider_user_name || "Workspace connected"}
+                              </p>
+                            ) : !ghlEnvStatus.configured ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">
+                                OAuth setup is not configured yet.
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button asChild disabled={!ghlEnvStatus.configured}>
+                              <Link href="/api/integrations/crm/connect?provider=gohighlevel&next=/workspace/settings?section=integrations">
+                                {ghlConnection ? "Reconnect" : "Connect"}
+                              </Link>
+                            </Button>
+                            {ghlConnection ? (
+                              <form action={disconnectCrmConnectionAction}>
+                                <input type="hidden" name="provider" value="gohighlevel" />
+                                <Button type="submit" variant="outline">Disconnect</Button>
+                              </form>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] p-5">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-3">
+                              <p className="text-base font-semibold text-[var(--ink)]">HubSpot</p>
+                              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", formatStatusTone(Boolean(hubspotConnection)))}>
+                                {hubspotConnection ? "Connected" : "Not connected"}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm text-[var(--muted)]">
+                              Send captured leads from this workspace into HubSpot contacts.
+                            </p>
+                            {hubspotConnection ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">
+                                {hubspotConnection.provider_user_name || "HubSpot account connected"}
+                              </p>
+                            ) : null}
+                          </div>
+                          {hubspotConnection ? (
+                            <div className="flex flex-wrap gap-2">
+                              <form action={disconnectCrmConnectionAction}>
+                                <input type="hidden" name="provider" value="hubspot" />
+                                <Button type="submit" variant="outline">Disconnect</Button>
+                              </form>
+                            </div>
+                          ) : (
+                            <form action={saveCrmConnectionAction} className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[22rem]">
+                              <input type="hidden" name="provider" value="hubspot" />
+                              <Input
+                                type="password"
+                                name="accessToken"
+                                required
+                                placeholder="HubSpot private app token"
+                              />
+                              <Button type="submit" className="sm:self-start">Connect</Button>
+                            </form>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {connection ? (
+                    <div className="rounded-[1.75rem] border border-[var(--line)] bg-white p-6 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--ink)]">Facebook campaign defaults</p>
+                          <p className="mt-1 text-sm text-[var(--muted)]">
+                            Choose the ad account and page this workspace should use by default.
+                          </p>
+                        </div>
+                      </div>
+
+                      <form action={saveMetaIntegrationSelectionsAction} className="mt-6 space-y-5">
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium text-[var(--ink)]">Ad account</label>
+                          <select
+                            name="adAccountId"
+                            defaultValue={integrationState?.selected.adAccountId || ""}
+                            className="h-12 w-full rounded-[14px] border border-[var(--line)] bg-white px-4 text-sm text-[var(--ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand)]"
+                          >
+                            <option value="">Select ad account</option>
+                            {adAccounts.map((account) => (
+                              <option key={account.asset_id} value={account.asset_id}>
+                                {account.name || account.asset_id}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium text-[var(--ink)]">Facebook Page</label>
+                          <select
+                            name="pageId"
+                            defaultValue={integrationState?.selected.pageId || ""}
+                            className="h-12 w-full rounded-[14px] border border-[var(--line)] bg-white px-4 text-sm text-[var(--ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand)]"
+                          >
+                            <option value="">Select page</option>
+                            {pages.map((page) => (
+                              <option key={page.asset_id} value={page.asset_id}>
+                                {page.name || page.asset_id}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {instagramActors.length ? (
+                          <div className="space-y-2">
+                            <label className="block text-sm font-medium text-[var(--ink)]">Instagram account</label>
                             <select
-                              name="adAccountId"
-                              defaultValue={integrationState?.selected.adAccountId || ""}
+                              name="instagramActorId"
+                              defaultValue={integrationState?.selected.instagramActorId || ""}
                               className="h-12 w-full rounded-[14px] border border-[var(--line)] bg-white px-4 text-sm text-[var(--ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand)]"
                             >
-                              <option value="">Select ad account</option>
-                              {adAccounts.map((account) => (
-                                <option key={account.asset_id} value={account.asset_id}>
-                                  {account.name || account.asset_id}
+                              <option value="">No Instagram account selected</option>
+                              {instagramActors.map((actor) => (
+                                <option key={actor.asset_id} value={actor.asset_id}>
+                                  {actor.name || actor.asset_id}
                                 </option>
                               ))}
                             </select>
                           </div>
+                        ) : null}
 
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between gap-3">
-                              <label className="block text-sm font-medium text-[var(--ink)]">
-                                Facebook Page
-                              </label>
-                              <span className="text-sm font-medium text-[var(--brand)]">
-                                create page
-                              </span>
-                            </div>
-                            <div className="flex gap-2">
-                              <select
-                                name="pageId"
-                                defaultValue={integrationState?.selected.pageId || ""}
-                                className="h-12 min-w-0 flex-1 rounded-[14px] border border-[var(--line)] bg-white px-4 text-sm text-[var(--ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand)]"
-                              >
-                                <option value="">Select page</option>
-                                {pages.map((page) => (
-                                  <option key={page.asset_id} value={page.asset_id}>
-                                    {page.name || page.asset_id}
-                                  </option>
-                                ))}
-                              </select>
-                              <div className="flex h-12 w-12 items-center justify-center rounded-[14px] border border-[var(--line)] bg-white text-[var(--muted)] shadow-sm">
-                                ↻
-                              </div>
-                            </div>
-                          </div>
-
-                          {instagramActors.length ? (
-                            <div className="space-y-2">
-                              <label className="block text-sm font-medium text-[var(--ink)]">
-                                Instagram (optional)
-                              </label>
-                              <select
-                                name="instagramActorId"
-                                defaultValue={integrationState?.selected.instagramActorId || ""}
-                                className="h-12 w-full rounded-[14px] border border-[var(--line)] bg-white px-4 text-sm text-[var(--ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand)]"
-                              >
-                                <option value="">No Instagram actor selected</option>
-                                {instagramActors.map((actor) => (
-                                  <option key={actor.asset_id} value={actor.asset_id}>
-                                    {actor.name || actor.asset_id}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
+                        <div className="flex flex-wrap items-center gap-3 pt-2">
+                          <Button type="submit">Save changes</Button>
+                          {needsLeadFormReconnect ? (
+                            <p className="text-xs text-[var(--muted)]">
+                              Reconnect Meta to approve lead form permissions for the selected page.
+                            </p>
                           ) : null}
                         </div>
-
-                        <div className="mt-7 flex flex-col items-center gap-4 border-t border-[var(--line)] pt-6">
-                          <Button type="submit" className="min-w-[13rem]">
-                            Save
-                          </Button>
-                          <div className="text-center">
-                            {metaConnected ? (
-                              <Link
-                                href={metaConnectHref}
-                                className="text-sm font-medium text-[var(--brand)] transition-colors hover:text-[var(--brand-ink)]"
-                              >
-                                Reconnect
-                              </Link>
-                            ) : null}
-                            <p className="mt-1 text-xs text-[var(--muted)]">
-                              {needsLeadFormReconnect
-                                ? "Reconnect will request lead-form permissions for the selected Facebook Page."
-                                : "Update permissions or switch accounts"}
-                            </p>
-                          </div>
-                        </div>
                       </form>
-                    ) : null}
+                    </div>
+                  ) : null}
+
+                  <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
+                    <div className="rounded-[1.75rem] border border-[var(--line)] bg-white p-6 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+                      <p className="text-sm font-semibold text-[var(--ink)]">Default CRM destination</p>
+                      <p className="mt-1 text-sm text-[var(--muted)]">
+                        Choose where this workspace should send new leads by default.
+                      </p>
+
+                      {providerDestinations.length ? (
+                        <form action={saveCrmRoutingAction} className="mt-6 space-y-4">
+                          <div className="space-y-2">
+                            <label className="block text-sm font-medium text-[var(--ink)]">Destination</label>
+                            <select
+                              name="routeTarget"
+                              defaultValue={
+                                crmState.activeRoutingRule
+                                  ? `${crmState.activeRoutingRule.provider}::${crmState.activeRoutingRule.destination_asset_id || ""}`
+                                  : ""
+                              }
+                              className="h-12 w-full rounded-[14px] border border-[var(--line)] bg-white px-4 text-sm text-[var(--ink)] shadow-sm outline-none transition-colors focus:border-[var(--brand)]"
+                            >
+                              <option value="">Choose a destination</option>
+                              {providerDestinations.map((destination) => (
+                                <option key={destination.id} value={`${destination.provider}::${destination.id}`}>
+                                  {destination.name || destination.asset_id}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <Button type="submit">Save destination</Button>
+                        </form>
+                      ) : (
+                        <div className="mt-6 rounded-2xl border border-dashed border-[var(--line)] bg-[var(--soft-panel)] px-5 py-6 text-sm text-[var(--muted)]">
+                          Connect a CRM first to choose a default destination.
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-[1.75rem] border border-[var(--line)] bg-white p-6 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--ink)]">Recent sync activity</p>
+                          <p className="mt-1 text-sm text-[var(--muted)]">
+                            A quick view of recent lead delivery results.
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-[var(--soft-panel)] px-3 py-1 text-xs font-semibold text-[var(--muted-strong)]">
+                          {crmState.deliveries.length} recent
+                        </span>
+                      </div>
+
+                      <div className="mt-5 space-y-3">
+                        {crmState.deliveries.length ? (
+                          crmState.deliveries.slice(0, 5).map((delivery) => (
+                            <div key={delivery.id} className="rounded-[1.15rem] border border-[var(--line)] bg-[var(--surface)] p-4">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="text-sm font-semibold text-[var(--ink)]">{delivery.provider}</p>
+                                    <span className={cn("rounded-full border px-2.5 py-1 text-[11px] font-semibold", formatDeliveryStateTone(delivery.state))}>
+                                      {delivery.state}
+                                    </span>
+                                  </div>
+                                  <p className="mt-1 text-xs text-[var(--muted)]">
+                                    {formatShortDate(delivery.updated_at) || "Recently updated"} • {delivery.attempts_count} attempt{delivery.attempts_count === 1 ? "" : "s"}
+                                  </p>
+                                  {delivery.last_error ? (
+                                    <p className="mt-2 text-xs text-rose-700">{delivery.last_error}</p>
+                                  ) : null}
+                                </div>
+                                {delivery.state === "failed" ? (
+                                  <form action={retryCrmDeliveryAction}>
+                                    <input type="hidden" name="deliveryId" value={delivery.id} />
+                                    <Button type="submit" size="sm" variant="outline">Retry</Button>
+                                  </form>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="rounded-2xl border border-dashed border-[var(--line)] bg-[var(--soft-panel)] px-5 py-6 text-sm text-[var(--muted)]">
+                            No recent sync activity yet.
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </section>

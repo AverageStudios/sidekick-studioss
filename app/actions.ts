@@ -2666,12 +2666,12 @@ export async function saveCrmConnectionAction(formData: FormData) {
   }
 
   if (!isSupabaseServerConfigured()) {
-    redirect("/integrations?error=Supabase server access is not configured.");
+    redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");
   }
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
-    redirect("/integrations?error=Supabase server access is not configured.");
+    redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");
   }
 
   let workspaceContext;
@@ -2679,12 +2679,12 @@ export async function saveCrmConnectionAction(formData: FormData) {
     workspaceContext = await ensureWorkspaceContextForUser(user);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Workspace could not be loaded.";
-    redirect(`/integrations?error=${encodeURIComponent(msg)}`);
+    redirect(`/workspace/settings?section=integrations&error=${encodeURIComponent(msg)}`);
   }
 
   const workspaceId = workspaceContext?.activeWorkspace.id;
   if (!workspaceId) {
-    redirect("/integrations?error=No active workspace found.");
+    redirect("/workspace/settings?section=integrations&error=No%20active%20workspace%20found.");
   }
 
   const provider = String(formData.get("provider") || "").trim();
@@ -2692,11 +2692,11 @@ export async function saveCrmConnectionAction(formData: FormData) {
   const locationId = String(formData.get("locationId") || "").trim();
 
   if (provider === "gohighlevel") {
-    redirect("/integrations?error=Connect%20GoHighLevel%20through%20the%20OAuth%20install%20flow.");
+    redirect("/workspace/settings?section=integrations&error=Connect%20GoHighLevel%20through%20the%20OAuth%20install%20flow.");
   }
 
   if (!provider || !accessToken) {
-    redirect("/integrations?error=Provider and access token are required.");
+    redirect("/workspace/settings?section=integrations&error=Provider%20and%20access%20token%20are%20required.");
   }
 
   try {
@@ -2710,13 +2710,13 @@ export async function saveCrmConnectionAction(formData: FormData) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not save CRM connection.";
-    redirect(`/integrations?error=${encodeURIComponent(message)}`);
+    redirect(`/workspace/settings?section=integrations&error=${encodeURIComponent(message)}`);
   }
 
-  revalidatePath("/integrations");
+  revalidatePath("/workspace/settings");
   revalidatePath("/dashboard");
   revalidatePath("/performance");
-  redirect(`/integrations?saved=${encodeURIComponent(`${provider} connected`)}`);
+  redirect(`/workspace/settings?section=integrations&saved=${encodeURIComponent(`${provider} connected`)}`);
 }
 
 export async function disconnectCrmConnectionAction(formData: FormData) {
@@ -2726,12 +2726,12 @@ export async function disconnectCrmConnectionAction(formData: FormData) {
   }
 
   if (!isSupabaseServerConfigured()) {
-    redirect("/integrations?error=Supabase server access is not configured.");
+    redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");
   }
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
-    redirect("/integrations?error=Supabase server access is not configured.");
+    redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");
   }
 
   let workspaceContext;
@@ -2739,13 +2739,13 @@ export async function disconnectCrmConnectionAction(formData: FormData) {
     workspaceContext = await ensureWorkspaceContextForUser(user);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Workspace could not be loaded.";
-    redirect(`/integrations?error=${encodeURIComponent(msg)}`);
+    redirect(`/workspace/settings?section=integrations&error=${encodeURIComponent(msg)}`);
   }
 
   const workspaceId = workspaceContext?.activeWorkspace.id;
   const provider = String(formData.get("provider") || "").trim();
   if (!workspaceId || !provider) {
-    redirect("/integrations?error=Missing workspace or provider.");
+    redirect("/workspace/settings?section=integrations&error=Missing%20workspace%20or%20provider.");
   }
 
   try {
@@ -2756,11 +2756,11 @@ export async function disconnectCrmConnectionAction(formData: FormData) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not disconnect CRM.";
-    redirect(`/integrations?error=${encodeURIComponent(message)}`);
+    redirect(`/workspace/settings?section=integrations&error=${encodeURIComponent(message)}`);
   }
 
-  revalidatePath("/integrations");
-  redirect(`/integrations?saved=${encodeURIComponent(`${provider} disconnected`)}`);
+  revalidatePath("/workspace/settings");
+  redirect(`/workspace/settings?section=integrations&saved=${encodeURIComponent(`${provider} disconnected`)}`);
 }
 
 export async function saveCrmRoutingAction(formData: FormData) {
@@ -2770,12 +2770,12 @@ export async function saveCrmRoutingAction(formData: FormData) {
   }
 
   if (!isSupabaseServerConfigured()) {
-    redirect("/integrations?error=Supabase server access is not configured.");
+    redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");
   }
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
-    redirect("/integrations?error=Supabase server access is not configured.");
+    redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");
   }
 
   let workspaceContext;
@@ -2783,14 +2783,14 @@ export async function saveCrmRoutingAction(formData: FormData) {
     workspaceContext = await ensureWorkspaceContextForUser(user);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Workspace could not be loaded.";
-    redirect(`/integrations?error=${encodeURIComponent(msg)}`);
+    redirect(`/workspace/settings?section=integrations&error=${encodeURIComponent(msg)}`);
   }
 
   const workspaceId = workspaceContext?.activeWorkspace.id;
   const routeTarget = String(formData.get("routeTarget") || "").trim();
   const [provider, destinationAssetId] = routeTarget.split("::");
   if (!workspaceId || !provider || !destinationAssetId) {
-    redirect("/integrations?error=Choose a CRM destination before saving routing.");
+    redirect("/workspace/settings?section=integrations&error=Choose%20a%20CRM%20destination%20before%20saving%20routing.");
   }
 
   try {
@@ -2802,12 +2802,12 @@ export async function saveCrmRoutingAction(formData: FormData) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not save routing.";
-    redirect(`/integrations?error=${encodeURIComponent(message)}`);
+    redirect(`/workspace/settings?section=integrations&error=${encodeURIComponent(message)}`);
   }
 
-  revalidatePath("/integrations");
+  revalidatePath("/workspace/settings");
   revalidatePath("/dashboard");
-  redirect("/integrations?saved=Routing%20saved");
+  redirect("/workspace/settings?section=integrations&saved=Routing%20saved");
 }
 
 export async function retryCrmDeliveryAction(formData: FormData) {
@@ -2817,17 +2817,17 @@ export async function retryCrmDeliveryAction(formData: FormData) {
   }
 
   if (!isSupabaseServerConfigured()) {
-    redirect("/integrations?error=Supabase server access is not configured.");
+    redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");
   }
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
-    redirect("/integrations?error=Supabase server access is not configured.");
+    redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");
   }
 
   const deliveryId = String(formData.get("deliveryId") || "").trim();
   if (!deliveryId) {
-    redirect("/integrations?error=Delivery ID is required.");
+    redirect("/workspace/settings?section=integrations&error=Delivery%20ID%20is%20required.");
   }
 
   try {
@@ -2837,12 +2837,12 @@ export async function retryCrmDeliveryAction(formData: FormData) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not retry delivery.";
-    redirect(`/integrations?error=${encodeURIComponent(message)}`);
+    redirect(`/workspace/settings?section=integrations&error=${encodeURIComponent(message)}`);
   }
 
-  revalidatePath("/integrations");
+  revalidatePath("/workspace/settings");
   revalidatePath("/performance");
-  redirect("/integrations?saved=Delivery%20retried");
+  redirect("/workspace/settings?section=integrations&saved=Delivery%20retried");
 }
 
 export async function completeOnboardingAction(formData: FormData) {

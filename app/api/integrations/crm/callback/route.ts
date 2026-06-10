@@ -7,7 +7,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 
 function buildIntegrationsUrl() {
-  return new URL("/integrations", env.appUrl);
+  return new URL("/workspace/settings?section=integrations", env.appUrl);
 }
 
 function clearOauthCookies(response: NextResponse) {
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
   const statePayload = parseCrmOAuthState(state || stateCookie);
   const safeNext =
     statePayload?.next ||
-    (nextCookie?.startsWith("/") ? nextCookie : "/integrations");
+    (nextCookie?.startsWith("/") ? nextCookie : "/workspace/settings?section=integrations");
 
   if (
     !code ||

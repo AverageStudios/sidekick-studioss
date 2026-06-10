@@ -7,7 +7,7 @@ import { CrmProvider } from "@/types";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 
 function buildIntegrationsUrl() {
-  return new URL("/integrations", env.appUrl);
+  return new URL("/workspace/settings?section=integrations", env.appUrl);
 }
 
 function resolveProvider(value: string | null): CrmProvider | null {
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
   }
 
   const next = request.nextUrl.searchParams.get("next");
-  const safeNext = next?.startsWith("/") ? next : "/integrations";
+  const safeNext = next?.startsWith("/") ? next : "/workspace/settings?section=integrations";
   const state = createCrmOAuthState({
     nonce: randomUUID(),
     provider,
