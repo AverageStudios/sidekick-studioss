@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, CheckCircle2, LifeBuoy, RefreshCcw, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, RefreshCcw, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
@@ -190,12 +190,6 @@ function DashboardConnectState() {
                 </Button>
                 <Button asChild size="lg" variant="outline" className="sm:min-w-48">
                   <Link href="/workspace/settings?section=integrations">Open integrations</Link>
-                </Button>
-                <Button asChild size="lg" variant="ghost" className="sm:min-w-48">
-                  <Link href="/support?from=/dashboard">
-                    <LifeBuoy className="h-4 w-4" />
-                    Get Support
-                  </Link>
                 </Button>
               </div>
             </div>

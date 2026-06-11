@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getCurrentRole, getCurrentUser } from "@/lib/auth";
+import { getCurrentProfile, getCurrentRole, getCurrentUser } from "@/lib/auth";
 import { authSuccessMessages, formatAuthErrorMessage } from "@/lib/auth-messages";
 import { createCampaignBlueprint } from "@/lib/template-engine";
 import { env, isDemoModeEnabled, isSupabasePublicConfigured, isSupabaseServerConfigured } from "@/lib/env";
@@ -28,7 +28,7 @@ import {
   normalizeIndustryLabel,
   normalizeTemplateCtaType,
 } from "@/data/template-taxonomy";
-import { CampaignRecord } from "@/types";
+import { CampaignRecord, SupportTicketStatus } from "@/types";
 import { getCanonicalLeadStatus } from "@/lib/leads";
 import {
   disconnectWorkspaceMetaConnection,
@@ -59,6 +59,14 @@ import {
   retryFailedCrmDeliveriesForWorkspace,
   saveWorkspaceCrmRoutingRule,
 } from "@/lib/crm-integration";
+import {
+  appendSupportTicketMessage,
+  createSupportTicketWithMessage,
+  isMissingSupportTableError,
+  supportCategories,
+  supportPriorities,
+  supportStatuses,
+} from "@/lib/support";
 
 const authSchema = z.object({
   email: z.string().email(),
@@ -109,22 +117,21 @@ function createWorkspaceLogoFileFromDataUrl(dataUrl: string) {
 }
 
 const optionalText = z.string().trim().optional().default("");
-const supportCategories = [
-  "campaign_launch",
-  "meta_connection",
-  "crm_integration",
-  "billing",
-  "bug_report",
-  "general_question",
-] as const;
-const supportPriorities = ["low", "medium", "high"] as const;
-
 const supportTicketSchema = z.object({
   subject: z.string().trim().min(3, "Add a short subject.").max(140, "Subject must be 140 characters or fewer."),
   category: z.enum(supportCategories),
   priority: z.enum(supportPriorities),
   message: z.string().trim().min(10, "Tell us a little more so support can help.").max(5000, "Message must be 5,000 characters or fewer."),
   currentRoute: z.string().trim().max(300).optional().default("/support"),
+});
+const supportReplySchema = z.object({
+  ticketId: z.string().uuid("Ticket is missing."),
+  message: z.string().trim().min(2, "Add a reply before sending.").max(5000, "Reply must be 5,000 characters or fewer."),
+});
+const supportStatusSchema = z.object({
+  ticketId: z.string().uuid("Ticket is missing."),
+  status: z.enum(supportStatuses),
+  redirectTo: z.string().trim().optional().default("/admin/support"),
 });
 const headlineText = z
   .string()
@@ -863,25 +870,203 @@ export async function submitSupportTicketAction(formData: FormData) {
     appUrl: env.appUrl,
   };
 
-  const { error } = await admin.from("support_tickets").insert({
-    workspace_id: workspaceId,
-    user_id: user.id,
-    user_name: userName,
-    user_email: userEmail,
-    subject: values.data.subject,
-    category: values.data.category,
-    priority: values.data.priority,
-    message: values.data.message,
-    status: "open",
-    context_json: context,
-  });
-
-  if (error) {
-    redirect(`/support?error=${encodeURIComponent(error.message)}#ticket`);
+  try {
+    await createSupportTicketWithMessage({
+      admin,
+      ticket: {
+        workspace_id: workspaceId,
+        workspace_name: workspaceContext.activeWorkspace.name,
+        user_id: user.id,
+        user_name: userName,
+        user_email: userEmail,
+        subject: values.data.subject,
+        category: values.data.category,
+        priority: values.data.priority,
+        message: values.data.message,
+        current_route: values.data.currentRoute || "/support",
+        context_json: context,
+      },
+      message: {
+        ticket_id: "",
+        workspace_id: workspaceId,
+        author_user_id: user.id,
+        author_name: userName,
+        author_email: userEmail,
+        author_role: "user",
+        body: values.data.message,
+      },
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Could not create support ticket.";
+    const message =
+      isMissingSupportTableError(errorMessage)
+        ? "Support ticket storage is not enabled in this database yet. Apply supabase/migrations/022_support_tickets.sql and 023_support_ticket_threads.sql, or email support directly for now."
+        : errorMessage;
+    redirect(`/support?error=${encodeURIComponent(message)}#ticket`);
   }
 
   revalidatePath("/support");
   redirect("/support?submitted=1");
+}
+
+export async function replyToSupportTicketAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  const values = supportReplySchema.safeParse({
+    ticketId: String(formData.get("ticketId") || ""),
+    message: String(formData.get("message") || ""),
+  });
+
+  const redirectTo = String(formData.get("redirectTo") || "/support");
+  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/support";
+
+  if (!values.success) {
+    const message = values.error.issues[0]?.message || "Reply could not be sent.";
+    redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`);
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin || !isSupabaseServerConfigured()) {
+    redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}error=${encodeURIComponent("Support is not available right now.")}`);
+  }
+
+  const workspaceContext = await ensureWorkspaceContextForUser(user);
+  const workspaceId = workspaceContext?.activeWorkspace.id;
+  if (!workspaceId) {
+    redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}error=${encodeURIComponent("Choose a workspace before replying.")}`);
+  }
+
+  const { data: ticketData, error: ticketError } = await admin
+    .from("support_tickets")
+    .select("id, user_id, workspace_id")
+    .eq("id", values.data.ticketId)
+    .maybeSingle();
+
+  if (ticketError || !ticketData || ticketData.user_id !== user.id || ticketData.workspace_id !== workspaceId) {
+    redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}error=${encodeURIComponent("That ticket is not available in this workspace.")}`);
+  }
+
+  try {
+    await appendSupportTicketMessage({
+      admin,
+      ticketId: values.data.ticketId,
+      body: values.data.message,
+      authorUserId: user.id,
+      authorName: workspaceContext.userDisplayName || user.email || "SideKick user",
+      authorEmail: user.email || workspaceContext.userEmail || "",
+      authorRole: "user",
+      nextStatus: "active",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Reply could not be sent.";
+    redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`);
+  }
+
+  revalidatePath("/support");
+  revalidatePath("/admin/support");
+  redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}replied=1`);
+}
+
+export async function adminReplyToSupportTicketAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+  const role = await getCurrentRole();
+  if (role !== "admin") {
+    redirect("/dashboard");
+  }
+
+  const values = supportReplySchema.safeParse({
+    ticketId: String(formData.get("ticketId") || ""),
+    message: String(formData.get("message") || ""),
+  });
+  const nextStatus = (String(formData.get("nextStatus") || "waiting_on_user") as SupportTicketStatus);
+  const redirectTo = String(formData.get("redirectTo") || `/admin/support/${String(formData.get("ticketId") || "")}`);
+  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/admin/support";
+
+  if (!values.success) {
+    const message = values.error.issues[0]?.message || "Reply could not be sent.";
+    redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`);
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin || !isSupabaseServerConfigured()) {
+    redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}error=${encodeURIComponent("Support admin is not available right now.")}`);
+  }
+
+  const profile = await getCurrentProfile();
+
+  try {
+    await appendSupportTicketMessage({
+      admin,
+      ticketId: values.data.ticketId,
+      body: values.data.message,
+      authorUserId: user.id,
+      authorName: [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim() || user.email || "SideKick admin",
+      authorEmail: user.email || "",
+      authorRole: "admin",
+      nextStatus: supportStatuses.includes(nextStatus) ? nextStatus : "waiting_on_user",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Reply could not be sent.";
+    redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`);
+  }
+
+  revalidatePath("/support");
+  revalidatePath("/admin/support");
+  redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}saved=${encodeURIComponent("Reply sent")}`);
+}
+
+export async function adminUpdateSupportTicketStatusAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+  const role = await getCurrentRole();
+  if (role !== "admin") {
+    redirect("/dashboard");
+  }
+
+  const values = supportStatusSchema.safeParse({
+    ticketId: String(formData.get("ticketId") || ""),
+    status: String(formData.get("status") || ""),
+    redirectTo: String(formData.get("redirectTo") || "/admin/support"),
+  });
+
+  if (!values.success) {
+    const message = values.error.issues[0]?.message || "Status could not be updated.";
+    const fallback = String(formData.get("redirectTo") || "/admin/support");
+    const safeFallback = fallback.startsWith("/") ? fallback : "/admin/support";
+    redirect(`${safeFallback}${safeFallback.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`);
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin || !isSupabaseServerConfigured()) {
+    redirect(`${values.data.redirectTo}${values.data.redirectTo.includes("?") ? "&" : "?"}error=${encodeURIComponent("Support admin is not available right now.")}`);
+  }
+
+  const { error } = await admin
+    .from("support_tickets")
+    .update({
+      status: values.data.status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", values.data.ticketId);
+
+  if (error) {
+    const message = isMissingSupportTableError(error.message)
+      ? "Support ticket storage is not enabled in this database yet. Apply supabase/migrations/022_support_tickets.sql and 023_support_ticket_threads.sql."
+      : error.message;
+    redirect(`${values.data.redirectTo}${values.data.redirectTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`);
+  }
+
+  revalidatePath("/admin/support");
+  revalidatePath("/support");
+  redirect(`${values.data.redirectTo}${values.data.redirectTo.includes("?") ? "&" : "?"}saved=${encodeURIComponent("Status updated")}`);
 }
 
 type CampaignLifecycleControl = "pause" | "resume" | "archive";

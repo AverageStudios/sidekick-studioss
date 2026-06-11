@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Folder, LifeBuoy } from "lucide-react";
+import { Folder } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -159,12 +159,6 @@ export default async function CampaignsPage() {
             <div className="mt-6 flex flex-wrap gap-3">
               <Button asChild className="rounded-[18px] px-5">
                 <Link href="/templates">Browse templates</Link>
-              </Button>
-              <Button asChild variant="outline" className="rounded-[18px] px-5">
-                <Link href="/support?from=/campaigns">
-                  <LifeBuoy className="h-4 w-4" />
-                  Get Support
-                </Link>
               </Button>
             </div>
           </Card>

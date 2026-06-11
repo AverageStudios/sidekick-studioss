@@ -4,7 +4,6 @@ import {
   ChevronDown,
   Image as ImageIcon,
   LayoutTemplate,
-  LifeBuoy,
   Plug,
   Settings2,
 } from "lucide-react";
@@ -221,21 +220,6 @@ export default async function WorkspaceSettingsPage({
               })}
             </nav>
 
-            <div className="mt-8 rounded-2xl border border-[var(--line)] bg-white p-4">
-              <div className="flex items-center gap-2">
-                <LifeBuoy className="h-4 w-4 text-[var(--brand)]" />
-                <p className="text-sm font-semibold text-[var(--ink)]">Need help?</p>
-              </div>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                Send the SideKick team a ticket with this workspace attached.
-              </p>
-              <Link
-                href="/support?from=/workspace/settings"
-                className="mt-4 inline-flex text-sm font-medium text-[var(--brand)]"
-              >
-                Get Support
-              </Link>
-            </div>
           </aside>
 
           <div className="px-6 py-8 sm:px-8 sm:py-10 lg:px-12">

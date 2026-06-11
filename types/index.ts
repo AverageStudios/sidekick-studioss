@@ -50,6 +50,47 @@ export type CampaignAdType =
   | "call_now"
   | "messenger_leads"
   | "messenger_engagement";
+export type SupportTicketCategory =
+  | "campaign_launch"
+  | "meta_connection"
+  | "crm_integration"
+  | "billing"
+  | "bug_report"
+  | "general_question";
+export type SupportTicketPriority = "low" | "medium" | "high";
+export type SupportTicketStatus = "new" | "active" | "waiting_on_user" | "resolved" | "closed";
+export type SupportTicketAuthorRole = "user" | "admin" | "system";
+export type SupportTicketRecord = {
+  id: string;
+  workspace_id: string;
+  workspace_name: string;
+  user_id: string | null;
+  user_name: string;
+  user_email: string;
+  subject: string;
+  category: SupportTicketCategory;
+  priority: SupportTicketPriority;
+  status: SupportTicketStatus;
+  message: string;
+  current_route: string | null;
+  context_json: Record<string, unknown>;
+  last_message_at: string;
+  last_message_preview: string;
+  created_at: string;
+  updated_at: string;
+};
+export type SupportTicketMessageRecord = {
+  id: string;
+  ticket_id: string;
+  workspace_id: string;
+  author_user_id: string | null;
+  author_name: string;
+  author_email: string;
+  author_role: SupportTicketAuthorRole;
+  body: string;
+  created_at: string;
+  updated_at?: string | null;
+};
 export type NormalizedLeadCustomAnswer = {
   key: string;
   label: string;
