@@ -10,11 +10,23 @@ function missing(keys: string[]) {
   return keys.filter((key) => !readEnv(key));
 }
 
+function readValue(value: string | undefined) {
+  if (!value) return undefined;
+
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : undefined;
+}
+
+const nextPublicAppUrl = readValue(process.env.NEXT_PUBLIC_APP_URL);
+const nextPublicDemoMode = readValue(process.env.NEXT_PUBLIC_DEMO_MODE);
+const nextPublicSupabaseUrl = readValue(process.env.NEXT_PUBLIC_SUPABASE_URL);
+const nextPublicSupabaseAnonKey = readValue(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
 export const env = {
-  appUrl: readEnv("NEXT_PUBLIC_APP_URL") || "https://sidekickstudioss.com",
-  demoMode: readEnv("NEXT_PUBLIC_DEMO_MODE") || readEnv("DEMO_MODE"),
-  supabaseUrl: readEnv("NEXT_PUBLIC_SUPABASE_URL"),
-  supabaseAnonKey: readEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+  appUrl: nextPublicAppUrl || "https://sidekickstudioss.com",
+  demoMode: nextPublicDemoMode || readEnv("DEMO_MODE"),
+  supabaseUrl: nextPublicSupabaseUrl,
+  supabaseAnonKey: nextPublicSupabaseAnonKey,
   supabaseServiceKey: readEnv("SUPABASE_SERVICE_ROLE_KEY"),
   supabaseStorageBucket: readEnv("SUPABASE_STORAGE_BUCKET") || "assets",
   resendApiKey: readEnv("RESEND_API_KEY"),
@@ -34,10 +46,10 @@ export const env = {
 } as const;
 
 export function getSupabasePublicEnvStatus() {
-  const missingKeys = missing([
-    "NEXT_PUBLIC_SUPABASE_URL",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-  ]);
+  const missingKeys = [
+    !nextPublicSupabaseUrl ? "NEXT_PUBLIC_SUPABASE_URL" : null,
+    !nextPublicSupabaseAnonKey ? "NEXT_PUBLIC_SUPABASE_ANON_KEY" : null,
+  ].filter((key): key is string => Boolean(key));
 
   return {
     configured: missingKeys.length === 0,
@@ -46,11 +58,11 @@ export function getSupabasePublicEnvStatus() {
 }
 
 export function getSupabaseServerEnvStatus() {
-  const missingKeys = missing([
-    "NEXT_PUBLIC_SUPABASE_URL",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-    "SUPABASE_SERVICE_ROLE_KEY",
-  ]);
+  const missingKeys = [
+    !nextPublicSupabaseUrl ? "NEXT_PUBLIC_SUPABASE_URL" : null,
+    !nextPublicSupabaseAnonKey ? "NEXT_PUBLIC_SUPABASE_ANON_KEY" : null,
+    !readEnv("SUPABASE_SERVICE_ROLE_KEY") ? "SUPABASE_SERVICE_ROLE_KEY" : null,
+  ].filter((key): key is string => Boolean(key));
 
   return {
     configured: missingKeys.length === 0,
