@@ -1,46 +1,78 @@
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 
+const columns = [
+  {
+    title: "Product",
+    links: [
+      { label: "Templates", href: "/product/templates" },
+      { label: "Plug-and-play ads", href: "/product/ads" },
+      { label: "Lead capture", href: "/product/lead-capture" },
+      { label: "Lead management", href: "/product/lead-management" },
+      { label: "Outreach", href: "/product/outreach" },
+      { label: "Integrations", href: "/product/integrations" },
+    ],
+  },
+  {
+    title: "Resources",
+    links: [
+      { label: "Product overview", href: "/product" },
+      { label: "Academy", href: "/academy" },
+      { label: "Pricing", href: "/pricing" },
+      { label: "FAQ", href: "/faq" },
+    ],
+  },
+  {
+    title: "Account",
+    links: [
+      { label: "Log in", href: "/login" },
+      { label: "Start free trial", href: "/signup" },
+    ],
+  },
+];
+
 export function PublicSiteFooter() {
   return (
-    <footer className="page-section pb-10 pt-6 sm:pt-8">
-      <div className="flex flex-col gap-6 border-t border-[rgba(15,17,22,0.08)] py-8 sm:flex-row sm:items-end sm:justify-between sm:py-9">
-        <div className="flex flex-col gap-4">
+    <footer className="border-t border-[rgba(15,17,22,0.08)]">
+      <div className="site-container grid gap-12 py-14 sm:py-16 lg:grid-cols-[1.3fr_1fr_1fr_0.8fr]">
+        <div className="max-w-xs">
           <Logo tone="dark" />
-          <div className="space-y-1.5">
-            <p className="text-sm font-medium text-[rgba(17,18,22,0.88)]">
-              Software for small businesses to choose an industry, pick a template, and launch faster.
-            </p>
-            <p className="text-sm public-text-soft">
-              Run campaigns in SideKick and hand Meta lead-form submissions off to the CRM tools you already use.
-            </p>
-          </div>
+          <p className="mt-4 text-sm leading-relaxed text-[rgba(15,17,22,0.62)]">
+            Template-driven Meta campaigns for local businesses. Pick a template,
+            launch, and keep every lead in one place.
+          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-3 text-sm public-text-soft sm:justify-end">
-          <Link href="/product" className="font-medium transition hover:text-[var(--public-text)]">
-            Product
-          </Link>
-          <Link href="/academy" className="font-medium transition hover:text-[var(--public-text)]">
-            Academy
-          </Link>
-          <Link href="/pricing" className="font-medium transition hover:text-[var(--public-text)]">
-            Pricing
-          </Link>
-          <Link href="/faq" className="font-medium transition hover:text-[var(--public-text)]">
-            FAQ
-          </Link>
-          <Link href="/privacy" className="font-medium transition hover:text-[var(--public-text)]">
-            Privacy Policy
-          </Link>
-          <Link href="/terms" className="font-medium transition hover:text-[var(--public-text)]">
-            Terms of Service
-          </Link>
-          <Link href="/login" className="font-medium transition hover:text-[var(--public-text)]">
-            Login
-          </Link>
-          <Link href="/signup" className="font-medium text-[var(--public-text)] transition hover:text-[var(--public-accent)]">
-            Start Free Trial
-          </Link>
+
+        {columns.map((column) => (
+          <nav key={column.title} aria-label={column.title}>
+            <p className="text-[13px] font-semibold text-[var(--public-text)]">{column.title}</p>
+            <ul className="mt-4 space-y-2.5">
+              {column.links.map((link) => (
+                <li key={link.label}>
+                  <Link
+                    href={link.href}
+                    className="text-sm text-[rgba(15,17,22,0.58)] transition-colors hover:text-[var(--public-text)]"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ))}
+      </div>
+
+      <div className="border-t border-[rgba(15,17,22,0.06)]">
+        <div className="site-container flex flex-col gap-3 py-6 text-[13px] text-[rgba(15,17,22,0.5)] sm:flex-row sm:items-center sm:justify-between">
+          <p>© {new Date().getFullYear()} SideKick Studioss. All rights reserved.</p>
+          <div className="flex gap-5">
+            <Link href="/privacy" className="transition-colors hover:text-[var(--public-text)]">
+              Privacy Policy
+            </Link>
+            <Link href="/terms" className="transition-colors hover:text-[var(--public-text)]">
+              Terms of Service
+            </Link>
+          </div>
         </div>
       </div>
     </footer>

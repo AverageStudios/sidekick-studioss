@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { AuthSubmitButton } from "@/components/auth-submit-button";
+import { SocialAuthButtons } from "@/components/social-auth-buttons";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
@@ -18,6 +19,7 @@ export function AuthCard({
   extraContent,
   fields,
   emailDefaultValue,
+  socialAuthNextPath = "/dashboard",
 }: {
   title: string;
   description: string;
@@ -32,6 +34,7 @@ export function AuthCard({
   extraContent?: React.ReactNode;
   fields?: React.ReactNode;
   emailDefaultValue?: string;
+  socialAuthNextPath?: string;
 }) {
   return (
     <Card className="w-full max-w-md p-6 sm:p-7">
@@ -50,6 +53,9 @@ export function AuthCard({
           {success}
         </div>
       ) : null}
+      <div className="mt-6">
+        <SocialAuthButtons nextPath={socialAuthNextPath} />
+      </div>
       <form action={action} className="mt-6 space-y-[1.125rem]">
         {fields}
         <div className="space-y-[0.625rem]">

@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { authSuccessMessages, formatAuthErrorMessage } from "@/lib/auth-messages";
 import { env, isSupabasePublicConfigured } from "@/lib/env";
+import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const next = requestUrl.searchParams.get("next");
+  const errorCode = requestUrl.searchParams.get("error_code");
+  const errorDescription = requestUrl.searchParams.get("error_description");
   const safeNextPath = next?.startsWith("/") ? next : "/dashboard";
   const redirectUrl = new URL(safeNextPath, env.appUrl);
 
@@ -16,7 +19,13 @@ export async function GET(request: NextRequest) {
 
   if (!code) {
     redirectUrl.pathname = "/login";
-    redirectUrl.searchParams.set("error", "Confirmation link is missing or expired.");
+    redirectUrl.searchParams.set(
+      "error",
+      errorDescription ? formatAuthErrorMessage(errorDescription) : "Confirmation link is missing or expired.",
+    );
+    if (errorCode) {
+      redirectUrl.searchParams.set("errorCode", errorCode);
+    }
     return NextResponse.redirect(redirectUrl);
   }
 
@@ -35,7 +44,27 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  redirectUrl.pathname = "/dashboard";
-  redirectUrl.searchParams.set("success", authSuccessMessages.confirmed);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    try {
+      await ensureWorkspaceContextForUser(user);
+    } catch (workspaceError) {
+      console.error(
+        "[auth/callback] Failed to initialize workspace context:",
+        workspaceError instanceof Error ? workspaceError.message : workspaceError,
+      );
+    }
+  }
+
+  if (safeNextPath === "/login") {
+    redirectUrl.pathname = "/login";
+    redirectUrl.searchParams.set("success", authSuccessMessages.confirmed);
+  } else {
+    redirectUrl.pathname = safeNextPath;
+  }
+
   return NextResponse.redirect(redirectUrl);
 }
