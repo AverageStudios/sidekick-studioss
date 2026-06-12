@@ -6,16 +6,15 @@ import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
-  const appOrigin = requestUrl.origin || env.appUrl;
   const code = requestUrl.searchParams.get("code");
   const next = requestUrl.searchParams.get("next");
   const errorCode = requestUrl.searchParams.get("error_code");
   const errorDescription = requestUrl.searchParams.get("error_description");
   const safeNextPath = next?.startsWith("/") ? next : "/dashboard";
-  const redirectUrl = new URL(safeNextPath, appOrigin);
+  const redirectUrl = new URL(safeNextPath, env.appUrl);
 
   if (!isSupabasePublicConfigured()) {
-    return NextResponse.redirect(new URL("/login", appOrigin));
+    return NextResponse.redirect(new URL("/login", env.appUrl));
   }
 
   if (!code) {
