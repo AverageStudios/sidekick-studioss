@@ -827,35 +827,35 @@ export async function submitSupportTicketAction(formData: FormData) {
 
   if (!values.success) {
     const message = values.error.issues[0]?.message || "Complete the support ticket fields.";
-    redirect(`/support?error=${encodeURIComponent(message)}#ticket`);
+    redirect(`/support/new?error=${encodeURIComponent(message)}`);
   }
 
   if (!isSupabaseServerConfigured()) {
     redirect(
-      `/support?error=${encodeURIComponent(
+      `/support/new?error=${encodeURIComponent(
         "Support ticket storage is not configured yet. Email support directly for now.",
-      )}#ticket`,
+      )}`,
     );
   }
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
     redirect(
-      `/support?error=${encodeURIComponent(
+      `/support/new?error=${encodeURIComponent(
         "Support ticket storage is not available right now. Email support directly for now.",
-      )}#ticket`,
+      )}`,
     );
   }
 
   const workspaceContext = await ensureWorkspaceContextForUser(user);
   if (!workspaceContext?.activeWorkspace.id) {
-    redirect(`/support?error=${encodeURIComponent("Choose a workspace before submitting a ticket.")}#ticket`);
+    redirect(`/support/new?error=${encodeURIComponent("Choose a workspace before submitting a ticket.")}`);
   }
 
   const workspaceId = workspaceContext.activeWorkspace.id;
   const hasAccess = await userHasWorkspaceAccess(user.id, workspaceId);
   if (!hasAccess) {
-    redirect(`/support?error=${encodeURIComponent("You do not have access to this workspace.")}#ticket`);
+    redirect(`/support/new?error=${encodeURIComponent("You do not have access to this workspace.")}`);
   }
 
   const userName = workspaceContext.userDisplayName || user.email || "SideKick user";
@@ -870,8 +870,10 @@ export async function submitSupportTicketAction(formData: FormData) {
     appUrl: env.appUrl,
   };
 
+  let createdTicketId = "";
+
   try {
-    await createSupportTicketWithMessage({
+    const createdTicket = await createSupportTicketWithMessage({
       admin,
       ticket: {
         workspace_id: workspaceId,
@@ -896,17 +898,18 @@ export async function submitSupportTicketAction(formData: FormData) {
         body: values.data.message,
       },
     });
+    createdTicketId = createdTicket.id;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Could not create support ticket.";
     const message =
       isMissingSupportTableError(errorMessage)
         ? "Support ticket storage is not enabled in this database yet. Apply supabase/migrations/022_support_tickets.sql and 023_support_ticket_threads.sql, or email support directly for now."
         : errorMessage;
-    redirect(`/support?error=${encodeURIComponent(message)}#ticket`);
+    redirect(`/support/new?error=${encodeURIComponent(message)}`);
   }
 
   revalidatePath("/support");
-  redirect("/support?submitted=1");
+  redirect(createdTicketId ? `/support/${createdTicketId}?submitted=1` : "/support?submitted=1");
 }
 
 export async function replyToSupportTicketAction(formData: FormData) {

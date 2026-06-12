@@ -47,7 +47,7 @@ export default async function SettingsPage({
             <Link href="/workspace/settings">Open workspace settings</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/support?from=/settings">
+            <Link href="/support/new?from=/settings">
               <LifeBuoy className="h-4 w-4" />
               Get Support
             </Link>
