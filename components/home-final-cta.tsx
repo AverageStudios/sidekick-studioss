@@ -4,7 +4,17 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Reveal } from "@/components/ui/reveal";
 
-export function HomeFinalCta() {
+export function HomeFinalCta({
+  title = "Pick a template. Go live this week.",
+  subtitle = "Start the trial, open the template library for your industry, and launch your first Meta campaign before it ends.",
+  secondaryLabel = "See pricing",
+  secondaryHref = "/pricing",
+}: {
+  title?: string;
+  subtitle?: string;
+  secondaryLabel?: string;
+  secondaryHref?: string;
+}) {
   return (
     <section className="site-container py-24 sm:py-32">
       <Reveal amount={0.35}>
@@ -20,11 +30,10 @@ export function HomeFinalCta() {
 
           <div className="relative mx-auto max-w-2xl">
             <h2 className="font-heading text-balance text-4xl font-semibold leading-[1.06] tracking-[-0.028em] text-white sm:text-5xl">
-              Pick a template. Go live this week.
+              {title}
             </h2>
             <p className="mx-auto mt-5 max-w-[44ch] text-balance text-[1.0625rem] leading-relaxed text-white/70">
-              Start the trial, open the template library for your industry, and
-              launch your first Meta campaign before it ends.
+              {subtitle}
             </p>
 
             <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -32,8 +41,8 @@ export function HomeFinalCta() {
                 Start free trial
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link href="/pricing" className="site-cta-ghost-on-dark">
-                See pricing
+              <Link href={secondaryHref} className="site-cta-ghost-on-dark">
+                {secondaryLabel}
               </Link>
             </div>
 

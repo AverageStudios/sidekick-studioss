@@ -25,45 +25,44 @@ export function AcademySidebar({ currentSlug }: { currentSlug?: string }) {
   }, [query]);
 
   return (
-    <aside className="rounded-[28px] border border-[var(--public-line)] bg-[rgba(255,255,255,0.8)] p-4 shadow-[0_18px_50px_rgba(15,17,22,0.06)] backdrop-blur-xl">
+    <aside aria-label="Academy guides">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--public-muted-soft)]" />
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[rgba(15,17,22,0.45)]" />
         <input
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search the Academy"
-          className="w-full rounded-[18px] border border-[var(--public-line)] bg-white/86 py-2.5 pl-9 pr-3 text-sm text-[var(--public-text)] outline-none transition focus:border-[rgba(143,124,255,0.5)]"
+          placeholder="Search guides"
+          className="h-10 w-full rounded-[10px] border border-[rgba(15,17,22,0.12)] bg-white pl-9 pr-3 text-sm text-[var(--public-text)] outline-none transition placeholder:text-[rgba(15,17,22,0.45)] focus:border-[rgba(101,88,246,0.55)] focus:shadow-[0_0_0_3px_rgba(101,88,246,0.1)]"
         />
       </div>
 
-      <div className="mt-4 max-h-[calc(100vh-14rem)] space-y-4 overflow-y-auto pr-1">
+      <div className="mt-6 max-h-[calc(100vh-13rem)] space-y-7 overflow-y-auto pb-4 pr-2">
         {filteredSections.map((section) => (
-          <div key={section.key} className="rounded-[22px] border border-[var(--public-line)] bg-white/70 p-3.5">
-            <div className="px-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] public-text-faint">{section.title}</p>
-              <p className="mt-1 text-xs leading-5 public-text-soft">{section.description}</p>
-            </div>
-            <div className="mt-3 space-y-1.5">
+          <div key={section.key}>
+            <p className="text-[13px] font-semibold text-[var(--public-text)]">{section.title}</p>
+            <ul className="mt-2 space-y-0.5">
               {section.articles.map((article) => {
                 const isActive = currentSlug === article.slug;
 
                 return (
-                  <Link
-                    key={article.slug}
-                    href={`/academy/${article.slug}`}
-                    className={cn(
-                      "block rounded-[18px] px-3 py-2.5 text-sm transition",
-                      isActive
-                        ? "bg-[rgba(109,94,248,0.1)] text-[var(--public-text)] shadow-[inset_0_0_0_1px_rgba(109,94,248,0.18)]"
-                        : "text-[var(--public-muted)] hover:bg-[rgba(109,94,248,0.05)] hover:text-[var(--public-text)]",
-                    )}
-                  >
-                    {article.title}
-                  </Link>
+                  <li key={article.slug}>
+                    <Link
+                      href={`/academy/${article.slug}`}
+                      aria-current={isActive ? "page" : undefined}
+                      className={cn(
+                        "block rounded-lg px-3 py-1.5 text-[13px] leading-snug transition-colors",
+                        isActive
+                          ? "bg-[rgba(101,88,246,0.09)] font-semibold text-[var(--public-accent-strong)]"
+                          : "text-[rgba(15,17,22,0.6)] hover:bg-[rgba(15,17,22,0.04)] hover:text-[var(--public-text)]",
+                      )}
+                    >
+                      {article.title}
+                    </Link>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           </div>
         ))}
       </div>

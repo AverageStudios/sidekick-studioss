@@ -17,11 +17,11 @@ const destinations = [
   {
     icon: Database,
     title: "Your CRM",
-    detail: "Keep working leads in the system you already run.",
+    detail: "Hand leads to GoHighLevel, HubSpot, or any system you run.",
   },
 ];
 
-function FlowDiagram() {
+export function FlowDiagram() {
   return (
     <svg
       viewBox="0 0 760 300"
@@ -56,7 +56,7 @@ function FlowDiagram() {
         {[
           { y: 28, title: "Email alert", detail: "Instant, on every lead" },
           { y: 118, title: "CSV export", detail: "Your data, any time" },
-          { y: 208, title: "Your CRM", detail: "Keep your workflow" },
+          { y: 208, title: "Your CRM", detail: "GoHighLevel · HubSpot" },
         ].map((node) => (
           <g key={node.title}>
             <rect x="578" y={node.y} width="156" height="64" rx="13" fill="#ffffff" stroke="rgba(15,17,22,0.12)" />
@@ -109,46 +109,41 @@ function FlowDiagramMobile() {
 
 export function HomeCrmFlow() {
   return (
-    <section className="border-y border-[rgba(15,17,22,0.07)] bg-[rgba(255,255,255,0.55)]">
-      <div className="site-container py-20 sm:py-28">
-        <div className="grid gap-12 lg:grid-cols-[0.46fr_0.54fr] lg:items-center lg:gap-16">
-          <div>
-            <Reveal>
-              <h2 className="site-h2">Leads land in the tools you already use</h2>
-              <p className="site-lead mt-4">
-                SideKick is not another CRM to migrate to. Campaigns run here, and
-                every lead stays yours: alerted to your inbox, exportable as CSV,
-                and ready to hand off to the system your business already runs on.
-              </p>
-            </Reveal>
+    <section>
+      <div className="site-container py-24 sm:py-32">
+        <Reveal className="mx-auto max-w-2xl text-center">
+          <h2 className="site-h2">Leads land in the tools you already use</h2>
+          <p className="site-lead mx-auto mt-5">
+            SideKick is not another CRM to migrate to. Campaigns run here, and
+            every lead stays yours.
+          </p>
+        </Reveal>
 
-            <div className="mt-8 space-y-5">
-              {destinations.map((destination, index) => {
-                const Icon = destination.icon;
+        <Reveal delay={0.15} amount={0.35} className="mx-auto mt-14 max-w-4xl sm:mt-16">
+          <FlowDiagram />
+          <FlowDiagramMobile />
+        </Reveal>
 
-                return (
-                  <Reveal key={destination.title} delay={0.12 + index * 0.1}>
-                    <div className="flex items-start gap-3.5">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[rgba(15,17,22,0.1)] bg-white text-[var(--public-accent)] shadow-[0_1px_2px_rgba(15,17,22,0.05)]">
-                        <Icon className="h-4 w-4" />
-                      </span>
-                      <div>
-                        <p className="text-[15px] font-semibold text-[var(--public-text)]">
-                          {destination.title}
-                        </p>
-                        <p className="site-body mt-0.5 max-w-[40ch]">{destination.detail}</p>
-                      </div>
-                    </div>
-                  </Reveal>
-                );
-              })}
-            </div>
-          </div>
+        <div className="mx-auto mt-12 grid max-w-4xl gap-8 sm:mt-14 sm:grid-cols-3 sm:gap-10">
+          {destinations.map((destination, index) => {
+            const Icon = destination.icon;
 
-          <Reveal delay={0.15} amount={0.35}>
-            <FlowDiagram />
-            <FlowDiagramMobile />
-          </Reveal>
+            return (
+              <Reveal key={destination.title} delay={0.12 + index * 0.1}>
+                <div className="flex items-start gap-3.5">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[rgba(15,17,22,0.1)] bg-white text-[var(--public-accent)] shadow-[0_1px_2px_rgba(15,17,22,0.05)]">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-[15px] font-semibold text-[var(--public-text)]">
+                      {destination.title}
+                    </p>
+                    <p className="site-body mt-0.5">{destination.detail}</p>
+                  </div>
+                </div>
+              </Reveal>
+            );
+          })}
         </div>
       </div>
     </section>

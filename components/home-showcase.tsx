@@ -65,9 +65,9 @@ export function HomeShowcase() {
 
   return (
     <section className="site-container py-24 sm:py-32" id="product-showcase">
-      <Reveal className="max-w-2xl">
+      <Reveal className="mx-auto max-w-2xl text-center">
         <h2 className="site-h2">One place to launch, track, and follow up</h2>
-        <p className="site-lead mt-4">
+        <p className="site-lead mx-auto mt-4">
           The campaign, the leads it produces, and the follow-up they need live on
           the same screen, not across five tools.
         </p>
@@ -77,7 +77,7 @@ export function HomeShowcase() {
         <div
           role="tablist"
           aria-label="SideKick product areas"
-          className="mt-10 flex gap-1 border-b border-[rgba(15,17,22,0.1)]"
+          className="mt-10 flex justify-center gap-1 border-b border-[rgba(15,17,22,0.1)]"
         >
           {tabs.map((tab) => {
             const isActive = tab.id === activeId;

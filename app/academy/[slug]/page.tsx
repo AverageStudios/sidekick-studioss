@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, BookOpenText, Clock3, LifeBuoy } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { notFound } from "next/navigation";
-import { AcademyArticleCard } from "@/components/academy-article-card";
 import { AcademySidebar } from "@/components/academy-sidebar";
 import { MarketingNav } from "@/components/marketing-nav";
 import { PublicSiteFooter } from "@/components/public-site-footer";
-import { Button } from "@/components/ui/button";
-import { academyArticles, getAcademyArticle, getAcademyRelatedArticles } from "@/data/academy";
+import {
+  academyArticles,
+  academySections,
+  getAcademyArticle,
+  getAcademyRelatedArticles,
+} from "@/data/academy";
 
 export function generateStaticParams() {
   return academyArticles.map((article) => ({ slug: article.slug }));
@@ -46,144 +49,130 @@ export default async function AcademyArticlePage({
   }
 
   const relatedArticles = getAcademyRelatedArticles(article);
+  const sectionTitle = academySections.find((section) => section.key === article.section)?.title;
 
   return (
     <main className="public-site min-h-screen">
       <MarketingNav />
 
-      <section className="page-section pt-34 sm:pt-40">
-        <div className="grid gap-6 lg:grid-cols-[19rem_minmax(0,1fr)]">
-          <div className="lg:sticky lg:top-28 lg:self-start">
-            <AcademySidebar currentSlug={article.slug} />
-          </div>
+      <div className="site-container grid gap-12 pb-24 pt-32 sm:pt-36 lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-16">
+        <div className="hidden lg:sticky lg:top-24 lg:block lg:self-start">
+          <AcademySidebar currentSlug={article.slug} />
+        </div>
 
-          <div className="space-y-6">
-            <div className="rounded-[32px] border border-[var(--public-line)] bg-[rgba(255,255,255,0.82)] p-6 shadow-[0_18px_50px_rgba(15,17,22,0.06)] sm:p-8">
-              <Link
-                href="/academy"
-                className="inline-flex items-center gap-2 text-sm font-medium text-[var(--public-muted)] transition hover:text-[var(--public-text)]"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back to Academy
-              </Link>
+        <div className="min-w-0 max-w-[44rem]">
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[13px] text-[rgba(15,17,22,0.5)]">
+            <Link href="/academy" className="font-medium transition-colors hover:text-[var(--public-text)]">
+              Academy
+            </Link>
+            {sectionTitle ? (
+              <>
+                <ChevronRight className="h-3 w-3" />
+                <span className="font-medium text-[rgba(15,17,22,0.65)]">{sectionTitle}</span>
+              </>
+            ) : null}
+          </nav>
 
-              <div className="mt-5 flex flex-wrap items-center gap-3">
-                <span className="rounded-full border border-[var(--public-line)] bg-white/82 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] public-accent-kicker">
-                  {article.updatedLabel}
-                </span>
-                <span className="inline-flex items-center gap-2 rounded-full border border-[var(--public-line)] bg-white/82 px-3 py-1 text-sm text-[var(--public-muted)]">
-                  <Clock3 className="h-4 w-4 text-[var(--public-accent)]" />
-                  {article.readTime}
-                </span>
-              </div>
+          <h1 className="font-heading mt-5 text-[clamp(1.9rem,1.4rem+2vw,2.8rem)] font-semibold leading-[1.1] tracking-[-0.025em] text-[var(--public-text)] [text-wrap:balance]">
+            {article.title}
+          </h1>
+          <p className="site-lead mt-4">{article.description}</p>
+          <p className="mt-4 text-[13px] text-[rgba(15,17,22,0.5)]">
+            {article.updatedLabel} · {article.readTime}
+          </p>
 
-              <h1 className="mt-5 text-4xl font-semibold tracking-[-0.06em] text-[var(--public-text)] sm:text-5xl sm:leading-[1.02]">
-                {article.title}
-              </h1>
-              <p className="mt-5 max-w-3xl text-sm leading-7 public-text-muted sm:text-base">
-                {article.description}
-              </p>
-            </div>
-
-            <article className="rounded-[32px] border border-[var(--public-line)] bg-[var(--public-surface)] p-6 sm:p-8">
-              <div className="space-y-10">
-                {article.blocks.map((block) => (
-                  <section key={block.heading}>
-                    <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--public-text)]">{block.heading}</h2>
-                    <div className="mt-4 space-y-4">
-                      {block.body.map((paragraph) => (
-                        <p key={paragraph} className="text-sm leading-7 public-text-muted sm:text-base">
-                          {paragraph}
-                        </p>
-                      ))}
-                    </div>
-
-                    {block.bullets?.length ? (
-                      <ul className="mt-5 space-y-3">
-                        {block.bullets.map((bullet) => (
-                          <li key={bullet} className="flex gap-3 text-sm leading-7 public-text-muted sm:text-base">
-                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--public-accent)]" />
-                            <span>{bullet}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-
-                    {block.steps?.length ? (
-                      <ol className="mt-5 space-y-3">
-                        {block.steps.map((step, index) => (
-                          <li key={step} className="flex gap-4 rounded-[22px] border border-[var(--public-line)] bg-white/78 px-4 py-4">
-                            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[rgba(109,94,248,0.1)] text-sm font-semibold text-[var(--public-accent)]">
-                              {index + 1}
-                            </span>
-                            <span className="text-sm leading-7 public-text-muted sm:text-base">{step}</span>
-                          </li>
-                        ))}
-                      </ol>
-                    ) : null}
-
-                    {block.note ? (
-                      <div className="mt-5 rounded-[24px] border border-[rgba(109,94,248,0.16)] bg-[rgba(109,94,248,0.07)] px-5 py-4">
-                        <p className="text-sm leading-7 text-[rgba(61,48,138,0.92)]">{block.note}</p>
-                      </div>
-                    ) : null}
-                  </section>
-                ))}
-              </div>
-            </article>
-
-            <section className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-[28px] border border-[var(--public-line)] bg-white/80 p-6">
-                <div className="inline-flex items-center gap-2 rounded-full border border-[var(--public-line)] bg-white/82 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] public-text-faint">
-                  <BookOpenText className="h-3.5 w-3.5 text-[var(--public-accent)]" />
-                  Keep learning
-                </div>
-                <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-[var(--public-text)]">Browse the rest of the Academy</h2>
-                <p className="mt-3 text-sm leading-7 public-text-muted">
-                  Use the sidebar to jump between launch, integrations, CRM handoff, performance, and support articles.
-                </p>
-                <Button
-                  asChild
-                  variant="outline"
-                  className="mt-5 border-[var(--public-line)] bg-white/74 text-[var(--public-text)] hover:border-[var(--public-line-strong)] hover:bg-[rgba(109,94,248,0.05)] hover:text-[var(--public-text)]"
-                >
-                  <Link href="/academy">Open Academy home</Link>
-                </Button>
-              </div>
-              <div className="rounded-[28px] border border-[var(--public-line)] bg-white/80 p-6">
-                <div className="inline-flex items-center gap-2 rounded-full border border-[var(--public-line)] bg-white/82 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] public-text-faint">
-                  <LifeBuoy className="h-3.5 w-3.5 text-[var(--public-accent)]" />
-                  Need help?
-                </div>
-                <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-[var(--public-text)]">Still stuck after reading?</h2>
-                <p className="mt-3 text-sm leading-7 public-text-muted">
-                  Open a ticket from inside SideKick or email support if you need help with a launch, connection, or delivery issue.
-                </p>
-                <Button
-                  asChild
-                  className="mt-5 rounded-[18px] border border-[rgba(143,124,255,0.55)] bg-[linear-gradient(180deg,var(--public-accent)_0%,var(--public-accent-strong)_100%)] !font-bold !text-white shadow-[0_18px_44px_rgba(109,94,248,0.24)] hover:border-[rgba(173,160,255,0.68)] hover:bg-[linear-gradient(180deg,#9b8cff_0%,#7567ff_100%)] [&_svg]:!text-white"
-                >
-                  <Link href="/support/new">
-                    Open support
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
-            </section>
-
-            {relatedArticles.length ? (
-              <section className="rounded-[32px] border border-[var(--public-line)] bg-[var(--public-surface)] p-6 sm:p-8">
-                <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--public-text)]">Related articles</h2>
-                <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                  {relatedArticles.map((related) => (
-                    <AcademyArticleCard key={related.slug} article={related} />
+          <article className="mt-12 space-y-12 border-t border-[rgba(15,17,22,0.08)] pt-10">
+            {article.blocks.map((block) => (
+              <section key={block.heading}>
+                <h2 className="font-heading text-xl font-semibold tracking-[-0.018em] text-[var(--public-text)]">
+                  {block.heading}
+                </h2>
+                <div className="mt-4 space-y-4">
+                  {block.body.map((paragraph) => (
+                    <p key={paragraph} className="text-[15px] leading-[1.75] text-[rgba(15,17,22,0.72)]">
+                      {paragraph}
+                    </p>
                   ))}
                 </div>
+
+                {block.bullets?.length ? (
+                  <ul className="mt-5 space-y-2.5">
+                    {block.bullets.map((bullet) => (
+                      <li key={bullet} className="flex gap-3 text-[15px] leading-[1.7] text-[rgba(15,17,22,0.72)]">
+                        <span className="mt-[0.65rem] h-1 w-1 shrink-0 rounded-full bg-[rgba(15,17,22,0.4)]" />
+                        <span>{bullet}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+
+                {block.steps?.length ? (
+                  <ol className="mt-5 space-y-3.5">
+                    {block.steps.map((step, index) => (
+                      <li key={step} className="flex gap-3.5 text-[15px] leading-[1.7] text-[rgba(15,17,22,0.72)]">
+                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[rgba(101,88,246,0.1)] text-[12px] font-semibold text-[var(--public-accent-strong)]">
+                          {index + 1}
+                        </span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                ) : null}
+
+                {block.note ? (
+                  <div className="mt-5 rounded-xl bg-[rgba(101,88,246,0.06)] px-4 py-3.5">
+                    <p className="text-sm leading-[1.7] text-[rgba(61,48,138,0.95)]">
+                      <span className="font-semibold">Note: </span>
+                      {block.note}
+                    </p>
+                  </div>
+                ) : null}
               </section>
-            ) : null}
+            ))}
+          </article>
+
+          <div className="mt-14 border-t border-[rgba(15,17,22,0.08)] pt-8">
+            <p className="text-sm text-[rgba(15,17,22,0.55)]">
+              Still stuck after reading?{" "}
+              <Link
+                href="/support/new"
+                className="font-semibold text-[var(--public-accent)] transition-colors hover:text-[var(--public-accent-strong)]"
+              >
+                Open a support ticket
+              </Link>{" "}
+              and the team will pick it up.
+            </p>
           </div>
+
+          {relatedArticles.length ? (
+            <section className="mt-12">
+              <h2 className="font-heading text-lg font-semibold tracking-[-0.015em] text-[var(--public-text)]">
+                Related guides
+              </h2>
+              <ul className="mt-4 divide-y divide-[rgba(15,17,22,0.06)] border-t border-[rgba(15,17,22,0.06)]">
+                {relatedArticles.map((related) => (
+                  <li key={related.slug}>
+                    <Link
+                      href={`/academy/${related.slug}`}
+                      className="group flex items-center justify-between gap-4 py-3.5"
+                    >
+                      <span>
+                        <span className="block text-[15px] font-medium text-[rgba(15,17,22,0.82)] transition-colors group-hover:text-[var(--public-accent)]">
+                          {related.title}
+                        </span>
+                        <span className="mt-0.5 block text-[13px] text-[rgba(15,17,22,0.5)]">
+                          {related.summary}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-[13px] text-[rgba(15,17,22,0.45)]">{related.readTime}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
         </div>
-      </section>
+      </div>
 
       <PublicSiteFooter />
     </main>

@@ -1,100 +1,50 @@
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import type { Metadata } from "next";
+import { ChevronDown } from "lucide-react";
 import { MarketingNav } from "@/components/marketing-nav";
 import { PublicSiteFooter } from "@/components/public-site-footer";
-import { Button } from "@/components/ui/button";
-import { InteractiveGlowCard } from "@/components/ui/interactive-glow-card";
+import { HomeFinalCta } from "@/components/home-final-cta";
 import { publicFaqs } from "@/data/public-faqs";
+
+export const metadata: Metadata = {
+  title: "FAQ | SideKick Studioss",
+  description:
+    "What SideKick is, how it works, and what you can do inside it: templates, campaign launch, leads, and follow-up.",
+};
 
 export default function FaqPage() {
   return (
     <main className="public-site min-h-screen">
       <MarketingNav />
 
-      <section className="page-section pt-34 sm:pt-40">
-        <div className="public-section-shell relative overflow-hidden px-6 py-10 sm:px-8 sm:py-12">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(143,124,255,0.14),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(143,124,255,0.08),transparent_34%)]" />
-          <div className="relative max-w-3xl">
-            <p className="public-accent-kicker text-[11px] font-semibold uppercase tracking-[0.24em]">
-              FAQ
-            </p>
-            <h1 className="mt-4 text-4xl font-semibold tracking-[-0.06em] text-[var(--public-text)] sm:text-5xl md:text-[4rem] md:leading-[0.98]">
-              Clear answers about the SideKick platform
-            </h1>
-            <p className="mt-5 max-w-2xl text-sm leading-7 public-text-muted sm:text-base">
-              What SideKick is, how it works, and what you can do inside it from templates to leads and follow-up.
-            </p>
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <Button
-                asChild
-                size="lg"
-                className="rounded-[18px] border border-[rgba(143,124,255,0.55)] bg-[linear-gradient(180deg,var(--public-accent)_0%,var(--public-accent-strong)_100%)] !font-bold !text-white shadow-[0_18px_44px_rgba(109,94,248,0.24)] hover:border-[rgba(173,160,255,0.68)] hover:bg-[linear-gradient(180deg,#9b8cff_0%,#7567ff_100%)] [&_svg]:!text-white"
-              >
-                <Link href="/signup">
-                  Start Free Trial
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button
-                asChild
-                size="lg"
-                variant="outline"
-                className="border-[var(--public-line)] bg-white/74 text-[var(--public-text)] hover:border-[var(--public-line-strong)] hover:bg-[rgba(109,94,248,0.05)] hover:text-[var(--public-text)]"
-              >
-                <Link href="/product">See Product Overview</Link>
-              </Button>
-            </div>
-          </div>
+      <section className="site-container pb-20 pt-36 sm:pb-24 sm:pt-44">
+        <div className="mx-auto max-w-2xl text-center">
+          <h1 className="site-h2 text-[clamp(2.2rem,1.4rem+3vw,3.4rem)]">
+            Questions, answered plainly
+          </h1>
+          <p className="site-lead mx-auto mt-5">
+            What SideKick is, how it works, and what happens to your leads.
+          </p>
         </div>
-      </section>
 
-      <section className="page-section marketing-section pt-0">
-        <div className="grid gap-4 lg:grid-cols-2">
-          {publicFaqs.map((item, index) => (
-            <InteractiveGlowCard
-              key={item.question}
-              className="rounded-[30px] border border-[var(--public-line)] bg-[var(--public-surface)] px-5 py-5 sm:px-6 sm:py-6"
-            >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] public-text-faint">
-                0{index + 1}
-              </p>
-              <h2 className="mt-4 text-xl font-semibold tracking-[-0.03em] text-[var(--public-text)]">
+        <div className="mx-auto mt-14 max-w-2xl divide-y divide-[rgba(15,17,22,0.08)] border-y border-[rgba(15,17,22,0.08)] sm:mt-16">
+          {publicFaqs.map((item) => (
+            <details key={item.question} className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-5 text-[16px] font-semibold text-[var(--public-text)] transition-colors hover:text-[var(--public-accent)] [&::-webkit-details-marker]:hidden">
                 {item.question}
-              </h2>
-              <p className="mt-3 text-sm leading-7 public-text-muted">{item.answer}</p>
-            </InteractiveGlowCard>
+                <ChevronDown className="h-4 w-4 shrink-0 text-[rgba(15,17,22,0.45)] transition-transform duration-300 group-open:rotate-180" />
+              </summary>
+              <p className="pb-6 pr-8 text-[15px] leading-[1.7] text-[rgba(15,17,22,0.68)]">
+                {item.answer}
+              </p>
+            </details>
           ))}
         </div>
       </section>
 
-      <section className="page-section marketing-section pt-0">
-        <div className="public-section-shell relative overflow-hidden px-6 py-10 sm:px-8 sm:py-12">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(143,124,255,0.1),transparent_34%)]" />
-          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-2xl">
-              <p className="public-accent-kicker text-[11px] font-semibold uppercase tracking-[0.24em]">
-                Ready to try it?
-              </p>
-              <h2 className="mt-4 text-3xl font-semibold tracking-[-0.05em] text-[var(--public-text)] sm:text-4xl">
-                Start with the full SideKick flow
-              </h2>
-              <p className="mt-4 text-sm leading-7 public-text-muted sm:text-base">
-                Choose your industry, pick a template, and see how the platform handles launch, leads, and follow-up.
-              </p>
-            </div>
-            <Button
-              asChild
-              size="lg"
-              className="rounded-[18px] border border-[rgba(143,124,255,0.55)] bg-[linear-gradient(180deg,var(--public-accent)_0%,var(--public-accent-strong)_100%)] !font-bold !text-white shadow-[0_18px_44px_rgba(109,94,248,0.24)] hover:border-[rgba(173,160,255,0.68)] hover:bg-[linear-gradient(180deg,#9b8cff_0%,#7567ff_100%)] [&_svg]:!text-white"
-            >
-              <Link href="/signup">
-                Start Free Trial
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </section>
+      <HomeFinalCta
+        title="The rest you'll learn by trying it."
+        subtitle="Start the trial, pick a template, and see how launch, leads, and follow-up fit together."
+      />
 
       <PublicSiteFooter />
     </main>

@@ -1,85 +1,63 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { MarketingNav } from "@/components/marketing-nav";
 import { PublicSiteFooter } from "@/components/public-site-footer";
-import { InteractiveGlowCard } from "@/components/ui/interactive-glow-card";
-import { Button } from "@/components/ui/button";
+import { HomeFinalCta } from "@/components/home-final-cta";
 import { publicProductItems } from "@/data/public-product-pages";
+
+export const metadata: Metadata = {
+  title: "Product | SideKick Studioss",
+  description:
+    "Templates, campaign launch, lead capture, lead management, outreach, and CRM handoff: the SideKick platform for local businesses.",
+};
 
 export default function ProductPage() {
   return (
     <main className="public-site min-h-screen">
       <MarketingNav />
 
-      <section className="page-section pt-34 sm:pt-40">
-        <div className="public-section-shell relative overflow-hidden px-6 py-10 sm:px-8 sm:py-12">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(143,124,255,0.16),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(143,124,255,0.08),transparent_32%)]" />
-          <div className="relative max-w-3xl">
-            <p className="public-accent-kicker text-[11px] font-semibold uppercase tracking-[0.24em]">
-              Product
-            </p>
-            <h1 className="mt-4 text-4xl font-semibold tracking-[-0.06em] text-[var(--public-text)] sm:text-5xl md:text-[4.2rem] md:leading-[0.98]">
-              One platform to choose, launch, and manage leads
-            </h1>
-            <p className="mt-5 max-w-2xl text-sm leading-7 public-text-muted sm:text-base">
-              SideKick helps small businesses choose their industry, pick a ready-to-go template, launch faster, and keep lead management and follow-up in one place.
-            </p>
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <Button
-                asChild
-                size="lg"
-                className="rounded-[18px] border border-[rgba(143,124,255,0.55)] bg-[linear-gradient(180deg,var(--public-accent)_0%,var(--public-accent-strong)_100%)] !font-bold !text-white shadow-[0_18px_44px_rgba(109,94,248,0.28)] hover:border-[rgba(173,160,255,0.68)] hover:bg-[linear-gradient(180deg,#9b8cff_0%,#7567ff_100%)] [&_svg]:!text-white"
-              >
-                <Link href="/signup">
-                  Start Free Trial
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-                <Button
-                  asChild
-                  size="lg"
-                  variant="outline"
-                  className="border-[var(--public-line)] bg-white/74 text-[var(--public-text)] hover:border-[var(--public-line-strong)] hover:bg-[rgba(109,94,248,0.05)] hover:text-[var(--public-text)]"
-                >
-                  <Link href="/pricing">View Pricing</Link>
-                </Button>
-              </div>
-          </div>
+      <section className="site-container pb-20 pt-36 sm:pb-24 sm:pt-44">
+        <div className="mx-auto max-w-2xl text-center">
+          <h1 className="site-h2 text-[clamp(2.2rem,1.4rem+3vw,3.4rem)]">
+            Everything a campaign needs, in one system
+          </h1>
+          <p className="site-lead mx-auto mt-5">
+            SideKick covers the whole arc of a local Meta campaign: the template
+            you start from, the launch, the leads, and the follow-up they need.
+          </p>
         </div>
-      </section>
 
-      <section className="page-section marketing-section pt-8 sm:pt-10">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mx-auto mt-16 grid max-w-4xl gap-x-12 sm:mt-20 sm:grid-cols-2">
           {publicProductItems.map((item) => {
             const Icon = item.icon;
 
             return (
-              <InteractiveGlowCard
+              <Link
                 key={item.slug}
-                className="rounded-[30px] border border-[var(--public-line)] bg-[var(--public-surface)] p-5 sm:p-6"
+                href={item.href}
+                className="group flex items-start gap-4 border-t border-[rgba(15,17,22,0.08)] py-7"
               >
-                <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-[var(--public-line)] bg-[var(--public-accent-soft)] text-[var(--public-accent)]">
+                <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[rgba(15,17,22,0.08)] bg-white text-[var(--public-accent)] shadow-[0_1px_2px_rgba(15,17,22,0.04)]">
                   <Icon className="h-4.5 w-4.5" />
-                </div>
-                <h2 className="mt-5 text-2xl font-semibold tracking-[-0.04em] text-[var(--public-text)]">
-                  {item.title}
-                </h2>
-                <p className="mt-3 text-sm leading-7 public-text-muted">{item.description}</p>
-                <Button
-                  asChild
-                  variant="outline"
-                  className="mt-6 w-full border-[var(--public-line)] bg-white/74 text-[var(--public-text)] hover:border-[var(--public-line-strong)] hover:bg-[rgba(109,94,248,0.05)] hover:text-[var(--public-text)]"
-                >
-                  <Link href={item.href}>
-                    View page
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </InteractiveGlowCard>
+                </span>
+                <span className="min-w-0">
+                  <span className="flex items-center gap-1.5 text-[16px] font-semibold text-[var(--public-text)] transition-colors group-hover:text-[var(--public-accent)]">
+                    {item.title}
+                    <ArrowRight className="h-3.5 w-3.5 -translate-x-1 opacity-0 transition group-hover:translate-x-0 group-hover:opacity-100" />
+                  </span>
+                  <span className="site-body mt-1.5 block">{item.description}</span>
+                </span>
+              </Link>
             );
           })}
         </div>
       </section>
+
+      <HomeFinalCta
+        title="See the whole flow on a real campaign."
+        subtitle="Start the trial, pick a template for your industry, and follow it from launch to the first lead."
+      />
 
       <PublicSiteFooter />
     </main>
