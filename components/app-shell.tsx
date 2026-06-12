@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, Building2, ChevronDown, CircleHelp, LayoutDashboard, LayoutGrid, LifeBuoy, LogOut, Megaphone, Plus, Shield, SlidersHorizontal, UserCircle2 } from "lucide-react";
+import { BarChart3, BookOpenText, Building2, ChevronDown, CircleHelp, LayoutDashboard, LayoutGrid, LifeBuoy, LogOut, Megaphone, Plus, Shield, SlidersHorizontal, UserCircle2 } from "lucide-react";
 import { ConfigNotice } from "@/components/config-notice";
 import { InitialsAvatar } from "@/components/initials-avatar";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
@@ -258,6 +258,13 @@ export async function AppShell({
                 >
                   <CircleHelp className="h-4 w-4 text-[var(--muted)]" />
                   <span>Help & tips</span>
+                </Link>
+                <Link
+                  href="/academy"
+                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
+                >
+                  <BookOpenText className="h-4 w-4 text-[var(--muted)]" />
+                  <span>Academy & Docs</span>
                 </Link>
               </div>
 

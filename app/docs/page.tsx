@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function HelpPage() {
+export default function DocsRedirectPage() {
   redirect("/academy");
 }

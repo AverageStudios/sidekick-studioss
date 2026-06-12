@@ -12,13 +12,16 @@ export function PublicSiteFooter() {
               Software for small businesses to choose an industry, pick a template, and launch faster.
             </p>
             <p className="text-sm public-text-soft">
-              Manage leads and keep follow-up moving from the same SideKick system.
+              Run campaigns in SideKick and hand Meta lead-form submissions off to the CRM tools you already use.
             </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3 text-sm public-text-soft sm:justify-end">
           <Link href="/product" className="font-medium transition hover:text-[var(--public-text)]">
             Product
+          </Link>
+          <Link href="/academy" className="font-medium transition hover:text-[var(--public-text)]">
+            Academy
           </Link>
           <Link href="/pricing" className="font-medium transition hover:text-[var(--public-text)]">
             Pricing

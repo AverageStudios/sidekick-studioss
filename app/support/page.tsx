@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2, LifeBuoy, Mail, MessageSquareText } from "lucide-react";
+import { BookOpenText, CheckCircle2, LifeBuoy, Mail, MessageSquareText } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -66,6 +66,12 @@ export default async function SupportPage({
             </p>
           </div>
           <div className="flex gap-3">
+            <Button asChild variant="outline" className="rounded-[18px] px-5">
+              <Link href="/academy">
+                <BookOpenText className="h-4 w-4" />
+                Academy
+              </Link>
+            </Button>
             <Button asChild variant="outline" className="rounded-[18px] px-5">
               <Link href={emailHref}>
                 <Mail className="h-4 w-4" />

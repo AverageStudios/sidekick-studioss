@@ -2,7 +2,7 @@ import { AppShell } from "@/components/app-shell";
 import { InitialsAvatar } from "@/components/initials-avatar";
 import { ProfilePictureField } from "@/components/profile-picture-field";
 import Link from "next/link";
-import { LifeBuoy } from "lucide-react";
+import { BookOpenText, LifeBuoy } from "lucide-react";
 import { signOutAction, updateProfileSettingsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +45,12 @@ export default async function SettingsPage({
         <div className="flex flex-wrap gap-3">
           <Button asChild variant="outline">
             <Link href="/workspace/settings">Open workspace settings</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/academy">
+              <BookOpenText className="h-4 w-4" />
+              View Academy
+            </Link>
           </Button>
           <Button asChild variant="outline">
             <Link href="/support/new?from=/settings">

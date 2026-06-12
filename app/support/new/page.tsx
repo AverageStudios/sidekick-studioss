@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2, LifeBuoy, Mail, ShieldCheck } from "lucide-react";
+import { BookOpenText, CheckCircle2, LifeBuoy, Mail, ShieldCheck } from "lucide-react";
 import { submitSupportTicketAction } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -65,6 +65,12 @@ export default async function NewSupportTicketPage({
           <div className="flex gap-3">
             <Button asChild variant="outline" className="rounded-[18px] px-5">
               <Link href="/support">Back to tickets</Link>
+            </Button>
+            <Button asChild variant="outline" className="rounded-[18px] px-5">
+              <Link href="/academy">
+                <BookOpenText className="h-4 w-4" />
+                Academy
+              </Link>
             </Button>
             <Button asChild variant="outline" className="rounded-[18px] px-5">
               <Link href={emailHref}>
