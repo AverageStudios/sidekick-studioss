@@ -29,22 +29,13 @@ function GoogleIcon() {
   );
 }
 
-function AppleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-current">
-      <path d="M16.37 12.3c.03 3.24 2.84 4.32 2.87 4.33-.02.08-.44 1.52-1.45 3.02-.87 1.29-1.77 2.57-3.18 2.6-1.38.03-1.82-.82-3.4-.82-1.58 0-2.08.8-3.37.85-1.36.05-2.4-1.38-3.27-2.66-1.77-2.56-3.12-7.24-1.3-10.4.91-1.56 2.53-2.55 4.29-2.58 1.34-.03 2.61.9 3.43.9.82 0 2.36-1.12 3.98-.95.68.03 2.58.27 3.8 2.05-.1.06-2.27 1.32-2.24 3.66ZM14.74 3.67c.73-.89 1.22-2.12 1.09-3.35-1.06.04-2.34.7-3.1 1.58-.68.78-1.28 2.03-1.12 3.22 1.18.09 2.4-.6 3.13-1.45Z" />
-    </svg>
-  );
-}
-
 const providerConfig: Record<
-  "google" | "apple",
+  "google",
   {
     label: string;
     icon: () => React.JSX.Element;
   }
 > = {
-  apple: { label: "Continue with Apple", icon: AppleIcon },
   google: { label: "Continue with Google", icon: GoogleIcon },
 };
 
@@ -58,7 +49,7 @@ export function SocialAuthButtons({
   const [isPending, startTransition] = useTransition();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
-  const providers: Array<Extract<Provider, "google" | "apple">> = ["google", "apple"];
+  const providers: Array<Extract<Provider, "google">> = ["google"];
 
   function handleOAuthSignIn(provider: Provider) {
     setError(null);
@@ -107,7 +98,7 @@ export function SocialAuthButtons({
               className="h-12 justify-center rounded-[18px] border-[var(--line)] bg-white/90 text-[var(--ink)] hover:border-[rgba(109,94,248,0.24)] hover:bg-[rgba(109,94,248,0.04)]"
             >
               <Icon />
-              {disabled ? `Connecting ${provider === "google" ? "Google" : "Apple"}...` : config.label}
+              {disabled ? "Connecting Google..." : config.label}
             </Button>
           );
         })}
