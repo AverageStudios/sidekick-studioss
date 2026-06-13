@@ -73,6 +73,86 @@ const authSchema = z.object({
   password: z.string().min(6),
 });
 
+function isMissingTableError(message: string | null | undefined, tableName: string) {
+  const value = message || "";
+  return (
+    value.includes(`Could not find the table 'public.${tableName}' in the schema cache`) ||
+    value.includes(`relation "public.${tableName}" does not exist`) ||
+    value.includes(`relation "${tableName}" does not exist`)
+  );
+}
+
+async function runWorkspaceCleanup(
+  label: string,
+  operation: PromiseLike<{ error: { message?: string | null } | null }>,
+  options?: { optionalTable?: string },
+) {
+  const result = await operation;
+  if (result.error) {
+    if (options?.optionalTable && isMissingTableError(result.error.message, options.optionalTable)) {
+      return;
+    }
+    throw new Error(`Could not delete workspace ${label}: ${result.error.message || "Unknown database error"}`);
+  }
+}
+
+async function deleteWorkspaceAndDependencies(
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
+  workspaceId: string,
+) {
+  await runWorkspaceCleanup(
+    "publish jobs",
+    admin.from("campaign_publish_jobs").delete().eq("workspace_id", workspaceId),
+    { optionalTable: "campaign_publish_jobs" },
+  );
+  await runWorkspaceCleanup(
+    "launch snapshots",
+    admin.from("campaign_launch_snapshots").delete().eq("workspace_id", workspaceId),
+    { optionalTable: "campaign_launch_snapshots" },
+  );
+  await runWorkspaceCleanup(
+    "provider assets",
+    admin.from("workspace_provider_assets").delete().eq("workspace_id", workspaceId),
+    { optionalTable: "workspace_provider_assets" },
+  );
+  await runWorkspaceCleanup(
+    "provider connections",
+    admin.from("workspace_provider_connections").delete().eq("workspace_id", workspaceId),
+    { optionalTable: "workspace_provider_connections" },
+  );
+  await runWorkspaceCleanup(
+    "legacy Meta connections",
+    admin.from("workspace_meta_connections").delete().eq("workspace_id", workspaceId),
+    { optionalTable: "workspace_meta_connections" },
+  );
+  await runWorkspaceCleanup(
+    "workspace invitations",
+    admin.from("workspace_invitations").delete().eq("workspace_id", workspaceId),
+    { optionalTable: "workspace_invitations" },
+  );
+  await runWorkspaceCleanup(
+    "follow-up settings",
+    admin.from("follow_up_settings").delete().eq("workspace_id", workspaceId),
+  );
+  await runWorkspaceCleanup("funnels", admin.from("funnels").delete().eq("workspace_id", workspaceId));
+  await runWorkspaceCleanup("leads", admin.from("leads").delete().eq("workspace_id", workspaceId));
+  await runWorkspaceCleanup("campaigns", admin.from("campaigns").delete().eq("workspace_id", workspaceId));
+  await runWorkspaceCleanup("business profile", admin.from("business_profiles").delete().eq("workspace_id", workspaceId));
+  await runWorkspaceCleanup(
+    "active workspace references",
+    admin.from("profiles").update({ active_workspace_id: null }).eq("active_workspace_id", workspaceId),
+  );
+  await runWorkspaceCleanup(
+    "workspace memberships",
+    admin.from("workspace_memberships").delete().eq("workspace_id", workspaceId),
+  );
+
+  const { error: deleteError } = await admin.from("workspaces").delete().eq("id", workspaceId);
+  if (deleteError) {
+    throw new Error(`Could not delete workspace: ${deleteError.message}`);
+  }
+}
+
 const signUpSchema = authSchema.extend({
   firstName: z.string().trim().min(1, "First name is required."),
   lastName: z.string().trim().min(1, "Last name is required."),
@@ -809,6 +889,148 @@ export async function signOutAction() {
   }
 
   redirect(`/login?success=${encodeURIComponent(authSuccessMessages.signedOut)}`);
+}
+
+export async function cancelSubscriptionAction() {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!isSupabaseServerConfigured()) {
+    redirect(
+      `/settings?error=${encodeURIComponent(
+        "Billing cancellation requests are not available right now. Please contact support.",
+      )}#account-controls`,
+    );
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(
+      `/settings?error=${encodeURIComponent(
+        "Billing cancellation requests are not available right now. Please contact support.",
+      )}#account-controls`,
+    );
+  }
+
+  const workspaceContext = await ensureWorkspaceContextForUser(user);
+  const workspaceId = workspaceContext?.activeWorkspace.id || "";
+  const workspaceName = workspaceContext?.activeWorkspace.name || "Current workspace";
+  const userName = workspaceContext?.userDisplayName || user.email || "SideKick user";
+  const userEmail = user.email || workspaceContext?.userEmail || "";
+
+  if (!workspaceId) {
+    redirect(`/settings?error=${encodeURIComponent("Choose a workspace before canceling a subscription.")}#account-controls`);
+  }
+
+  try {
+    await createSupportTicketWithMessage({
+      admin,
+      ticket: {
+        workspace_id: workspaceId,
+        workspace_name: workspaceName,
+        user_id: user.id,
+        user_name: userName,
+        user_email: userEmail,
+        subject: "Cancel subscription request",
+        category: "billing",
+        priority: "medium",
+        message:
+          "Please cancel my SideKick subscription or active trial. This request was submitted from account settings.",
+        current_route: "/settings",
+        context_json: {
+          workspaceName,
+          workspaceId,
+          currentRoute: "/settings",
+          submittedAt: new Date().toISOString(),
+          requestType: "cancel_subscription",
+        },
+      },
+      message: {
+        ticket_id: "",
+        workspace_id: workspaceId,
+        author_user_id: user.id,
+        author_name: userName,
+        author_email: userEmail,
+        author_role: "user",
+        body: "Please cancel my SideKick subscription or active trial.",
+      },
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Could not submit cancellation request.";
+    const message = isMissingSupportTableError(errorMessage)
+      ? "Billing cancellation requests are not enabled in this database yet. Please contact support directly."
+      : errorMessage;
+    redirect(`/settings?error=${encodeURIComponent(message)}#account-controls`);
+  }
+
+  revalidatePath("/settings");
+  revalidatePath("/support");
+  redirect(`/settings?saved=${encodeURIComponent("Cancellation request received. Our team will confirm it by email.")}#account-controls`);
+}
+
+export async function deleteAccountAction() {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!isSupabaseServerConfigured()) {
+    redirect(`/settings?error=${encodeURIComponent("Account deletion is not available right now.")}#account-controls`);
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(`/settings?error=${encodeURIComponent("Account deletion is not available right now.")}#account-controls`);
+  }
+
+  const { data: ownedWorkspaces, error: ownedWorkspacesError } = await admin
+    .from("workspaces")
+    .select("id")
+    .eq("owner_user_id", user.id);
+
+  if (ownedWorkspacesError) {
+    redirect(`/settings?error=${encodeURIComponent(ownedWorkspacesError.message)}#account-controls`);
+  }
+
+  for (const workspace of ownedWorkspaces || []) {
+    await deleteWorkspaceAndDependencies(admin, workspace.id);
+  }
+
+  const optionalDelete = async (tableName: string, operation: PromiseLike<{ error: { message?: string | null } | null }>) => {
+    const result = await operation;
+    if (result.error && !isMissingTableError(result.error.message, tableName)) {
+      throw new Error(result.error.message || `Could not delete ${tableName}.`);
+    }
+  };
+
+  try {
+    await optionalDelete("support_ticket_messages", admin.from("support_ticket_messages").delete().eq("author_user_id", user.id));
+    await optionalDelete("support_tickets", admin.from("support_tickets").delete().eq("user_id", user.id));
+    await admin.from("campaigns").delete().eq("user_id", user.id);
+    await admin.from("funnels").delete().eq("user_id", user.id);
+    await admin.from("leads").delete().eq("user_id", user.id);
+    await admin.from("follow_up_settings").delete().eq("user_id", user.id);
+    await admin.from("business_profiles").delete().eq("user_id", user.id);
+    await admin.from("workspace_memberships").delete().eq("user_id", user.id);
+    await admin.from("profiles").delete().eq("user_id", user.id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not fully clean up account data.";
+    redirect(`/settings?error=${encodeURIComponent(message)}#account-controls`);
+  }
+
+  const { error: deleteUserError } = await admin.auth.admin.deleteUser(user.id);
+  if (deleteUserError) {
+    redirect(`/settings?error=${encodeURIComponent(deleteUserError.message)}#account-controls`);
+  }
+
+  const supabase = await createSupabaseServerClient();
+  if (supabase) {
+    await supabase.auth.signOut().catch(() => undefined);
+  }
+
+  redirect(`/login?success=${encodeURIComponent("Your account has been deleted.")}`);
 }
 
 export async function submitSupportTicketAction(formData: FormData) {
@@ -1571,93 +1793,7 @@ export async function deleteWorkspaceAction(formData: FormData) {
   const remainingWorkspaces = totalWorkspaces.filter((workspace) => workspace.id !== workspaceId);
   const nextActiveWorkspaceId = remainingWorkspaces[0]?.id || null;
 
-  const isMissingTableError = (error: { message?: string | null } | null | undefined, tableName: string) => {
-    const message = error?.message || "";
-    return (
-      message.includes(`Could not find the table 'public.${tableName}' in the schema cache`) ||
-      message.includes(`relation \"public.${tableName}\" does not exist`) ||
-      message.includes(`relation \"${tableName}\" does not exist`)
-    );
-  };
-
-  const runWorkspaceCleanup = async (
-    label: string,
-    operation: PromiseLike<{ error: { message?: string | null } | null }>,
-    options?: { optionalTable?: string },
-  ) => {
-    const result = await operation;
-    if (result.error) {
-      if (options?.optionalTable && isMissingTableError(result.error, options.optionalTable)) {
-        return;
-      }
-      throw new Error(`Could not delete workspace ${label}: ${result.error.message || "Unknown database error"}`);
-    }
-  };
-
-  await runWorkspaceCleanup(
-    "publish jobs",
-    admin.from("campaign_publish_jobs").delete().eq("workspace_id", workspaceId),
-    { optionalTable: "campaign_publish_jobs" },
-  );
-  await runWorkspaceCleanup(
-    "launch snapshots",
-    admin.from("campaign_launch_snapshots").delete().eq("workspace_id", workspaceId),
-    { optionalTable: "campaign_launch_snapshots" },
-  );
-  await runWorkspaceCleanup(
-    "provider assets",
-    admin.from("workspace_provider_assets").delete().eq("workspace_id", workspaceId),
-    { optionalTable: "workspace_provider_assets" },
-  );
-  await runWorkspaceCleanup(
-    "provider connections",
-    admin.from("workspace_provider_connections").delete().eq("workspace_id", workspaceId),
-    { optionalTable: "workspace_provider_connections" },
-  );
-  await runWorkspaceCleanup(
-    "legacy Meta connections",
-    admin.from("workspace_meta_connections").delete().eq("workspace_id", workspaceId),
-    { optionalTable: "workspace_meta_connections" },
-  );
-  await runWorkspaceCleanup(
-    "workspace invitations",
-    admin.from("workspace_invitations").delete().eq("workspace_id", workspaceId),
-    { optionalTable: "workspace_invitations" },
-  );
-  await runWorkspaceCleanup(
-    "follow-up settings",
-    admin.from("follow_up_settings").delete().eq("workspace_id", workspaceId),
-  );
-  await runWorkspaceCleanup(
-    "funnels",
-    admin.from("funnels").delete().eq("workspace_id", workspaceId),
-  );
-  await runWorkspaceCleanup(
-    "leads",
-    admin.from("leads").delete().eq("workspace_id", workspaceId),
-  );
-  await runWorkspaceCleanup(
-    "campaigns",
-    admin.from("campaigns").delete().eq("workspace_id", workspaceId),
-  );
-  await runWorkspaceCleanup(
-    "business profile",
-    admin.from("business_profiles").delete().eq("workspace_id", workspaceId),
-  );
-
-  await runWorkspaceCleanup(
-    "active workspace references",
-    admin.from("profiles").update({ active_workspace_id: null }).eq("active_workspace_id", workspaceId),
-  );
-  await runWorkspaceCleanup(
-    "workspace memberships",
-    admin.from("workspace_memberships").delete().eq("workspace_id", workspaceId),
-  );
-
-  const { error: deleteError } = await admin.from("workspaces").delete().eq("id", workspaceId);
-  if (deleteError) {
-    throw new Error(`Could not delete workspace: ${deleteError.message}`);
-  }
+  await deleteWorkspaceAndDependencies(admin, workspaceId);
 
   await admin.from("profiles").update({ active_workspace_id: nextActiveWorkspaceId }).eq("user_id", user.id);
 

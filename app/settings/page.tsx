@@ -1,8 +1,9 @@
 import { AppShell } from "@/components/app-shell";
+import { CancelSubscriptionButton, DeleteAccountButton } from "@/components/account-management-actions";
 import { InitialsAvatar } from "@/components/initials-avatar";
 import { ProfilePictureField } from "@/components/profile-picture-field";
 import Link from "next/link";
-import { BookOpenText, LifeBuoy } from "lucide-react";
+import { AlertTriangle, BookOpenText, CreditCard, LifeBuoy } from "lucide-react";
 import { signOutAction, updateProfileSettingsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,7 @@ export default async function SettingsPage({
     "U";
   const resolvedEmail = user.email || workspaceContext?.userEmail || "";
   const resolvedAvatarUrl = getUserAvatarUrl(resolvedProfile, user);
+  const savedMessage = saved && saved !== "1" ? saved : saved ? "Settings saved." : "";
 
   return (
     <AppShell currentPath="/settings">
@@ -61,9 +63,9 @@ export default async function SettingsPage({
         </div>
       </div>
 
-      {saved ? (
+      {savedMessage ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          Settings saved.
+          {savedMessage}
         </div>
       ) : null}
       {error ? (
@@ -122,6 +124,57 @@ export default async function SettingsPage({
                   — {tip}
                 </p>
               ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="account-controls" className="pt-2">
+        <div className="mb-5">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--muted)]">Billing & account</p>
+          <h2 className="mt-1 text-base font-semibold text-[var(--ink)]">Billing & account controls</h2>
+          <p className="mt-0.5 text-sm text-[var(--muted)]">
+            Subscription cancellation and permanent account removal live here so they are easy to find when you need them.
+          </p>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-amber-200 bg-[linear-gradient(180deg,#fffdf5_0%,#fff9e7_100%)] p-5 shadow-[0_8px_24px_rgba(120,53,15,0.06)]">
+              <div className="flex items-start gap-3">
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+                  <CreditCard className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Subscription</p>
+                  <h3 className="mt-1 text-lg font-semibold text-[var(--ink)]">Cancel subscription</h3>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">
+                    Send a billing cancellation request from your account settings. You will be asked to confirm before anything is submitted.
+                  </p>
+                  <div className="mt-4">
+                    <CancelSubscriptionButton />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-rose-200 bg-[linear-gradient(180deg,#fff7f7_0%,#fff1f1_100%)] p-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-rose-700">Danger zone</p>
+            <div className="mt-4 space-y-3">
+              <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-white/75 px-4 py-4">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+                <p className="text-sm leading-6 text-rose-900">
+                  Deleting your account is permanent. It removes your SideKick profile, workspaces, campaigns, leads,
+                  support history, and connected accounts.
+                </p>
+              </div>
+              <p className="text-xs leading-5 text-[var(--muted)]">
+                If trial or subscription billing is active on this account in the future, canceling billing should happen before account deletion.
+              </p>
+              <div className="pt-2">
+                <DeleteAccountButton />
+              </div>
             </div>
           </div>
         </div>
