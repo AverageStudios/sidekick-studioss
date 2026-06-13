@@ -82,6 +82,19 @@ function isMissingTableError(message: string | null | undefined, tableName: stri
   );
 }
 
+function isMissingColumnError(
+  error: { message?: string | null } | null | undefined,
+  tableName: string,
+  columnName: string,
+) {
+  const value = error?.message || "";
+  return (
+    value.includes(`column ${tableName}.${columnName} does not exist`) ||
+    value.includes(`Could not find the '${columnName}' column of '${tableName}' in the schema cache`) ||
+    (value.includes(tableName) && value.includes(columnName) && value.includes("schema cache"))
+  );
+}
+
 async function runWorkspaceCleanup(
   label: string,
   operation: PromiseLike<{ error: { message?: string | null } | null }>,
@@ -1106,7 +1119,7 @@ export async function deleteAccountAction() {
     redirect(`/settings?error=${encodeURIComponent(ownedWorkspacesError.message)}#account-controls`);
   }
 
-  const [campaignAssetsResult, businessProfilesResult, profileResult] = await Promise.all([
+  const [campaignAssetsResult, businessProfilesResult, profileAvatarResult] = await Promise.all([
     admin.from("campaigns").select("before_images_json, after_images_json").eq("user_id", user.id),
     admin.from("business_profiles").select("logo_url").eq("user_id", user.id),
     admin.from("profiles").select("avatar_url").eq("user_id", user.id).maybeSingle(),
@@ -1120,8 +1133,8 @@ export async function deleteAccountAction() {
     redirect(`/settings?error=${encodeURIComponent(businessProfilesResult.error.message)}#account-controls`);
   }
 
-  if (profileResult.error) {
-    redirect(`/settings?error=${encodeURIComponent(profileResult.error.message)}#account-controls`);
+  if (profileAvatarResult.error && !isMissingColumnError(profileAvatarResult.error, "profiles", "avatar_url")) {
+    redirect(`/settings?error=${encodeURIComponent(profileAvatarResult.error.message)}#account-controls`);
   }
 
   for (const workspace of ownedWorkspaces || []) {
@@ -1137,7 +1150,7 @@ export async function deleteAccountAction() {
 
   try {
     const avatarPaths = collectStoragePathsFromUrls([
-      profileResult.data?.avatar_url,
+      !profileAvatarResult.error ? profileAvatarResult.data?.avatar_url : null,
       typeof user.user_metadata?.avatar_url === "string" ? user.user_metadata.avatar_url : null,
     ]);
     const userAssetPaths = collectStoragePathsFromUrls([
