@@ -13,7 +13,7 @@ import { env, isDemoModeEnabled, isSupabasePublicConfigured, isSupabaseServerCon
 import { getPublishedTemplateBySlug } from "@/lib/template-repository";
 import { slugify } from "@/lib/utils";
 import { sendLeadConfirmationEmail, sendWorkspaceInvitationEmail } from "@/services/follow-up";
-import { uploadAsset } from "@/services/storage";
+import { deleteStoragePaths, deleteStoragePrefix, getStoragePathFromPublicUrl, uploadAsset } from "@/services/storage";
 import { storageBucketName } from "@/services/storage";
 import {
   createWorkspaceForUser,
@@ -96,10 +96,102 @@ async function runWorkspaceCleanup(
   }
 }
 
+function collectStoragePathsFromUrls(urls: Array<string | null | undefined>) {
+  return urls
+    .map((url) => getStoragePathFromPublicUrl(url))
+    .filter((path): path is string => Boolean(path));
+}
+
+function collectCampaignStorageUrls(
+  campaigns: Array<{
+    before_images_json?: unknown;
+    after_images_json?: unknown;
+  }> | null | undefined,
+) {
+  const urls: string[] = [];
+
+  for (const campaign of campaigns || []) {
+    const beforeImages = Array.isArray(campaign.before_images_json) ? campaign.before_images_json : [];
+    const afterImages = Array.isArray(campaign.after_images_json) ? campaign.after_images_json : [];
+
+    for (const imageUrl of [...beforeImages, ...afterImages]) {
+      if (typeof imageUrl === "string" && imageUrl.trim()) {
+        urls.push(imageUrl.trim());
+      }
+    }
+  }
+
+  return urls;
+}
+
+async function loadWorkspaceStorageCleanupTargets(
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
+  workspaceId: string,
+) {
+  const [campaignsResult, businessProfileResult] = await Promise.all([
+    admin.from("campaigns").select("before_images_json, after_images_json").eq("workspace_id", workspaceId),
+    admin.from("business_profiles").select("logo_url").eq("workspace_id", workspaceId),
+  ]);
+
+  if (campaignsResult.error) {
+    throw new Error(`Could not inspect workspace campaigns before deletion: ${campaignsResult.error.message}`);
+  }
+
+  if (businessProfileResult.error) {
+    throw new Error(`Could not inspect workspace branding before deletion: ${businessProfileResult.error.message}`);
+  }
+
+  return {
+    paths: collectStoragePathsFromUrls([
+      ...(businessProfileResult.data || []).map((profile) => profile.logo_url),
+      ...collectCampaignStorageUrls(campaignsResult.data),
+    ]),
+    prefixes: [`logos/workspaces/${workspaceId}`],
+  };
+}
+
+async function cleanupWorkspaceStorageAssets(
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
+  workspaceId: string,
+) {
+  const targets = await loadWorkspaceStorageCleanupTargets(admin, workspaceId);
+
+  if (targets.paths.length) {
+    await deleteStoragePaths(targets.paths);
+  }
+
+  for (const prefix of targets.prefixes) {
+    await deleteStoragePrefix(prefix);
+  }
+}
+
+async function verifyNoRemainingRowsByColumn(
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
+  records: Array<{ table: string; column: string; value: string; optional?: boolean }>,
+) {
+  for (const record of records) {
+    const result = await admin.from(record.table).select("id", { head: true, count: "exact" }).eq(record.column, record.value);
+
+    if (result.error) {
+      if (record.optional && isMissingTableError(result.error.message, record.table)) {
+        continue;
+      }
+
+      throw new Error(`Could not verify ${record.table} cleanup: ${result.error.message}`);
+    }
+
+    if ((result.count || 0) > 0) {
+      throw new Error(`Supabase still has ${record.table} rows linked to this deletion.`);
+    }
+  }
+}
+
 async function deleteWorkspaceAndDependencies(
   admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
   workspaceId: string,
 ) {
+  await cleanupWorkspaceStorageAssets(admin, workspaceId);
+
   await runWorkspaceCleanup(
     "publish jobs",
     admin.from("campaign_publish_jobs").delete().eq("workspace_id", workspaceId),
@@ -151,6 +243,26 @@ async function deleteWorkspaceAndDependencies(
   if (deleteError) {
     throw new Error(`Could not delete workspace: ${deleteError.message}`);
   }
+
+  await verifyNoRemainingRowsByColumn(admin, [
+    { table: "workspaces", column: "id", value: workspaceId },
+    { table: "workspace_memberships", column: "workspace_id", value: workspaceId },
+    { table: "business_profiles", column: "workspace_id", value: workspaceId },
+    { table: "campaigns", column: "workspace_id", value: workspaceId },
+    { table: "funnels", column: "workspace_id", value: workspaceId },
+    { table: "leads", column: "workspace_id", value: workspaceId },
+    { table: "follow_up_settings", column: "workspace_id", value: workspaceId },
+    { table: "workspace_invitations", column: "workspace_id", value: workspaceId, optional: true },
+    { table: "workspace_meta_connections", column: "workspace_id", value: workspaceId, optional: true },
+    { table: "workspace_provider_connections", column: "workspace_id", value: workspaceId, optional: true },
+    { table: "workspace_provider_assets", column: "workspace_id", value: workspaceId, optional: true },
+    { table: "campaign_publish_jobs", column: "workspace_id", value: workspaceId, optional: true },
+    { table: "campaign_launch_snapshots", column: "workspace_id", value: workspaceId, optional: true },
+    { table: "crm_routing_rules", column: "workspace_id", value: workspaceId, optional: true },
+    { table: "lead_deliveries", column: "workspace_id", value: workspaceId, optional: true },
+    { table: "support_tickets", column: "workspace_id", value: workspaceId, optional: true },
+    { table: "support_ticket_messages", column: "workspace_id", value: workspaceId, optional: true },
+  ]);
 }
 
 const signUpSchema = authSchema.extend({
@@ -994,6 +1106,24 @@ export async function deleteAccountAction() {
     redirect(`/settings?error=${encodeURIComponent(ownedWorkspacesError.message)}#account-controls`);
   }
 
+  const [campaignAssetsResult, businessProfilesResult, profileResult] = await Promise.all([
+    admin.from("campaigns").select("before_images_json, after_images_json").eq("user_id", user.id),
+    admin.from("business_profiles").select("logo_url").eq("user_id", user.id),
+    admin.from("profiles").select("avatar_url").eq("user_id", user.id).maybeSingle(),
+  ]);
+
+  if (campaignAssetsResult.error) {
+    redirect(`/settings?error=${encodeURIComponent(campaignAssetsResult.error.message)}#account-controls`);
+  }
+
+  if (businessProfilesResult.error) {
+    redirect(`/settings?error=${encodeURIComponent(businessProfilesResult.error.message)}#account-controls`);
+  }
+
+  if (profileResult.error) {
+    redirect(`/settings?error=${encodeURIComponent(profileResult.error.message)}#account-controls`);
+  }
+
   for (const workspace of ownedWorkspaces || []) {
     await deleteWorkspaceAndDependencies(admin, workspace.id);
   }
@@ -1006,15 +1136,48 @@ export async function deleteAccountAction() {
   };
 
   try {
+    const avatarPaths = collectStoragePathsFromUrls([
+      profileResult.data?.avatar_url,
+      typeof user.user_metadata?.avatar_url === "string" ? user.user_metadata.avatar_url : null,
+    ]);
+    const userAssetPaths = collectStoragePathsFromUrls([
+      ...(businessProfilesResult.data || []).map((profile) => profile.logo_url),
+      ...collectCampaignStorageUrls(campaignAssetsResult.data),
+    ]);
+
+    if (avatarPaths.length || userAssetPaths.length) {
+      await deleteStoragePaths([...avatarPaths, ...userAssetPaths]);
+    }
+    await deleteStoragePrefix(`profiles/${user.id}`);
+
     await optionalDelete("support_ticket_messages", admin.from("support_ticket_messages").delete().eq("author_user_id", user.id));
     await optionalDelete("support_tickets", admin.from("support_tickets").delete().eq("user_id", user.id));
-    await admin.from("campaigns").delete().eq("user_id", user.id);
-    await admin.from("funnels").delete().eq("user_id", user.id);
-    await admin.from("leads").delete().eq("user_id", user.id);
-    await admin.from("follow_up_settings").delete().eq("user_id", user.id);
-    await admin.from("business_profiles").delete().eq("user_id", user.id);
-    await admin.from("workspace_memberships").delete().eq("user_id", user.id);
-    await admin.from("profiles").delete().eq("user_id", user.id);
+    await optionalDelete("workspace_provider_connections", admin.from("workspace_provider_connections").delete().eq("user_id", user.id));
+    await optionalDelete("workspace_meta_connections", admin.from("workspace_meta_connections").delete().eq("user_id", user.id));
+    await optionalDelete("workspace_invitations", admin.from("workspace_invitations").delete().eq("invited_by_user_id", user.id));
+    await optionalDelete("workspace_invitations", admin.from("workspace_invitations").delete().eq("accepted_by_user_id", user.id));
+    await optionalDelete("campaign_publish_jobs", admin.from("campaign_publish_jobs").update({ created_by: null }).eq("created_by", user.id));
+    await optionalDelete("campaign_launch_snapshots", admin.from("campaign_launch_snapshots").update({ created_by: null }).eq("created_by", user.id));
+    await runWorkspaceCleanup("campaigns", admin.from("campaigns").delete().eq("user_id", user.id));
+    await runWorkspaceCleanup("funnels", admin.from("funnels").delete().eq("user_id", user.id));
+    await runWorkspaceCleanup("leads", admin.from("leads").delete().eq("user_id", user.id));
+    await runWorkspaceCleanup("follow-up settings", admin.from("follow_up_settings").delete().eq("user_id", user.id));
+    await runWorkspaceCleanup("business profiles", admin.from("business_profiles").delete().eq("user_id", user.id));
+    await runWorkspaceCleanup("workspace memberships", admin.from("workspace_memberships").delete().eq("user_id", user.id));
+    await runWorkspaceCleanup("profiles", admin.from("profiles").delete().eq("user_id", user.id));
+    await verifyNoRemainingRowsByColumn(admin, [
+      { table: "workspaces", column: "owner_user_id", value: user.id },
+      { table: "workspace_memberships", column: "user_id", value: user.id },
+      { table: "business_profiles", column: "user_id", value: user.id },
+      { table: "campaigns", column: "user_id", value: user.id },
+      { table: "funnels", column: "user_id", value: user.id },
+      { table: "leads", column: "user_id", value: user.id },
+      { table: "follow_up_settings", column: "user_id", value: user.id },
+      { table: "profiles", column: "user_id", value: user.id },
+      { table: "support_tickets", column: "user_id", value: user.id, optional: true },
+      { table: "workspace_provider_connections", column: "user_id", value: user.id, optional: true },
+      { table: "workspace_meta_connections", column: "user_id", value: user.id, optional: true },
+    ]);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not fully clean up account data.";
     redirect(`/settings?error=${encodeURIComponent(message)}#account-controls`);
