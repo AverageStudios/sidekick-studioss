@@ -4,6 +4,7 @@ import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 import { getCurrentUser } from "@/lib/auth";
 import { fetchMetaGeoLocationSearch, MetaGeoLocationSearchResult } from "@/lib/meta";
 import { getWorkspaceMetaAccessToken } from "@/lib/meta-integration";
+import { logRouteError } from "@/lib/api-security";
 import { CampaignLocationScope, MetaLocationClassification, MetaLocationTargeting } from "@/types";
 
 type GeocoderSearchResult = {
@@ -264,7 +265,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const query = request.nextUrl.searchParams.get("q")?.trim() || "";
+  const query = (request.nextUrl.searchParams.get("q") || "").trim().slice(0, 120);
   if (query.length < 2) {
     return NextResponse.json({ suggestions: [] });
   }
@@ -426,7 +427,8 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ suggestions: normalizedSuggestions });
-  } catch {
+  } catch (error) {
+    logRouteError("location search", error);
     return NextResponse.json(
       { suggestions: [], error: "Could not load location suggestions right now." },
       { status: 500 },

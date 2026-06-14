@@ -4,10 +4,12 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/auth";
 import { ensureCampaignDraft } from "@/lib/campaign-drafts";
 import { runMetaLaunchPreflight } from "@/lib/meta-launch";
+import { logRouteError, readJsonBody } from "@/lib/api-security";
+import { checkRateLimit, createRateLimitResponse, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
 
 const preflightRequestSchema = z.object({
   campaignId: z.string().uuid().optional(),
-  templateSlug: z.string().min(1).optional(),
+  templateSlug: z.string().trim().min(1).max(160).optional(),
   state: z.record(z.string(), z.any()).default({}),
   mode: z.enum(["draft", "live"]).default("draft"),
 });
@@ -18,7 +20,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const parsed = preflightRequestSchema.safeParse(await request.json());
+  const ip = getIpFromRequest(request);
+  const rateLimit = checkRateLimit({
+    key: "api:meta-preflight",
+    limit: 30,
+    windowMs: 60 * 1000,
+    identifiers: { ip, userId: user.id },
+  });
+  if (!rateLimit.allowed) {
+    logRateLimitHit({
+      key: "api:meta-preflight",
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+      matchedOn: rateLimit.matchedOn,
+      ip,
+      userId: user.id,
+    });
+    return createRateLimitResponse(undefined, rateLimit.retryAfterSeconds);
+  }
+
+  const body = await readJsonBody(request);
+  if (!body) {
+    return NextResponse.json({ error: "Invalid JSON payload." }, { status: 400 });
+  }
+
+  const parsed = preflightRequestSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid preflight payload." },
@@ -69,10 +94,7 @@ export async function POST(request: Request) {
       ...preflight,
     });
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Preflight could not be completed.";
-    return NextResponse.json({ error: message }, { status: 400 });
+    logRouteError("meta preflight", error);
+    return NextResponse.json({ error: "Preflight could not be completed." }, { status: 400 });
   }
 }

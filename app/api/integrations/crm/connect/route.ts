@@ -5,6 +5,8 @@ import { createCrmOAuthState } from "@/lib/crm-oauth-state";
 import { env, isGhlConfigured } from "@/lib/env";
 import { CrmProvider } from "@/types";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
+import { logRouteError } from "@/lib/api-security";
+import { checkRateLimit, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
 
 function buildIntegrationsUrl() {
   return new URL("/workspace/settings?section=integrations", env.appUrl);
@@ -43,6 +45,20 @@ export async function GET(request: NextRequest) {
     const loginUrl = new URL("/login", env.appUrl);
     loginUrl.searchParams.set("error", "Sign in before connecting a CRM.");
     return NextResponse.redirect(loginUrl);
+  }
+
+  const ip = getIpFromRequest(request);
+  const rateLimit = checkRateLimit({
+    key: "api:crm-connect",
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+    identifiers: { ip, userId: user.id },
+  });
+  if (!rateLimit.allowed) {
+    logRateLimitHit({ key: "api:crm-connect", retryAfterSeconds: rateLimit.retryAfterSeconds, matchedOn: rateLimit.matchedOn, ip, userId: user.id });
+    const integrationsUrl = buildIntegrationsUrl();
+    integrationsUrl.searchParams.set("error", "Too many attempts right now. Please wait a moment and try again.");
+    return NextResponse.redirect(integrationsUrl);
   }
 
   let workspaceContext;
@@ -111,10 +127,9 @@ export async function GET(request: NextRequest) {
     });
     return response;
   } catch (error) {
+    logRouteError("crm connect", error);
     const integrationsUrl = buildIntegrationsUrl();
-    const message =
-      error instanceof Error ? error.message : "Could not start CRM connection.";
-    integrationsUrl.searchParams.set("error", message);
+    integrationsUrl.searchParams.set("error", "Could not start CRM connection.");
     return NextResponse.redirect(integrationsUrl);
   }
 }

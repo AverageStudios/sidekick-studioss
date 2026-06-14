@@ -4,6 +4,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { parseMetaOAuthState } from "@/lib/meta-oauth-state";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
+import { logRouteError } from "@/lib/api-security";
+import { checkRateLimit, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
 import { ensureWorkspaceMetaLeadAutomation } from "@/lib/meta-leads";
 import {
   exchangeMetaCodeForToken,
@@ -70,6 +72,21 @@ export async function GET(request: NextRequest) {
     const loginUrl = new URL("/login", env.appUrl);
     loginUrl.searchParams.set("error", "Sign in before connecting Meta.");
     const response = NextResponse.redirect(loginUrl);
+    clearOauthCookies(response);
+    return response;
+  }
+
+  const ip = getIpFromRequest(request);
+  const rateLimit = checkRateLimit({
+    key: "api:meta-callback",
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+    identifiers: { ip, userId: user.id },
+  });
+  if (!rateLimit.allowed) {
+    logRateLimitHit({ key: "api:meta-callback", retryAfterSeconds: rateLimit.retryAfterSeconds, matchedOn: rateLimit.matchedOn, ip, userId: user.id });
+    settingsUrl.searchParams.set("error", "Too many attempts right now. Please wait a moment and try again.");
+    const response = NextResponse.redirect(settingsUrl);
     clearOauthCookies(response);
     return response;
   }
@@ -238,11 +255,8 @@ export async function GET(request: NextRequest) {
     clearOauthCookies(response);
     return response;
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Meta connection failed. Please try again.";
-    settingsUrl.searchParams.set("error", message);
+    logRouteError("meta callback", error);
+    settingsUrl.searchParams.set("error", "Meta connection failed. Please try again.");
     const response = NextResponse.redirect(settingsUrl);
     clearOauthCookies(response);
     return response;

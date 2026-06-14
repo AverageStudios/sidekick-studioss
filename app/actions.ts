@@ -3,6 +3,7 @@
 import { randomUUID } from "crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -15,6 +16,7 @@ import { slugify } from "@/lib/utils";
 import { sendLeadConfirmationEmail, sendWorkspaceInvitationEmail } from "@/services/follow-up";
 import { deleteStoragePaths, deleteStoragePrefix, getStoragePathFromPublicUrl, uploadAsset } from "@/services/storage";
 import { storageBucketName } from "@/services/storage";
+import { checkRateLimit, getIpFromHeaders, logRateLimitHit } from "@/lib/rate-limit";
 import {
   createWorkspaceForUser,
   ensureWorkspaceContextForUser,
@@ -28,7 +30,7 @@ import {
   normalizeIndustryLabel,
   normalizeTemplateCtaType,
 } from "@/data/template-taxonomy";
-import { CampaignRecord, SupportTicketStatus } from "@/types";
+import { CampaignRecord, LeadRecord, SupportTicketStatus } from "@/types";
 import { getCanonicalLeadStatus } from "@/lib/leads";
 import {
   disconnectWorkspaceMetaConnection,
@@ -73,6 +75,25 @@ const authSchema = z.object({
   password: z.string().min(6),
 });
 
+const RATE_LIMITED_ACTION_MESSAGE = "Too many attempts right now. Please wait a moment and try again.";
+
+const uuidSchema = z.string().uuid();
+const publicLeadSubmissionSchema = z.object({
+  funnelSlug: z.string().trim().min(1).max(160),
+  campaignId: z.string().uuid().optional().or(z.literal("")),
+  funnelId: z.string().uuid().optional().or(z.literal("")),
+  email: z.string().trim().email().max(254),
+  name: z.string().trim().min(1).max(120),
+  phone: z
+    .string()
+    .trim()
+    .min(7)
+    .max(40)
+    .regex(/^[+()\d\s.-]+$/, "Enter a valid phone number."),
+  serviceInterest: z.string().trim().min(1).max(160),
+  message: z.string().trim().max(1000).optional().default(""),
+});
+
 function isMissingTableError(message: string | null | undefined, tableName: string) {
   const value = message || "";
   return (
@@ -93,6 +114,50 @@ function isMissingColumnError(
     value.includes(`Could not find the '${columnName}' column of '${tableName}' in the schema cache`) ||
     (value.includes(tableName) && value.includes(columnName) && value.includes("schema cache"))
   );
+}
+
+function logActionError(scope: string, error: unknown) {
+  console.error(`[${scope}]`, error instanceof Error ? error.message : "Unexpected action error");
+}
+
+async function enforceActionRateLimit({
+  key,
+  limit,
+  windowMs,
+  redirectTo,
+  userId,
+  email,
+}: {
+  key: string;
+  limit: number;
+  windowMs: number;
+  redirectTo: string;
+  userId?: string | null;
+  email?: string | null;
+}) {
+  const headerStore = await headers();
+  const ip = getIpFromHeaders(headerStore);
+  const result = checkRateLimit({
+    key,
+    limit,
+    windowMs,
+    identifiers: {
+      ip,
+      userId,
+      email,
+    },
+  });
+
+  if (!result.allowed) {
+    logRateLimitHit({
+      key,
+      retryAfterSeconds: result.retryAfterSeconds,
+      matchedOn: result.matchedOn,
+      ip,
+      userId,
+    });
+    redirect(appendQueryParam(redirectTo, "error", RATE_LIMITED_ACTION_MESSAGE));
+  }
 }
 
 async function runWorkspaceCleanup(
@@ -197,6 +262,83 @@ async function verifyNoRemainingRowsByColumn(
       throw new Error(`Supabase still has ${record.table} rows linked to this deletion.`);
     }
   }
+}
+
+function appendSafeActionError(redirectTo: string, message: string) {
+  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/dashboard";
+  return appendQueryParam(safeRedirectTo, "error", message);
+}
+
+async function requireAuthenticatedActionUser(redirectTo = "/login") {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect(redirectTo);
+  }
+  return user;
+}
+
+async function requireSupabaseAdminForAction(redirectTo: string) {
+  if (!isSupabaseServerConfigured()) {
+    redirect(appendSafeActionError(redirectTo, "Server database access is not configured."));
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(appendSafeActionError(redirectTo, "Server database access is not configured."));
+  }
+
+  return admin;
+}
+
+async function userCanAccessWorkspaceResource({
+  userId,
+  ownerUserId,
+  workspaceId,
+}: {
+  userId: string;
+  ownerUserId?: string | null;
+  workspaceId?: string | null;
+}) {
+  if (ownerUserId && ownerUserId === userId) return true;
+  if (!workspaceId) return false;
+  return userHasWorkspaceAccess(userId, workspaceId);
+}
+
+async function requireLeadMutationAccess({
+  admin,
+  leadId,
+  userId,
+}: {
+  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
+  leadId: string;
+  userId: string;
+}) {
+  const { data, error } = await admin
+    .from("leads")
+    .select("id, user_id, workspace_id")
+    .eq("id", leadId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const lead = data as Pick<LeadRecord, "id" | "user_id" | "workspace_id"> | null;
+  if (!lead) {
+    return { ok: false as const, status: 404 as const, message: "Lead not found." };
+  }
+
+  const allowed = await userCanAccessWorkspaceResource({
+    userId,
+    ownerUserId: lead.user_id,
+    workspaceId: lead.workspace_id,
+  });
+
+  if (!allowed) {
+    return { ok: false as const, status: 403 as const, message: "You do not have access to this lead." };
+  }
+
+  return { ok: true as const, lead };
 }
 
 async function deleteWorkspaceAndDependencies(
@@ -872,6 +1014,14 @@ export async function signUpAction(formData: FormData) {
     redirect(`/signup?error=${encodeURIComponent(formatAuthErrorMessage(message))}`);
   }
 
+  await enforceActionRateLimit({
+    key: "auth:signup",
+    limit: 3,
+    windowMs: 60 * 60 * 1000,
+    redirectTo: "/signup",
+    email: values.data.email,
+  });
+
   if (!isSupabasePublicConfigured()) {
     if (isDemoModeEnabled()) {
       redirect("/dashboard");
@@ -942,6 +1092,14 @@ export async function resendConfirmationAction(formData: FormData) {
     redirect(`${redirectBase}&error=${encodeURIComponent("Enter a valid email address.")}`);
   }
 
+  await enforceActionRateLimit({
+    key: "auth:resend-confirmation",
+    limit: 3,
+    windowMs: 60 * 60 * 1000,
+    redirectTo: redirectBase,
+    email: values.data.email,
+  });
+
   if (!isSupabasePublicConfigured()) {
     redirect(`${redirectBase}&error=${encodeURIComponent("Supabase auth is not configured yet.")}`);
   }
@@ -977,6 +1135,14 @@ export async function signInAction(formData: FormData) {
     const message = values.error.issues[0]?.message || "Enter a valid email and password.";
     redirect(`/login?error=${encodeURIComponent(formatAuthErrorMessage(message))}`);
   }
+
+  await enforceActionRateLimit({
+    key: "auth:signin",
+    limit: 5,
+    windowMs: 60 * 1000,
+    redirectTo: "/login",
+    email: values.data.email,
+  });
 
   if (!isSupabasePublicConfigured()) {
     if (isDemoModeEnabled()) {
@@ -1116,7 +1282,8 @@ export async function deleteAccountAction() {
     .eq("owner_user_id", user.id);
 
   if (ownedWorkspacesError) {
-    redirect(`/settings?error=${encodeURIComponent(ownedWorkspacesError.message)}#account-controls`);
+    logActionError("delete account owned workspace lookup", ownedWorkspacesError);
+    redirect(`/settings?error=${encodeURIComponent("Account deletion could not be completed.")}#account-controls`);
   }
 
   const [campaignAssetsResult, businessProfilesResult, profileAvatarResult] = await Promise.all([
@@ -1126,15 +1293,18 @@ export async function deleteAccountAction() {
   ]);
 
   if (campaignAssetsResult.error) {
-    redirect(`/settings?error=${encodeURIComponent(campaignAssetsResult.error.message)}#account-controls`);
+    logActionError("delete account campaign asset lookup", campaignAssetsResult.error);
+    redirect(`/settings?error=${encodeURIComponent("Account deletion could not be completed.")}#account-controls`);
   }
 
   if (businessProfilesResult.error) {
-    redirect(`/settings?error=${encodeURIComponent(businessProfilesResult.error.message)}#account-controls`);
+    logActionError("delete account business profile lookup", businessProfilesResult.error);
+    redirect(`/settings?error=${encodeURIComponent("Account deletion could not be completed.")}#account-controls`);
   }
 
   if (profileAvatarResult.error && !isMissingColumnError(profileAvatarResult.error, "profiles", "avatar_url")) {
-    redirect(`/settings?error=${encodeURIComponent(profileAvatarResult.error.message)}#account-controls`);
+    logActionError("delete account profile avatar lookup", profileAvatarResult.error);
+    redirect(`/settings?error=${encodeURIComponent("Account deletion could not be completed.")}#account-controls`);
   }
 
   for (const workspace of ownedWorkspaces || []) {
@@ -1192,13 +1362,14 @@ export async function deleteAccountAction() {
       { table: "workspace_meta_connections", column: "user_id", value: user.id, optional: true },
     ]);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not fully clean up account data.";
-    redirect(`/settings?error=${encodeURIComponent(message)}#account-controls`);
+    logActionError("delete account cleanup", error);
+    redirect(`/settings?error=${encodeURIComponent("Account deletion could not be completed.")}#account-controls`);
   }
 
   const { error: deleteUserError } = await admin.auth.admin.deleteUser(user.id);
   if (deleteUserError) {
-    redirect(`/settings?error=${encodeURIComponent(deleteUserError.message)}#account-controls`);
+    logActionError("delete account auth user cleanup", deleteUserError);
+    redirect(`/settings?error=${encodeURIComponent("Account deletion could not be completed.")}#account-controls`);
   }
 
   const supabase = await createSupabaseServerClient();
@@ -1707,18 +1878,20 @@ export async function deleteCampaignAction(formData: FormData) {
   const campaignId = String(formData.get("campaignId") || "").trim();
   const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
   const successRedirectTo = String(formData.get("successRedirectTo") || "/templates") || "/templates";
+  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/templates";
+  const campaignIdResult = uuidSchema.safeParse(campaignId);
 
-  if (!campaignId) {
-    redirect(appendQueryParam(redirectTo, "error", "Campaign could not be found."));
+  if (!campaignIdResult.success) {
+    redirect(appendQueryParam(safeRedirectTo, "error", "Campaign could not be found."));
   }
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
-    redirect(appendQueryParam(redirectTo, "error", "Campaign deletion is not available right now."));
+    redirect(appendQueryParam(safeRedirectTo, "error", "Campaign deletion is not available right now."));
   }
 
   try {
-    const campaign = await loadManagedCampaign(admin, campaignId);
+    const campaign = await loadManagedCampaign(admin, campaignIdResult.data);
     const hasAccess = campaign.workspace_id
       ? await userHasWorkspaceAccess(user.id, campaign.workspace_id)
       : campaign.user_id === user.id;
@@ -1736,11 +1909,11 @@ export async function deleteCampaignAction(formData: FormData) {
       campaign,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Campaign deletion failed.";
-    redirect(appendQueryParam(redirectTo, "error", message));
+    logActionError("delete campaign", error);
+    redirect(appendQueryParam(safeRedirectTo, "error", "Campaign deletion failed."));
   }
 
-  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath(`/campaigns/${campaignIdResult.data}`);
   revalidatePath("/workspace/settings");
   revalidatePath("/templates");
   revalidatePath("/performance");
@@ -1760,18 +1933,20 @@ export async function deleteDraftCampaignAction(formData: FormData) {
 
   const campaignId = String(formData.get("campaignId") || "").trim();
   const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
+  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/templates/drafts";
+  const campaignIdResult = uuidSchema.safeParse(campaignId);
 
-  if (!campaignId) {
-    redirect(appendQueryParam(redirectTo, "error", "Campaign could not be found."));
+  if (!campaignIdResult.success) {
+    redirect(appendQueryParam(safeRedirectTo, "error", "Campaign could not be found."));
   }
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
-    redirect(appendQueryParam(redirectTo, "error", "Campaign deletion is not available right now."));
+    redirect(appendQueryParam(safeRedirectTo, "error", "Campaign deletion is not available right now."));
   }
 
   try {
-    const campaign = await loadManagedCampaign(admin, campaignId);
+    const campaign = await loadManagedCampaign(admin, campaignIdResult.data);
     const hasAccess = campaign.workspace_id
       ? await userHasWorkspaceAccess(user.id, campaign.workspace_id)
       : campaign.user_id === user.id;
@@ -1793,11 +1968,11 @@ export async function deleteDraftCampaignAction(formData: FormData) {
       campaign,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Draft deletion failed.";
-    redirect(appendQueryParam(redirectTo, "error", message));
+    logActionError("delete draft campaign", error);
+    redirect(appendQueryParam(safeRedirectTo, "error", "Draft deletion failed."));
   }
 
-  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath(`/campaigns/${campaignIdResult.data}`);
   revalidatePath("/templates/drafts");
   revalidatePath("/performance");
   revalidatePath("/dashboard");
@@ -2534,19 +2709,42 @@ export async function createCampaignAction(formData: FormData) {
 }
 
 export async function submitLeadAction(formData: FormData) {
-  const payload = {
+  const rawPayload = {
     funnelSlug: String(formData.get("funnelSlug") || ""),
     campaignId: String(formData.get("campaignId") || ""),
     funnelId: String(formData.get("funnelId") || ""),
-    userId: String(formData.get("userId") || ""),
-    businessName: String(formData.get("businessName") || "the shop"),
     email: String(formData.get("email") || ""),
     name: String(formData.get("name") || ""),
     phone: String(formData.get("phone") || ""),
     serviceInterest: String(formData.get("serviceInterest") || ""),
     message: String(formData.get("message") || ""),
   };
-  const successRedirect = payload.funnelSlug ? `/f/${payload.funnelSlug}?submitted=1` : "/?submitted=1";
+  const parsedPayload = publicLeadSubmissionSchema.safeParse(rawPayload);
+  const fallbackSlug = rawPayload.funnelSlug.trim();
+  const baseRedirect = fallbackSlug ? `/f/${encodeURIComponent(fallbackSlug)}` : "/";
+  const errorRedirect = appendQueryParam(baseRedirect, "error", "Please check the form and try again.");
+  const successRedirect = appendQueryParam(baseRedirect, "submitted", "1");
+
+  if (!parsedPayload.success) {
+    redirect(errorRedirect);
+  }
+
+  const payload = parsedPayload.data;
+
+  await enforceActionRateLimit({
+    key: "public:lead-submit:minute",
+    limit: 5,
+    windowMs: 60 * 1000,
+    redirectTo: baseRedirect,
+    email: payload.email,
+  });
+  await enforceActionRateLimit({
+    key: "public:lead-submit:hour",
+    limit: 30,
+    windowMs: 60 * 60 * 1000,
+    redirectTo: baseRedirect,
+    email: payload.email,
+  });
 
   if (isSupabaseServerConfigured()) {
     const admin = createSupabaseAdminClient();
@@ -2554,18 +2752,72 @@ export async function submitLeadAction(formData: FormData) {
       redirect(successRedirect);
     }
 
+    let funnelQuery = admin
+      .from("funnels")
+      .select("id, user_id, workspace_id, campaign_id, slug, is_published")
+      .eq("slug", payload.funnelSlug)
+      .eq("is_published", true);
+
+    if (payload.funnelId) {
+      funnelQuery = funnelQuery.eq("id", payload.funnelId);
+    }
+
+    const funnelResult = await funnelQuery.maybeSingle();
+    const funnel = funnelResult.data as {
+      id: string;
+      user_id: string;
+      workspace_id: string | null;
+      campaign_id: string;
+      slug: string;
+      is_published: boolean;
+    } | null;
+
+    if (funnelResult.error || !funnel) {
+      redirect(errorRedirect);
+    }
+
     const campaignResult = await admin
       .from("campaigns")
-      .select("workspace_id")
-      .eq("id", payload.campaignId)
+      .select("id, user_id, workspace_id, name, status")
+      .eq("id", funnel.campaign_id)
       .maybeSingle();
-    const workspaceId = campaignResult.data?.workspace_id || null;
+    const campaign = campaignResult.data as {
+      id: string;
+      user_id: string;
+      workspace_id: string | null;
+      name: string | null;
+      status: string | null;
+    } | null;
+
+    if (
+      campaignResult.error ||
+      !campaign ||
+      (payload.campaignId && payload.campaignId !== campaign.id) ||
+      (funnel.workspace_id && campaign.workspace_id && funnel.workspace_id !== campaign.workspace_id) ||
+      campaign.status !== "published"
+    ) {
+      redirect(errorRedirect);
+    }
+
+    const workspaceId = campaign.workspace_id || funnel.workspace_id || null;
+    const ownerUserId = campaign.user_id || funnel.user_id;
+    const businessProfileResult = workspaceId
+      ? await admin
+          .from("business_profiles")
+          .select("business_name")
+          .eq("workspace_id", workspaceId)
+          .maybeSingle()
+      : { data: null };
+    const businessName =
+      typeof businessProfileResult.data?.business_name === "string" && businessProfileResult.data.business_name.trim()
+        ? businessProfileResult.data.business_name.trim()
+        : campaign.name || "the shop";
 
     const leadInsertPayload = {
-      user_id: payload.userId,
+      user_id: ownerUserId,
       workspace_id: workspaceId,
-      campaign_id: payload.campaignId,
-      funnel_id: payload.funnelId,
+      campaign_id: campaign.id,
+      funnel_id: funnel.id,
       source: "website_funnel",
       full_name: payload.name,
       name: payload.name,
@@ -2587,7 +2839,12 @@ export async function submitLeadAction(formData: FormData) {
         ...(payload.serviceInterest ? [{ key: "service_interest", label: "Service interest", values: [payload.serviceInterest] }] : []),
         ...(payload.message ? [{ key: "message", label: "Message", values: [payload.message] }] : []),
       ],
-      raw_payload_json: payload,
+      raw_payload_json: {
+        ...payload,
+        campaignId: campaign.id,
+        funnelId: funnel.id,
+        userId: ownerUserId,
+      },
       last_synced_at: new Date().toISOString(),
       status: "new",
     };
@@ -2596,13 +2853,14 @@ export async function submitLeadAction(formData: FormData) {
     if (insertResult.error) {
       const missingColumnMatch = insertResult.error.message.match(/Could not find the '([^']+)' column of 'leads'/i);
       if (!missingColumnMatch) {
-        throw new Error(insertResult.error.message);
+        logActionError("public lead insert", insertResult.error);
+        redirect(errorRedirect);
       }
       const fallbackInsert = await admin.from("leads").insert({
-        user_id: payload.userId,
+        user_id: ownerUserId,
         workspace_id: workspaceId,
-        campaign_id: payload.campaignId,
-        funnel_id: payload.funnelId,
+        campaign_id: campaign.id,
+        funnel_id: funnel.id,
         name: payload.name,
         phone: payload.phone,
         email: payload.email,
@@ -2611,7 +2869,8 @@ export async function submitLeadAction(formData: FormData) {
         status: "new",
       }).select("*").single();
       if (fallbackInsert.error) {
-        throw new Error(fallbackInsert.error.message);
+        logActionError("public lead fallback insert", fallbackInsert.error);
+        redirect(errorRedirect);
       }
       await queueLeadForCrmDelivery({
         admin,
@@ -2627,13 +2886,13 @@ export async function submitLeadAction(formData: FormData) {
     const { data: followUp } = await admin
       .from("follow_up_settings")
       .select("*")
-      .eq("campaign_id", payload.campaignId)
+      .eq("campaign_id", campaign.id)
       .single();
 
     if (followUp?.email_enabled && payload.email) {
       await sendLeadConfirmationEmail({
         to: payload.email,
-        businessName: payload.businessName,
+        businessName,
         subject: followUp.confirmation_subject,
         message: followUp.confirmation_body,
       });
@@ -2644,13 +2903,14 @@ export async function submitLeadAction(formData: FormData) {
 }
 
 export async function updateLeadStatusAction(formData: FormData) {
-  if (!isSupabaseServerConfigured()) {
-    redirect("/leads");
-  }
-
-  const leadId = String(formData.get("leadId") || "");
   const redirectTo = String(formData.get("redirectTo") || "/leads");
   const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/leads";
+  const user = await requireAuthenticatedActionUser("/login");
+  const leadIdResult = uuidSchema.safeParse(String(formData.get("leadId") || ""));
+  if (!leadIdResult.success) {
+    redirect(appendQueryParam(safeRedirectTo, "error", "Lead not found."));
+  }
+
   const requestedStatus = String(formData.get("status") || "new");
   const status = getCanonicalLeadStatus(requestedStatus);
   const allowedStatuses = new Set(["new", "contacted", "qualified", "closed", "archived"]);
@@ -2658,11 +2918,26 @@ export async function updateLeadStatusAction(formData: FormData) {
     redirect(safeRedirectTo);
   }
 
-  const admin = createSupabaseAdminClient();
-  if (!admin) {
-    redirect(safeRedirectTo);
+  await enforceActionRateLimit({
+    key: "lead:status-update",
+    limit: 30,
+    windowMs: 60 * 1000,
+    redirectTo: safeRedirectTo,
+    userId: user.id,
+  });
+
+  const admin = await requireSupabaseAdminForAction(safeRedirectTo);
+  const access = await requireLeadMutationAccess({
+    admin,
+    leadId: leadIdResult.data,
+    userId: user.id,
+  });
+
+  if (!access.ok) {
+    redirect(appendQueryParam(safeRedirectTo, "error", access.message));
   }
-  await admin.from("leads").update({ status }).eq("id", leadId);
+
+  await admin.from("leads").update({ status }).eq("id", leadIdResult.data);
 
   revalidatePath("/leads");
   revalidatePath("/dashboard");
@@ -2670,21 +2945,34 @@ export async function updateLeadStatusAction(formData: FormData) {
 }
 
 export async function updateLeadNotesAction(formData: FormData) {
-  if (!isSupabaseServerConfigured()) {
-    redirect("/leads");
-  }
-
-  const leadId = String(formData.get("leadId") || "");
   const redirectTo = String(formData.get("redirectTo") || "/leads");
   const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/leads";
-  const notes = String(formData.get("notes") || "").trim();
-
-  const admin = createSupabaseAdminClient();
-  if (!admin) {
-    redirect(safeRedirectTo);
+  const user = await requireAuthenticatedActionUser("/login");
+  const leadIdResult = uuidSchema.safeParse(String(formData.get("leadId") || ""));
+  if (!leadIdResult.success) {
+    redirect(appendQueryParam(safeRedirectTo, "error", "Lead not found."));
   }
 
-  await admin.from("leads").update({ notes }).eq("id", leadId);
+  const notes = String(formData.get("notes") || "").trim().slice(0, 5000);
+  await enforceActionRateLimit({
+    key: "lead:notes-update",
+    limit: 30,
+    windowMs: 60 * 1000,
+    redirectTo: safeRedirectTo,
+    userId: user.id,
+  });
+  const admin = await requireSupabaseAdminForAction(safeRedirectTo);
+  const access = await requireLeadMutationAccess({
+    admin,
+    leadId: leadIdResult.data,
+    userId: user.id,
+  });
+
+  if (!access.ok) {
+    redirect(appendQueryParam(safeRedirectTo, "error", access.message));
+  }
+
+  await admin.from("leads").update({ notes }).eq("id", leadIdResult.data);
 
   revalidatePath("/leads");
   redirect(safeRedirectTo);
@@ -3414,6 +3702,14 @@ export async function retryCrmDeliveryAction(formData: FormData) {
     redirect("/login");
   }
 
+  await enforceActionRateLimit({
+    key: "crm:retry-delivery",
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+    redirectTo: "/workspace/settings?section=integrations",
+    userId: user.id,
+  });
+
   if (!isSupabaseServerConfigured()) {
     redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");
   }
@@ -3429,6 +3725,35 @@ export async function retryCrmDeliveryAction(formData: FormData) {
   }
 
   try {
+    const { data: delivery, error: deliveryError } = await admin
+      .from("lead_deliveries")
+      .select("id, workspace_id, lead_id")
+      .eq("id", deliveryId)
+      .maybeSingle();
+
+    if (deliveryError) {
+      if (
+        deliveryError.message.includes("Could not find the table 'public.lead_deliveries'") ||
+        deliveryError.message.includes("lead_deliveries")
+      ) {
+        throw new Error("CRM delivery logging is not available until the latest database migration is applied.");
+      }
+      throw new Error(deliveryError.message);
+    }
+
+    if (!delivery?.id) {
+      throw new Error("CRM delivery could not be found.");
+    }
+
+    const role = await getCurrentRole();
+    const hasWorkspaceAccess =
+      role === "admin" ||
+      (typeof delivery.workspace_id === "string" && (await userHasWorkspaceAccess(user.id, delivery.workspace_id)));
+
+    if (!hasWorkspaceAccess) {
+      throw new Error("You do not have access to this CRM delivery.");
+    }
+
     await processLeadCrmDelivery({
       admin,
       deliveryId,
@@ -3448,6 +3773,14 @@ export async function retryFailedCrmDeliveriesAction() {
   if (!user) {
     redirect("/login");
   }
+
+  await enforceActionRateLimit({
+    key: "crm:retry-failed-deliveries",
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+    redirectTo: "/workspace/settings?section=integrations",
+    userId: user.id,
+  });
 
   if (!isSupabaseServerConfigured()) {
     redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");
@@ -4186,23 +4519,6 @@ export async function deleteTemplateLibraryTemplateAction(formData: FormData) {
 
   revalidateTemplateLibraryPaths();
   redirect(createAdminLibraryRedirect({ industryId, categoryId, success: "Template deleted." }));
-}
-
-export async function publishFunnelAction(formData: FormData) {
-  const funnelId = String(formData.get("funnelId") || "");
-
-  if (isSupabaseServerConfigured()) {
-    const admin = createSupabaseAdminClient();
-    if (admin) {
-      await admin
-      .from("funnels")
-      .update({ is_published: true, published_at: new Date().toISOString() })
-      .eq("id", funnelId);
-    }
-  }
-
-  revalidatePath("/dashboard");
-  redirect("/dashboard");
 }
 
 export async function createSlugAction(name: string) {

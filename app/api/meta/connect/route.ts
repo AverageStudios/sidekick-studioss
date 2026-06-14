@@ -5,6 +5,7 @@ import { getMetaOAuthUrl, getMetaScopes, isMetaConfigured } from "@/lib/meta";
 import { createMetaOAuthState, MetaOAuthScopeSet } from "@/lib/meta-oauth-state";
 import { getCurrentUser } from "@/lib/auth";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
+import { checkRateLimit, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
@@ -12,6 +13,21 @@ export async function GET(request: NextRequest) {
     const loginUrl = new URL("/login", env.appUrl);
     loginUrl.searchParams.set("error", "Sign in before connecting Meta.");
     return NextResponse.redirect(loginUrl);
+  }
+
+  const ip = getIpFromRequest(request);
+  const rateLimit = checkRateLimit({
+    key: "api:meta-connect",
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+    identifiers: { ip, userId: user.id },
+  });
+  if (!rateLimit.allowed) {
+    logRateLimitHit({ key: "api:meta-connect", retryAfterSeconds: rateLimit.retryAfterSeconds, matchedOn: rateLimit.matchedOn, ip, userId: user.id });
+    const settingsUrl = new URL("/workspace/settings", env.appUrl);
+    settingsUrl.searchParams.set("section", "integrations");
+    settingsUrl.searchParams.set("error", "Too many attempts right now. Please wait a moment and try again.");
+    return NextResponse.redirect(settingsUrl);
   }
 
   let workspaceContext;

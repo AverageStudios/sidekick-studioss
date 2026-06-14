@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentRole, getCurrentUser } from "@/lib/auth";
-import { storageBucketName, uploadAsset } from "@/services/storage";
+import { logRouteError } from "@/lib/api-security";
+import { checkRateLimit, createRateLimitResponse, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
+import { uploadAsset } from "@/services/storage";
 
 const allowedMediaTypes = new Set([
   "image/png",
@@ -13,6 +15,7 @@ const allowedMediaTypes = new Set([
   "video/quicktime",
   "video/x-msvideo",
 ]);
+const maxMediaUploadBytes = 50 * 1024 * 1024;
 
 function getMediaKind(file: File) {
   return file.type.startsWith("video/") ? "video" : "image";
@@ -23,6 +26,18 @@ export async function POST(request: Request) {
 
   if (!user || role !== "admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const ip = getIpFromRequest(request);
+  const rateLimit = checkRateLimit({
+    key: "api:admin-template-media-upload",
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+    identifiers: { ip, userId: user.id },
+  });
+  if (!rateLimit.allowed) {
+    logRateLimitHit({ key: "api:admin-template-media-upload", retryAfterSeconds: rateLimit.retryAfterSeconds, matchedOn: rateLimit.matchedOn, ip, userId: user.id });
+    return createRateLimitResponse(undefined, rateLimit.retryAfterSeconds);
   }
 
   const formData = await request.formData();
@@ -45,28 +60,29 @@ export async function POST(request: Request) {
     );
   }
 
+  if (file.size > maxMediaUploadBytes) {
+    return NextResponse.json(
+      { error: "Media files must be 50 MB or smaller." },
+      { status: 400 },
+    );
+  }
+
   try {
     const folder = getMediaKind(file) === "video" ? "templates/videos" : "templates/images";
     const url = await uploadAsset(file, folder);
 
     if (!url) {
       return NextResponse.json(
-        {
-          error: `Media upload is not configured yet. Check Supabase storage bucket "${storageBucketName}".`,
-        },
+        { error: "Media upload is not available right now." },
         { status: 500 },
       );
     }
 
     return NextResponse.json({ url, kind: getMediaKind(file) });
   } catch (error) {
+    logRouteError("admin template media upload", error);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Media upload failed.",
-      },
+      { error: "Media upload failed." },
       { status: 500 },
     );
   }

@@ -3,6 +3,8 @@ import { z } from "zod";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/auth";
 import { ensureCampaignDraft } from "@/lib/campaign-drafts";
+import { logRouteError, readJsonBody } from "@/lib/api-security";
+import { checkRateLimit, createRateLimitResponse, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
 import {
   buildPublishRequestPayloadSummary,
   markMetaPublishJobResult,
@@ -57,7 +59,7 @@ async function updateCampaignWithSchemaFallback(
 
 const publishRequestSchema = z.object({
   campaignId: z.string().uuid(),
-  templateSlug: z.string().min(1).optional(),
+  templateSlug: z.string().trim().min(1).max(160).optional(),
   state: z.record(z.string(), z.any()).optional(),
   mode: z.enum(["draft", "live"]),
 });
@@ -68,7 +70,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const parsed = publishRequestSchema.safeParse(await request.json());
+  const ip = getIpFromRequest(request);
+  const rateLimit = checkRateLimit({
+    key: "api:meta-publish",
+    limit: 5,
+    windowMs: 60 * 1000,
+    identifiers: { ip, userId: user.id },
+  });
+  if (!rateLimit.allowed) {
+    logRateLimitHit({
+      key: "api:meta-publish",
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+      matchedOn: rateLimit.matchedOn,
+      ip,
+      userId: user.id,
+    });
+    return createRateLimitResponse(undefined, rateLimit.retryAfterSeconds);
+  }
+
+  const body = await readJsonBody(request);
+  if (!body) {
+    return NextResponse.json({ error: "Invalid JSON payload." }, { status: 400 });
+  }
+
+  const parsed = publishRequestSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid publish payload." },
@@ -196,13 +221,12 @@ export async function POST(request: Request) {
             ? `Meta rejected campaign creation: ${metaDetail}`
         : metaError.stage === "adset_create" && /location/i.test(metaError.message)
           ? `Meta rejected ad set targeting: ${metaDetail}`
-          : metaError.stage === "adset_create" && metaDetail
+        : metaError.stage === "adset_create" && metaDetail
             ? `Meta rejected ad set creation: ${metaDetail}`
         : blameField && /invalid parameter/i.test(metaError.message)
-        ? `Meta rejected the publish payload at ${metaError.stage || "publish"} (${blameField}): ${metaError.message}`
-        : error instanceof Error
-          ? error.message
-          : "Publish failed.";
+        ? `Meta rejected the publish payload at ${metaError.stage || "publish"} (${blameField}). Review the highlighted launch settings and try again.`
+        : "Publish failed. Review the launch settings and try again.";
+    logRouteError("meta publish", error);
     if (jobId) {
       await markMetaPublishJobResult({
         admin,
@@ -218,7 +242,6 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: message,
-        metaError,
       },
       { status: 400 },
     );

@@ -10,9 +10,11 @@ import {
 import { getWorkspaceMetaAccessToken } from "@/lib/meta-integration";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getActiveWorkspaceIdForUser } from "@/lib/workspaces";
+import { logRouteError } from "@/lib/api-security";
+import { checkRateLimit, createRateLimitResponse, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
 
 const requestSchema = z.object({
-  adAccountId: z.string().min(1),
+  adAccountId: z.string().trim().min(1).max(80).regex(/^act_\d+$|^\d+$/),
   adType: z.enum(["lead_form", "landing_page", "call_now", "messenger_leads", "messenger_engagement"]),
 });
 
@@ -181,6 +183,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const ip = getIpFromRequest(request);
+  const rateLimit = checkRateLimit({
+    key: "api:meta-budget-guidance",
+    limit: 30,
+    windowMs: 60 * 1000,
+    identifiers: { ip, userId: user.id },
+  });
+  if (!rateLimit.allowed) {
+    logRateLimitHit({
+      key: "api:meta-budget-guidance",
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+      matchedOn: rateLimit.matchedOn,
+      ip,
+      userId: user.id,
+    });
+    return createRateLimitResponse(undefined, rateLimit.retryAfterSeconds);
+  }
+
   const url = new URL(request.url);
   const parsed = requestSchema.safeParse({
     adAccountId: url.searchParams.get("adAccountId"),
@@ -243,7 +263,7 @@ export async function GET(request: Request) {
       estimate,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Budget guidance could not be loaded.";
-    return NextResponse.json({ error: message }, { status: 400 });
+    logRouteError("meta budget guidance", error);
+    return NextResponse.json({ error: "Budget guidance could not be loaded." }, { status: 400 });
   }
 }

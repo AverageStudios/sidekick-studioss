@@ -5,6 +5,8 @@ import { connectWorkspaceGoHighLevelOAuthProvider } from "@/lib/crm-integration"
 import { env } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
+import { logRouteError } from "@/lib/api-security";
+import { checkRateLimit, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
 
 function buildIntegrationsUrl() {
   return new URL("/workspace/settings?section=integrations", env.appUrl);
@@ -50,6 +52,21 @@ export async function GET(request: NextRequest) {
     const loginUrl = new URL("/login", env.appUrl);
     loginUrl.searchParams.set("error", "Sign in before connecting a CRM.");
     const response = NextResponse.redirect(loginUrl);
+    clearOauthCookies(response);
+    return response;
+  }
+
+  const ip = getIpFromRequest(request);
+  const rateLimit = checkRateLimit({
+    key: "api:crm-callback",
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+    identifiers: { ip, userId: user.id },
+  });
+  if (!rateLimit.allowed) {
+    logRateLimitHit({ key: "api:crm-callback", retryAfterSeconds: rateLimit.retryAfterSeconds, matchedOn: rateLimit.matchedOn, ip, userId: user.id });
+    integrationsUrl.searchParams.set("error", "Too many attempts right now. Please wait a moment and try again.");
+    const response = NextResponse.redirect(integrationsUrl);
     clearOauthCookies(response);
     return response;
   }
@@ -116,11 +133,8 @@ export async function GET(request: NextRequest) {
     clearOauthCookies(response);
     return response;
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "CRM connection failed. Please try again.";
-    integrationsUrl.searchParams.set("error", message);
+    logRouteError("crm callback", error);
+    integrationsUrl.searchParams.set("error", "CRM connection failed. Please try again.");
     const response = NextResponse.redirect(integrationsUrl);
     clearOauthCookies(response);
     return response;

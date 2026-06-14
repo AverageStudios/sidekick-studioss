@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentRole, getCurrentUser } from "@/lib/auth";
-import { storageBucketName, uploadAsset } from "@/services/storage";
+import { logRouteError } from "@/lib/api-security";
+import { checkRateLimit, createRateLimitResponse, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
+import { uploadAsset } from "@/services/storage";
 
 const allowedImageTypes = new Set([
   "image/png",
@@ -8,12 +10,25 @@ const allowedImageTypes = new Set([
   "image/jpg",
   "image/webp",
 ]);
+const maxPreviewUploadBytes = 10 * 1024 * 1024;
 
 export async function POST(request: Request) {
   const [user, role] = await Promise.all([getCurrentUser(), getCurrentRole()]);
 
   if (!user || role !== "admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const ip = getIpFromRequest(request);
+  const rateLimit = checkRateLimit({
+    key: "api:admin-template-preview-upload",
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+    identifiers: { ip, userId: user.id },
+  });
+  if (!rateLimit.allowed) {
+    logRateLimitHit({ key: "api:admin-template-preview-upload", retryAfterSeconds: rateLimit.retryAfterSeconds, matchedOn: rateLimit.matchedOn, ip, userId: user.id });
+    return createRateLimitResponse(undefined, rateLimit.retryAfterSeconds);
   }
 
   const formData = await request.formData();
@@ -33,27 +48,28 @@ export async function POST(request: Request) {
     );
   }
 
+  if (file.size > maxPreviewUploadBytes) {
+    return NextResponse.json(
+      { error: "Preview images must be 10 MB or smaller." },
+      { status: 400 },
+    );
+  }
+
   try {
     const url = await uploadAsset(file, "templates/previews");
 
     if (!url) {
       return NextResponse.json(
-        {
-          error: `Preview image upload is not configured yet. Check Supabase storage bucket "${storageBucketName}".`,
-        },
+        { error: "Preview image upload is not available right now." },
         { status: 500 },
       );
     }
 
     return NextResponse.json({ url });
   } catch (error) {
+    logRouteError("admin template preview upload", error);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Preview image upload failed.",
-      },
+      { error: "Preview image upload failed." },
       { status: 500 },
     );
   }

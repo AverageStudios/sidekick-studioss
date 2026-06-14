@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { authSuccessMessages, formatAuthErrorMessage } from "@/lib/auth-messages";
 import { env, isSupabasePublicConfigured } from "@/lib/env";
+import { checkRateLimit, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 
 export async function GET(request: NextRequest) {
@@ -12,6 +13,20 @@ export async function GET(request: NextRequest) {
   const errorDescription = requestUrl.searchParams.get("error_description");
   const safeNextPath = next?.startsWith("/") ? next : "/dashboard";
   const redirectUrl = new URL(safeNextPath, env.appUrl);
+  const ip = getIpFromRequest(request);
+  const rateLimit = checkRateLimit({
+    key: "auth:callback",
+    limit: 20,
+    windowMs: 60 * 60 * 1000,
+    identifiers: { ip },
+  });
+
+  if (!rateLimit.allowed) {
+    logRateLimitHit({ key: "auth:callback", retryAfterSeconds: rateLimit.retryAfterSeconds, matchedOn: rateLimit.matchedOn, ip });
+    redirectUrl.pathname = "/login";
+    redirectUrl.searchParams.set("error", "Too many attempts right now. Please wait a moment and try again.");
+    return NextResponse.redirect(redirectUrl);
+  }
 
   if (!isSupabasePublicConfigured()) {
     return NextResponse.redirect(new URL("/login", env.appUrl));

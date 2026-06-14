@@ -8,7 +8,6 @@ export function PublicLeadForm({
   funnelSlug,
   campaignId,
   funnelId,
-  userId,
   businessName,
   privacyPolicyHref = "/privacy",
   termsHref = "/terms",
@@ -37,8 +36,6 @@ export function PublicLeadForm({
       <input type="hidden" name="funnelSlug" value={funnelSlug} />
       <input type="hidden" name="campaignId" value={campaignId} />
       <input type="hidden" name="funnelId" value={funnelId} />
-      <input type="hidden" name="userId" value={userId} />
-      <input type="hidden" name="businessName" value={businessName} />
       <div>
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand)]">Get your quote</p>
         <h3 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
