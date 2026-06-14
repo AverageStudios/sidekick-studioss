@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
   }
 
   const ip = getIpFromRequest(request);
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: "api:meta-webhook",
     limit: 240,
     windowMs: 60 * 1000,

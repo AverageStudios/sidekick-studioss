@@ -197,8 +197,17 @@ function readMetaEnv(name: string) {
 function sanitizeMetaRequestUrl(url: string) {
   try {
     const parsed = new URL(url);
-    if (parsed.searchParams.has("access_token")) {
-      parsed.searchParams.set("access_token", "[redacted]");
+    for (const key of [
+      "access_token",
+      "client_secret",
+      "code",
+      "fb_exchange_token",
+      "input_token",
+      "refresh_token",
+    ]) {
+      if (parsed.searchParams.has(key)) {
+        parsed.searchParams.set(key, "[redacted]");
+      }
     }
     return parsed.toString();
   } catch {
@@ -213,8 +222,17 @@ function sanitizeMetaRequestBody(body?: BodyInit | null) {
 
   try {
     const params = new URLSearchParams(body);
-    if (params.has("access_token")) {
-      params.set("access_token", "[redacted]");
+    for (const key of [
+      "access_token",
+      "client_secret",
+      "code",
+      "fb_exchange_token",
+      "input_token",
+      "refresh_token",
+    ]) {
+      if (params.has(key)) {
+        params.set(key, "[redacted]");
+      }
     }
     return params.toString();
   } catch {

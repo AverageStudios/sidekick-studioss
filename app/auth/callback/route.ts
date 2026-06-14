@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   const safeNextPath = next?.startsWith("/") ? next : "/dashboard";
   const redirectUrl = new URL(safeNextPath, env.appUrl);
   const ip = getIpFromRequest(request);
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: "auth:callback",
     limit: 20,
     windowMs: 60 * 60 * 1000,

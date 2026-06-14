@@ -184,7 +184,7 @@ export async function GET(request: Request) {
   }
 
   const ip = getIpFromRequest(request);
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: "api:meta-budget-guidance",
     limit: 30,
     windowMs: 60 * 1000,

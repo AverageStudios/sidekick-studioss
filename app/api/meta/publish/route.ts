@@ -71,7 +71,7 @@ export async function POST(request: Request) {
   }
 
   const ip = getIpFromRequest(request);
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: "api:meta-publish",
     limit: 5,
     windowMs: 60 * 1000,

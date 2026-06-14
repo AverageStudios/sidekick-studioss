@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   }
 
   const ip = getIpFromRequest(request);
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: "api:meta-preflight",
     limit: 30,
     windowMs: 60 * 1000,

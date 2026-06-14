@@ -72,10 +72,28 @@ If you want the demo experience, set `NEXT_PUBLIC_DEMO_MODE=1`. Otherwise the ap
 Required env vars:
 
 ```bash
+NEXT_PUBLIC_APP_URL=https://sidekickstudioss.com
+NEXT_PUBLIC_DEMO_MODE=
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_STORAGE_BUCKET=assets
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
+META_APP_ID=
+META_APP_SECRET=
+META_REDIRECT_URI=https://sidekickstudioss.com/api/meta/callback
+META_SCOPES=ads_management,ads_read,business_management,pages_show_list,pages_read_engagement
+META_WEBHOOK_VERIFY_TOKEN=
+META_GRAPH_API_VERSION=v25.0
+META_TOKEN_ENCRYPTION_KEY=
+CRM_TOKEN_ENCRYPTION_KEY=
+CRM_OAUTH_REDIRECT_URI=https://sidekickstudioss.com/api/integrations/crm/callback
+GHL_CLIENT_ID=
+GHL_CLIENT_SECRET=
+GHL_INSTALL_URL=
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
 ```
 
 What each env var is used for:
@@ -87,10 +105,26 @@ What each env var is used for:
 - `SUPABASE_STORAGE_BUCKET`: optional bucket name for uploaded assets; defaults to `assets`
 - `RESEND_API_KEY`: optional email API key
 - `RESEND_FROM_EMAIL`: optional sender address for confirmation emails
+- `META_APP_ID`: Meta app identifier for connect/publish flows
+- `META_APP_SECRET`: Meta app secret for OAuth exchange and webhook signature verification
+- `META_REDIRECT_URI`: exact Meta OAuth callback URL
+- `META_SCOPES`: optional override for requested Meta scopes
+- `META_WEBHOOK_VERIFY_TOKEN`: shared secret for Meta webhook verification
+- `META_GRAPH_API_VERSION`: optional Meta Graph API version override
+- `META_TOKEN_ENCRYPTION_KEY`: server-only encryption key for stored Meta tokens
+- `CRM_TOKEN_ENCRYPTION_KEY`: server-only encryption key for stored CRM tokens
+- `CRM_OAUTH_REDIRECT_URI`: exact CRM OAuth callback URL
+- `GHL_CLIENT_ID`: GoHighLevel marketplace OAuth client ID
+- `GHL_CLIENT_SECRET`: GoHighLevel marketplace OAuth client secret
+- `GHL_INSTALL_URL`: GoHighLevel marketplace install URL
+- `UPSTASH_REDIS_REST_URL`: optional production shared rate-limit store URL
+- `UPSTASH_REDIS_REST_TOKEN`: optional production shared rate-limit store token
 
 If Supabase public env vars are missing, auth will stay disabled unless you explicitly enable demo mode.
 
 If the service-role key is missing, the app still renders safely, but writes, uploads, and persisted lead actions are skipped.
+
+If Upstash env vars are missing, rate limiting safely falls back to in-memory storage for local development.
 
 ## Production domain setup
 

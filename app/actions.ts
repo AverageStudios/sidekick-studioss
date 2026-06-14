@@ -137,7 +137,7 @@ async function enforceActionRateLimit({
 }) {
   const headerStore = await headers();
   const ip = getIpFromHeaders(headerStore);
-  const result = checkRateLimit({
+  const result = await checkRateLimit({
     key,
     limit,
     windowMs,

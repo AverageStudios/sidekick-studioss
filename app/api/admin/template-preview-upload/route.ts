@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   }
 
   const ip = getIpFromRequest(request);
-  const rateLimit = checkRateLimit({
+  const rateLimit = await checkRateLimit({
     key: "api:admin-template-preview-upload",
     limit: 10,
     windowMs: 60 * 60 * 1000,

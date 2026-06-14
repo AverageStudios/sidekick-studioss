@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
+import { Redis } from "@upstash/redis";
 
 type RateLimitIdentifierSet = {
   ip?: string | null;
@@ -26,6 +27,8 @@ type MemoryBucket = {
 
 declare global {
   var __sidekickRateLimitStore: Map<string, MemoryBucket> | undefined;
+  var __sidekickUpstashRedisClient: Redis | null | undefined;
+  var __sidekickRateLimitRedisWarningLogged: boolean | undefined;
 }
 
 const memoryStore = globalThis.__sidekickRateLimitStore || new Map<string, MemoryBucket>();
@@ -33,11 +36,46 @@ if (!globalThis.__sidekickRateLimitStore) {
   globalThis.__sidekickRateLimitStore = memoryStore;
 }
 
+function hasUpstashConfig() {
+  return Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+}
+
+function getRedisClient() {
+  if (!hasUpstashConfig()) {
+    return null;
+  }
+
+  if (globalThis.__sidekickUpstashRedisClient !== undefined) {
+    return globalThis.__sidekickUpstashRedisClient;
+  }
+
+  globalThis.__sidekickUpstashRedisClient = new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    retry: false,
+    signal: typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(1000) : undefined,
+  });
+
+  return globalThis.__sidekickUpstashRedisClient;
+}
+
+function logRedisFallbackWarning(error: unknown) {
+  if (globalThis.__sidekickRateLimitRedisWarningLogged) {
+    return;
+  }
+
+  globalThis.__sidekickRateLimitRedisWarningLogged = true;
+  console.warn(
+    "[rate-limit] Redis unavailable, falling back to in-memory storage.",
+    error instanceof Error ? error.message : "Unknown Redis error",
+  );
+}
+
 function pruneBucket(bucket: MemoryBucket, now: number, windowMs: number) {
   bucket.hits = bucket.hits.filter((hit) => hit > now - windowMs);
 }
 
-function consumeBucket(storageKey: string, limit: number, windowMs: number) {
+function consumeMemoryBucket(storageKey: string, limit: number, windowMs: number) {
   const now = Date.now();
   const bucket = memoryStore.get(storageKey) || { hits: [] };
   pruneBucket(bucket, now, windowMs);
@@ -54,6 +92,35 @@ function consumeBucket(storageKey: string, limit: number, windowMs: number) {
 
   bucket.hits.push(now);
   memoryStore.set(storageKey, bucket);
+  return {
+    allowed: true,
+    retryAfterSeconds: 0,
+  };
+}
+
+async function consumeRedisBucket(storageKey: string, limit: number, windowMs: number) {
+  const redis = getRedisClient();
+  if (!redis) {
+    return null;
+  }
+
+  const now = Date.now();
+  const windowStart = Math.floor(now / windowMs) * windowMs;
+  const windowEnd = windowStart + windowMs;
+  const bucketKey = `${storageKey}:${windowStart}`;
+  const count = await redis.incr(bucketKey);
+
+  if (count === 1) {
+    await redis.pexpire(bucketKey, windowMs + 1000);
+  }
+
+  if (count > limit) {
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(1, Math.ceil((windowEnd - now) / 1000)),
+    };
+  }
+
   return {
     allowed: true,
     retryAfterSeconds: 0,
@@ -105,17 +172,32 @@ export function getIpFingerprint(ip: string | null | undefined) {
   return normalized ? hashValue(normalized) : "unknown";
 }
 
-export function checkRateLimit(options: RateLimitCheckOptions): RateLimitResult {
+export async function checkRateLimit(options: RateLimitCheckOptions): Promise<RateLimitResult> {
   const identifierKeys = buildIdentifierKeys(options.key, options.identifiers);
 
   for (const identifier of identifierKeys) {
-    const bucketResult = consumeBucket(identifier.storageKey, options.limit, options.windowMs);
-    if (!bucketResult.allowed) {
-      return {
-        allowed: false,
-        retryAfterSeconds: bucketResult.retryAfterSeconds,
-        matchedOn: identifier.type,
-      };
+    try {
+      const redisResult = await consumeRedisBucket(identifier.storageKey, options.limit, options.windowMs);
+      const bucketResult =
+        redisResult || consumeMemoryBucket(identifier.storageKey, options.limit, options.windowMs);
+
+      if (!bucketResult.allowed) {
+        return {
+          allowed: false,
+          retryAfterSeconds: bucketResult.retryAfterSeconds,
+          matchedOn: identifier.type,
+        };
+      }
+    } catch (error) {
+      logRedisFallbackWarning(error);
+      const bucketResult = consumeMemoryBucket(identifier.storageKey, options.limit, options.windowMs);
+      if (!bucketResult.allowed) {
+        return {
+          allowed: false,
+          retryAfterSeconds: bucketResult.retryAfterSeconds,
+          matchedOn: identifier.type,
+        };
+      }
     }
   }
 
@@ -146,14 +228,12 @@ export function logRateLimitHit({
     userId: userId || null,
     ipHash: getIpFingerprint(ip),
     timestamp: new Date().toISOString(),
+    storage: hasUpstashConfig() ? "redis_or_fallback" : "memory",
   });
 }
 
 export function createRateLimitResponse(message = "Too many requests. Please wait and try again.", retryAfterSeconds = 60) {
-  const response = NextResponse.json(
-    { error: message },
-    { status: 429 },
-  );
+  const response = NextResponse.json({ error: message }, { status: 429 });
   response.headers.set("Retry-After", String(retryAfterSeconds));
   return response;
 }
