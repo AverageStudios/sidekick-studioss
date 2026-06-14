@@ -1475,132 +1475,154 @@ export function TemplateLaunchWizard({
     router.push("/templates");
   }
 
+  function renderTemplateSelectionGrid() {
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setTemplateCategoryFilter("all")}
+            className={cn(
+              "rounded-full border px-4 py-2 text-sm font-semibold transition",
+              templateCategoryFilter === "all"
+                ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_10px_20px_rgba(109,94,248,0.18)]"
+                : "border-[var(--line)] bg-white text-[var(--muted-strong)] hover:border-[color-mix(in_oklab,var(--brand)_18%,white)] hover:text-[var(--ink)]",
+            )}
+          >
+            All
+          </button>
+          {templateCategoryOptions.map((category) => {
+            const active = templateCategoryFilter === category.key;
+            return (
+              <button
+                key={category.key}
+                type="button"
+                onClick={() => setTemplateCategoryFilter(category.key)}
+                className={cn(
+                  "rounded-full border px-4 py-2 text-sm font-semibold transition",
+                  active
+                    ? "border-[var(--brand)] bg-[color-mix(in_oklab,var(--brand)_12%,white)] text-[var(--brand)] shadow-[0_10px_20px_rgba(109,94,248,0.10)]"
+                    : "border-[var(--line)] bg-white text-[var(--muted-strong)] hover:border-[color-mix(in_oklab,var(--brand)_18%,white)] hover:text-[var(--ink)]",
+                )}
+              >
+                {category.label}
+                <span className="ml-2 text-[11px] font-medium opacity-70">{category.count}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {visibleTemplates.map((template) => {
+            const previewPrimaryText =
+              template.adCopy.primary || template.description || template.promoDetails || "Template preview";
+            const previewHeadline = template.adCopy.headlines?.[0] || template.name;
+            const previewDescription = template.adCopy.descriptions?.[0] || template.promoDetails || "";
+            const previewCta =
+              template.ctaLabel ||
+              previewBlueprint?.funnelConfig.ctaText ||
+              resolveTemplateCtaLabel(template, "Learn more");
+            return (
+              <button
+                key={template.id}
+                type="button"
+                onClick={() => selectTemplateAndAdvance(template)}
+                className={cn(
+                  "group h-full overflow-hidden rounded-[24px] border text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--brand)_50%,white)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]",
+                  "border-[var(--line)] bg-white shadow-[var(--shadow-soft)] hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--brand)_18%,white)] hover:bg-white active:translate-y-px",
+                )}
+              >
+                <FacebookAdPreview
+                  template={template}
+                  pageName={pagePreviewIdentity.pageName}
+                  pageAvatarUrl={pagePreviewIdentity.pageAvatarUrl}
+                  primaryText={previewPrimaryText}
+                  headline={previewHeadline}
+                  description={previewDescription}
+                  displayLink={null}
+                  ctaLabel={previewCta}
+                  imageUrl={template.previewImage || null}
+                  compact
+                  showCompactDescription
+                  showMetaBar
+                  showReactionsBar={false}
+                  showActionsRow={false}
+                  interactiveControls={false}
+                  className="border-0 bg-transparent p-0 shadow-none"
+                />
+              </button>
+            );
+          })}
+        </div>
+        {!visibleTemplates.length ? (
+          <div className="rounded-[24px] border border-dashed border-[var(--line)] bg-white px-6 py-10 text-center text-sm text-[var(--muted-strong)]">
+            No templates match this category yet. Try another category or switch back to All.
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   function renderStepContent() {
     switch (launchState.stepId) {
       case "industry":
         return (
-          <div className="lf-industry-grid lf-fade">
-            {availableIndustries.map((industry) => {
-              const visuals = industryVisuals[industry] || { emoji: "🏢", color: "#6D5EF8", bg: "#EFECFF" };
-              const active = launchState.selection.industry === industry;
-              return (
-                <button
-                  key={industry}
-                  type="button"
-                  data-active={active}
-                  className="lf-industry-tile focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:ring-offset-2"
-                  onClick={() =>
-                    updateLaunchState((current) =>
-                      normalizeCampaignLaunchState(
-                        {
-                          ...current,
-                          selection: {
-                            ...current.selection,
-                            industry,
-                            category: "",
-                          },
-                        },
-                        selectedTemplate || templates[0],
-                        businessProfile,
-                      ),
-                    )
-                  }
-                >
-                  <div className="lf-industry-icon" style={{ background: visuals.bg, color: visuals.color }}>
-                    {visuals.emoji}
-                  </div>
-                  <span className="text-sm font-semibold leading-tight text-[var(--foreground)]">{industry}</span>
-                </button>
-              );
-            })}
-          </div>
-        );
-      case "template":
-        return (
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setTemplateCategoryFilter("all")}
-                className={cn(
-                  "rounded-full border px-4 py-2 text-sm font-semibold transition",
-                  templateCategoryFilter === "all"
-                    ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_10px_20px_rgba(109,94,248,0.18)]"
-                    : "border-[var(--line)] bg-white text-[var(--muted-strong)] hover:border-[color-mix(in_oklab,var(--brand)_18%,white)] hover:text-[var(--ink)]",
-                )}
-              >
-                All
-              </button>
-              {templateCategoryOptions.map((category) => {
-                const active = templateCategoryFilter === category.key;
+          <div className="space-y-6">
+            <div className="lf-industry-grid lf-fade">
+              {availableIndustries.map((industry) => {
+                const visuals = industryVisuals[industry] || { emoji: "🏢", color: "#6D5EF8", bg: "#EFECFF" };
+                const active = launchState.selection.industry === industry;
                 return (
                   <button
-                    key={category.key}
+                    key={industry}
                     type="button"
-                    onClick={() => setTemplateCategoryFilter(category.key)}
-                    className={cn(
-                      "rounded-full border px-4 py-2 text-sm font-semibold transition",
-                      active
-                        ? "border-[var(--brand)] bg-[color-mix(in_oklab,var(--brand)_12%,white)] text-[var(--brand)] shadow-[0_10px_20px_rgba(109,94,248,0.10)]"
-                        : "border-[var(--line)] bg-white text-[var(--muted-strong)] hover:border-[color-mix(in_oklab,var(--brand)_18%,white)] hover:text-[var(--ink)]",
-                    )}
+                    data-active={active}
+                    className="lf-industry-tile focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:ring-offset-2"
+                    onClick={() =>
+                      updateLaunchState((current) =>
+                        normalizeCampaignLaunchState(
+                          {
+                            ...current,
+                            selection: {
+                              ...current.selection,
+                              industry,
+                              category: "",
+                            },
+                          },
+                          selectedTemplate || templates[0],
+                          businessProfile,
+                        ),
+                      )
+                    }
                   >
-                    {category.label}
-                    <span className="ml-2 text-[11px] font-medium opacity-70">{category.count}</span>
+                    <div className="lf-industry-icon" style={{ background: visuals.bg, color: visuals.color }}>
+                      {visuals.emoji}
+                    </div>
+                    <span className="text-sm font-semibold leading-tight text-[var(--foreground)]">{industry}</span>
                   </button>
                 );
               })}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {visibleTemplates.map((template) => {
-                const previewPrimaryText =
-                  template.adCopy.primary || template.description || template.promoDetails || "Template preview";
-                const previewHeadline = template.adCopy.headlines?.[0] || template.name;
-                const previewDescription = template.adCopy.descriptions?.[0] || template.promoDetails || "";
-                const previewCta =
-                  template.ctaLabel ||
-                  previewBlueprint?.funnelConfig.ctaText ||
-                  resolveTemplateCtaLabel(template, "Learn more");
-                return (
-                  <button
-                    key={template.id}
-                    type="button"
-                    onClick={() => selectTemplateAndAdvance(template)}
-                    className={cn(
-                      "group h-full overflow-hidden rounded-[24px] border text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--brand)_50%,white)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]",
-                      "border-[var(--line)] bg-white shadow-[var(--shadow-soft)] hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--brand)_18%,white)] hover:bg-white active:translate-y-px",
-                    )}
-                  >
-                    <FacebookAdPreview
-                      template={template}
-                      pageName={pagePreviewIdentity.pageName}
-                      pageAvatarUrl={pagePreviewIdentity.pageAvatarUrl}
-                      primaryText={previewPrimaryText}
-                      headline={previewHeadline}
-                      description={previewDescription}
-                      displayLink={null}
-                      ctaLabel={previewCta}
-                    imageUrl={template.previewImage || null}
-                    compact
-                    showCompactDescription
-                    showMetaBar
-                    showReactionsBar={false}
-                    showActionsRow={false}
-                    interactiveControls={false}
-                      className="border-0 bg-transparent p-0 shadow-none"
-                    />
-                  </button>
-                );
-              })}
-            </div>
-            {!visibleTemplates.length ? (
-              <div className="rounded-[24px] border border-dashed border-[var(--line)] bg-white px-6 py-10 text-center text-sm text-[var(--muted-strong)]">
-                No templates match this category yet. Try another category or switch back to All.
+            {launchState.selection.industry ? (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--ink)]">Choose a template</p>
+                  <p className="mt-1 text-sm text-[var(--muted)]">
+                    Click anywhere on a template to start customizing it for {launchState.selection.industry}.
+                  </p>
+                </div>
+                {renderTemplateSelectionGrid()}
               </div>
-            ) : null}
+            ) : (
+              <div className="rounded-[24px] border border-dashed border-[var(--line)] bg-white px-6 py-10 text-center text-sm text-[var(--muted-strong)]">
+                Pick an industry to browse the matching campaign templates.
+              </div>
+            )}
           </div>
         );
+      case "template":
+        return renderTemplateSelectionGrid();
       case "ad-type":
         return (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -3031,14 +3053,20 @@ export function TemplateLaunchWizard({
                 Back
               </Button>
               {launchState.stepId !== "review-launch" ? (
-                <Button
-                  type="button"
-                  onClick={handleContinue}
-                  className="h-11 rounded-[14px] px-6 shadow-[0_8px_24px_rgba(109,94,248,0.28)]"
-                >
-                  Continue
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+                launchState.stepId === "industry" ? (
+                  <div className="text-right text-sm text-[var(--muted)]">
+                    Choose a template card to continue.
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={handleContinue}
+                    className="h-11 rounded-[14px] px-6 shadow-[0_8px_24px_rgba(109,94,248,0.28)]"
+                  >
+                    Continue
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                )
               ) : null}
             </div>
           </div>
