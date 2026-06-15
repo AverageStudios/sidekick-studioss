@@ -815,6 +815,14 @@ export default async function WorkspaceSettingsPage({
                         <div className="border-t border-[var(--line)] px-5 py-5">
                           {hubspotConnection ? (
                             <div className="flex flex-wrap gap-2">
+                              {workspaceId && canSendCrmTests && isCrmTestDeliverySupported("hubspot") ? (
+                                <form action={testCrmDeliveryAction}>
+                                  <input type="hidden" name="workspaceId" value={workspaceId} />
+                                  <input type="hidden" name="provider" value="hubspot" />
+                                  <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
+                                  <Button type="submit" variant="secondary">Send Test Lead</Button>
+                                </form>
+                              ) : null}
                               <form action={disconnectCrmConnectionAction}>
                                 <input type="hidden" name="provider" value="hubspot" />
                                 <Button type="submit" variant="outline">Disconnect</Button>
@@ -833,9 +841,7 @@ export default async function WorkspaceSettingsPage({
                             </form>
                           )}
                           {hubspotConnection ? (
-                            canSendCrmTests ? (
-                              <p className="mt-3 text-xs text-[var(--muted)]">HubSpot test delivery is not available yet.</p>
-                            ) : (
+                            canSendCrmTests ? null : (
                               <p className="mt-3 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
                             )
                           ) : (

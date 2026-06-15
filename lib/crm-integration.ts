@@ -203,7 +203,7 @@ export function getCrmProviderLabel(provider: CrmProvider) {
 }
 
 export function isCrmTestDeliverySupported(provider: CrmProvider) {
-  return provider === "gohighlevel" || provider === "pipedrive";
+  return provider === "gohighlevel" || provider === "pipedrive" || provider === "hubspot";
 }
 
 function getString(value: unknown) {
@@ -1576,6 +1576,70 @@ export async function sendWorkspaceGoHighLevelTestLead({
   } satisfies CrmTestDeliveryResult;
 }
 
+export async function sendWorkspaceHubSpotTestLead({
+  admin,
+  workspaceId,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+}) {
+  const connections = await listCrmConnections(admin, workspaceId);
+  const connection =
+    connections.find((entry) => entry.provider === "hubspot" && entry.is_active && entry.status === "connected") ||
+    null;
+
+  if (!connection) {
+    throw new Error("HubSpot is not connected for this workspace.");
+  }
+
+  const token = decryptCrmSecret(connection);
+  if (!token) {
+    throw new Error("HubSpot token is unavailable.");
+  }
+
+  const payload = {
+    inputs: [
+      {
+        id: CRM_TEST_LEAD.email,
+        idProperty: "email",
+        properties: {
+          email: CRM_TEST_LEAD.email,
+          firstname: CRM_TEST_LEAD.firstName,
+          lastname: CRM_TEST_LEAD.lastName,
+          phone: CRM_TEST_LEAD.phone,
+        },
+        objectWriteTraceId: `sidekick-hubspot-test-${workspaceId}`,
+      },
+    ],
+  };
+
+  const response = await crmFetch<Record<string, unknown>>(
+    "https://api.hubapi.com/crm/v3/objects/contacts/batch/upsert",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "HubSpot test delivery failed",
+  );
+
+  const firstResult = Array.isArray(response.results) ? getObjectRecord(response.results[0]) : {};
+  return {
+    success: true,
+    provider: "hubspot",
+    providerName: "HubSpot",
+    safeMessage: "Test contact sent to HubSpot.",
+    createdObjectType: "contact",
+    providerRecordIds: {
+      contactId: getFirstString(firstResult.id),
+    },
+  } satisfies CrmTestDeliveryResult;
+}
+
 export async function sendWorkspaceCrmTestLead({
   admin,
   workspaceId,
@@ -1590,6 +1654,8 @@ export async function sendWorkspaceCrmTestLead({
       return sendWorkspacePipedriveTestLead({ admin, workspaceId });
     case "gohighlevel":
       return sendWorkspaceGoHighLevelTestLead({ admin, workspaceId });
+    case "hubspot":
+      return sendWorkspaceHubSpotTestLead({ admin, workspaceId });
     default:
       throw new Error(`${getCrmProviderLabel(provider)} test delivery is not available yet.`);
   }

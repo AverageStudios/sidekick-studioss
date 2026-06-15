@@ -24,10 +24,10 @@ Current test-delivery support:
 
 - GoHighLevel
 - Pipedrive
+- HubSpot
 
 Not available yet:
 
-- HubSpot
 - Salesforce
 - future CRM providers until a provider-specific helper is implemented
 
@@ -66,10 +66,13 @@ Success message:
 
 ### HubSpot
 
-Current behavior:
+Creates or updates:
 
-- test button is not available yet
-- the UI explains that test delivery is not available yet
+- Contact
+
+Success message:
+
+- `Test contact sent to HubSpot.`
 
 ## Security notes
 
