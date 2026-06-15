@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { createCrmOAuthState } from "@/lib/crm-oauth-state";
 import { env, isGhlConfigured } from "@/lib/env";
+import { buildHubSpotAuthorizationUrl } from "@/lib/integrations/hubspot";
 import { CrmProvider } from "@/types";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 import { logRouteError } from "@/lib/api-security";
@@ -34,6 +35,8 @@ function getProviderConnectUrl(provider: CrmProvider, state: string) {
       oauthUrl.searchParams.set("state", state);
       return oauthUrl;
     }
+    case "hubspot":
+      return buildHubSpotAuthorizationUrl(state);
     default:
       throw new Error(`${provider} connect flow is not implemented yet.`);
   }

@@ -1,6 +1,13 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { decryptCrmSecret, decryptEncryptedSecret, encryptCrmSecret } from "@/lib/crm-security";
-import { env, isGhlConfigured } from "@/lib/env";
+import { env, isGhlConfigured, isHubSpotConfigured } from "@/lib/env";
+import {
+  createOrUpdateHubSpotContact,
+  exchangeHubSpotCodeForTokens,
+  getHubSpotAccountDetails,
+  getHubSpotTokenMetadata,
+  refreshHubSpotAccessToken,
+} from "@/lib/integrations/hubspot";
 import {
   exchangeCodeForTokens as exchangePipedriveCodeForTokens,
   getCurrentUser as getPipedriveCurrentUser,
@@ -184,6 +191,14 @@ type PipedriveMetadata = {
   timezoneName?: string | null;
 };
 
+type HubSpotMetadata = {
+  tokenType?: string | null;
+  expiresIn?: number | string | null;
+  refreshToken?: string | null;
+  scope?: string | string[] | null;
+  authType?: string | null;
+};
+
 const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce"];
 const CRM_TEST_PROVIDER_LABELS: Record<CrmProvider, string> = {
   gohighlevel: "GoHighLevel",
@@ -317,13 +332,6 @@ function normalizeAccessToken(value: string) {
   return trimmed.replace(/^Bearer\s+/i, "").trim();
 }
 
-function createCrmDiagnosticError(
-  message: string,
-  fields: Partial<Pick<CrmDiagnosticError, "status" | "category" | "code" | "provider" | "step">>,
-) {
-  return Object.assign(new Error(message), fields) as CrmDiagnosticError;
-}
-
 function getCrmDiagnostic(error: unknown) {
   if (!(error instanceof Error)) {
     return {
@@ -396,47 +404,6 @@ async function crmFetch<T>(url: string, init: RequestInit & { headers?: HeadersI
     throw new Error(`${errorPrefix}: ${response.status} ${response.statusText}`);
   }
   return data;
-}
-
-async function hubspotFetch<T>(
-  url: string,
-  init: RequestInit & { headers?: HeadersInit },
-  step: string,
-  errorPrefix: string,
-) {
-  const response = await fetch(url, init);
-  const raw = await response.text();
-  const data = raw
-    ? (() => {
-        try {
-          return JSON.parse(raw) as Record<string, unknown> & T;
-        } catch {
-          return ({ raw } as unknown) as Record<string, unknown> & T;
-        }
-      })()
-    : ({} as Record<string, unknown> & T);
-
-  if (!response.ok) {
-    const category = typeof data.category === "string" ? data.category : null;
-    const code =
-      typeof data.errorType === "string"
-        ? data.errorType
-        : typeof data.subCategory === "string"
-          ? data.subCategory
-          : null;
-    throw createCrmDiagnosticError(
-      `${errorPrefix}: ${response.status} ${response.statusText}`,
-      {
-        status: response.status,
-        category,
-        code,
-        provider: "hubspot",
-        step,
-      },
-    );
-  }
-
-  return data as T;
 }
 
 async function validateGoHighLevelConnection({
@@ -517,103 +484,68 @@ async function validateGoHighLevelConnection({
 
 async function validateHubSpotConnection({
   accessToken,
+  metadata,
 }: {
   accessToken: string;
+  metadata?: HubSpotMetadata;
 }): Promise<ValidatedConnection> {
-  let details: Record<string, unknown> | null = null;
-  let portalId: string | null = null;
-  let uiDomain: string | null = null;
-  let validationMode = "unverified";
-
   try {
-    const meDetails = await hubspotFetch<Record<string, unknown>>(
-      "https://api.hubapi.com/integrations/v1/me",
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: "application/json",
-        },
+    const details = await getHubSpotAccountDetails(accessToken);
+    const portalId =
+      getFirstString(details.portalId, details.hubId) ||
+      (typeof details.portalId === "number" ? String(details.portalId) : null) ||
+      (typeof details.hubId === "number" ? String(details.hubId) : null) ||
+      "hubspot-account";
+    const uiDomain =
+      getFirstString(details.uiDomain, details.hub_domain, details.timeZone) || `Portal ${portalId}`;
+    return {
+      providerUserId: portalId,
+      providerUserName: uiDomain,
+      tokenType: getFirstString(metadata?.tokenType) || "Bearer",
+      tokenExpiresAt: buildTokenExpiry(
+        typeof metadata?.expiresIn === "number"
+          ? metadata.expiresIn
+          : typeof metadata?.expiresIn === "string"
+            ? Number(metadata.expiresIn)
+            : undefined,
+      ),
+      refreshToken: getFirstString(metadata?.refreshToken),
+      scopes: getScopeList(metadata?.scope).length ? getScopeList(metadata?.scope) : ["crm.objects.contacts.write"],
+      metadata: {
+        validated_at: new Date().toISOString(),
+        validation_mode: "oauth_account_lookup",
+        auth_type: getFirstString(metadata?.authType, "oauth"),
+        portal_id: portalId,
+        account_details: details || {},
       },
-      "hubspot_validate_me",
-      "HubSpot connection failed",
-    );
-    details = meDetails;
-    portalId =
-      getFirstString(meDetails.portalId, meDetails.hubId) ||
-      (typeof meDetails.portalId === "number" ? String(meDetails.portalId) : null) ||
-      (typeof meDetails.hubId === "number" ? String(meDetails.hubId) : null);
-    uiDomain = getFirstString(meDetails.hub_domain, meDetails.timeZone);
-    validationMode = "integrations_v1_me";
-  } catch (firstError) {
-    try {
-      const accountDetails = await hubspotFetch<Record<string, unknown>>(
-        "https://api.hubapi.com/account-info/v3/details",
+      destinations: [
         {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: "application/json",
+          assetId: "contacts",
+          name: "HubSpot contacts",
+          metadata: {
+            destinationType: "contacts",
+            objectType: "contacts",
           },
+          selected: true,
         },
-        "hubspot_validate_account_info",
-        "HubSpot connection failed",
-      );
-      details = accountDetails;
-      portalId =
-        getFirstString(accountDetails.portalId, accountDetails.hubId) ||
-        (typeof accountDetails.portalId === "number" ? String(accountDetails.portalId) : null) ||
-        (typeof accountDetails.hubId === "number" ? String(accountDetails.hubId) : null);
-      uiDomain = getFirstString(accountDetails.uiDomain, accountDetails.timeZone);
-      validationMode = "account_info_v3_details";
-    } catch (secondError) {
-      const primaryError = secondError instanceof Error ? secondError : firstError;
-      const diagnostic = getCrmDiagnostic(primaryError);
-
-      if (diagnostic.status === 401 || diagnostic.category === "EXPIRED_AUTHENTICATION") {
-        throw new Error(
-          "HubSpot token is invalid or expired. Reconnect HubSpot with a valid token that includes crm.objects.contacts.write.",
-        );
-      }
-
-      if (diagnostic.status === 403) {
-        throw new Error(
-          "HubSpot token is missing contact write access. Reconnect HubSpot with crm.objects.contacts.write enabled.",
-        );
-      }
-
+      ],
+    };
+  } catch (error) {
+    const diagnostic = getCrmDiagnostic(error);
+    if (diagnostic.status === 401 || diagnostic.category === "EXPIRED_AUTHENTICATION") {
       throw new Error(
-        diagnostic.message || "HubSpot verification could not be completed.",
+        "HubSpot token is invalid or expired. Reconnect HubSpot with OAuth and crm.objects.contacts.write.",
       );
     }
+
+    if (diagnostic.status === 403) {
+      throw new Error(
+        "HubSpot token is missing contact write access. Reconnect HubSpot with crm.objects.contacts.write enabled.",
+      );
+    }
+
+    throw new Error(diagnostic.message || "HubSpot verification could not be completed.");
   }
-
-  const resolvedPortalId = portalId || "hubspot-account";
-  const resolvedUiDomain = uiDomain || `Portal ${resolvedPortalId}`;
-
-  return {
-    providerUserId: resolvedPortalId,
-    providerUserName: resolvedUiDomain,
-    tokenType: "Bearer",
-    scopes: ["crm.objects.contacts.write"],
-    metadata: {
-      validated_at: new Date().toISOString(),
-      portal_id: resolvedPortalId,
-      validation_mode: validationMode,
-      account_details: details || {},
-    },
-    destinations: [
-      {
-        assetId: "contacts",
-        name: "HubSpot contacts",
-        metadata: {
-          destinationType: "contacts",
-          objectType: "contacts",
-        },
-        selected: true,
-      },
-    ],
-  };
 }
 
 async function validateCrmConnection(input: {
@@ -651,7 +583,10 @@ async function validateCrmConnection(input: {
       });
     }
     case "hubspot":
-      return validateHubSpotConnection({ accessToken: input.accessToken });
+      return validateHubSpotConnection({
+        accessToken: input.accessToken,
+        metadata: input.metadata as HubSpotMetadata | undefined,
+      });
     case "pipedrive":
       return validatePipedriveConnection({
         accessToken: input.accessToken,
@@ -1210,6 +1145,36 @@ export async function connectWorkspacePipedriveOAuthProvider({
   });
 }
 
+export async function connectWorkspaceHubSpotOAuthProvider({
+  admin,
+  workspaceId,
+  userId,
+  code,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+  userId: string;
+  code: string;
+}) {
+  const token = await exchangeHubSpotCodeForTokens(code);
+  const tokenMetadata = getHubSpotTokenMetadata(token);
+
+  return connectWorkspaceCrmProvider({
+    admin,
+    workspaceId,
+    userId,
+    provider: "hubspot",
+    accessToken: normalizeAccessToken(token.access_token || ""),
+    metadata: {
+      authType: "oauth",
+      scope: token.scope || tokenMetadata.scopes,
+      refreshToken: tokenMetadata.refreshToken,
+      expiresIn: tokenMetadata.expiresIn,
+      tokenType: tokenMetadata.tokenType,
+    },
+  });
+}
+
 export async function disconnectWorkspaceCrmProvider({
   admin,
   workspaceId,
@@ -1369,6 +1334,105 @@ async function getGoHighLevelAccessToken({
   }).catch(() => accessToken);
 }
 
+async function refreshHubSpotToken({
+  admin,
+  connection,
+  refreshToken,
+}: {
+  admin: SupabaseAdmin;
+  connection: WorkspaceCrmConnectionRow;
+  refreshToken: string;
+}) {
+  if (!isHubSpotConfigured()) {
+    throw new Error("HubSpot OAuth env vars are missing.");
+  }
+
+  const refreshed = await refreshHubSpotAccessToken(refreshToken);
+  const metadata = getHubSpotTokenMetadata(refreshed);
+  const accessPayload = encryptCrmSecret(refreshed.access_token || "");
+  const nextRefreshToken = metadata.refreshToken || refreshToken;
+  const refreshPayload = nextRefreshToken ? encryptCrmSecret(nextRefreshToken) : null;
+
+  const { error } = await admin
+    .from("workspace_provider_connections")
+    .update({
+      token_ciphertext: accessPayload.ciphertext,
+      token_iv: accessPayload.iv,
+      token_tag: accessPayload.tag,
+      refresh_token_ciphertext: refreshPayload?.ciphertext || null,
+      refresh_token_iv: refreshPayload?.iv || null,
+      refresh_token_tag: refreshPayload?.tag || null,
+      token_type: metadata.tokenType || connection.token_type || "Bearer",
+      token_expires_at: buildTokenExpiry(
+        typeof metadata.expiresIn === "number" ? metadata.expiresIn : undefined,
+      ),
+      scopes: metadata.scopes.length ? metadata.scopes : connection.scopes,
+      metadata_json: {
+        ...connection.metadata_json,
+        auth_type: "oauth",
+      },
+      last_synced_at: new Date().toISOString(),
+      status: "connected",
+      disconnected_at: null,
+      is_active: true,
+    })
+    .eq("id", connection.id);
+
+  if (error) throw new Error(error.message);
+  return refreshed.access_token || "";
+}
+
+async function getHubSpotAccessToken({
+  admin,
+  connection,
+  requireOAuth = false,
+}: {
+  admin: SupabaseAdmin;
+  connection: WorkspaceCrmConnectionRow;
+  requireOAuth?: boolean;
+}) {
+  const accessToken = decryptCrmSecret(connection);
+  if (!accessToken) {
+    throw new Error("HubSpot token is unavailable.");
+  }
+
+  const authType = getFirstString(connection.metadata_json.auth_type);
+  if (requireOAuth && authType !== "oauth") {
+    throw new Error("HubSpot must be reconnected through OAuth before test delivery can run.");
+  }
+
+  const expiresAt = connection.token_expires_at ? new Date(connection.token_expires_at).getTime() : null;
+  const expiresSoon = typeof expiresAt === "number" && Number.isFinite(expiresAt) && expiresAt <= Date.now() + 60_000;
+
+  if (!expiresSoon) {
+    return accessToken;
+  }
+
+  const refreshToken = decryptEncryptedSecret({
+    ciphertext: connection.refresh_token_ciphertext,
+    iv: connection.refresh_token_iv,
+    tag: connection.refresh_token_tag,
+  });
+
+  if (!refreshToken) {
+    if (requireOAuth) {
+      throw new Error("HubSpot OAuth refresh token is missing. Reconnect HubSpot.");
+    }
+    return accessToken;
+  }
+
+  return refreshHubSpotToken({
+    admin,
+    connection,
+    refreshToken,
+  }).catch(() => {
+    if (requireOAuth) {
+      throw new Error("HubSpot token is invalid or expired. Reconnect HubSpot.");
+    }
+    return accessToken;
+  });
+}
+
 async function refreshPipedriveToken({
   admin,
   connection,
@@ -1514,14 +1578,18 @@ async function deliverLeadToGoHighLevel({
 }
 
 async function deliverLeadToHubSpot({
+  admin,
   connection,
   lead,
 }: {
+  admin: SupabaseAdmin;
   connection: WorkspaceCrmConnectionRow;
   lead: LeadRecord;
 }): Promise<DeliveryResult> {
-  const token = decryptCrmSecret(connection);
-  if (!token) throw new Error("HubSpot token is unavailable.");
+  const token = await getHubSpotAccessToken({
+    admin,
+    connection,
+  });
 
   const properties = {
     ...(lead.email ? { email: lead.email } : {}),
@@ -1538,39 +1606,29 @@ async function deliverLeadToHubSpot({
 
   if (lead.email) {
     const payload = {
-      inputs: [
-        {
-          id: lead.email,
-          idProperty: "email",
-          properties,
-          objectWriteTraceId: lead.id,
-        },
-      ],
+      email: lead.email,
+      firstName: lead.first_name || "",
+      lastName: lead.last_name || "",
+      phone: lead.phone || undefined,
+      objectWriteTraceId: lead.id,
     };
-    const response = await hubspotFetch<Record<string, unknown>>(
-      "https://api.hubapi.com/crm/v3/objects/contacts/batch/upsert",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(payload),
-      },
-      "hubspot_contact_batch_upsert",
-      "HubSpot lead delivery failed",
-    );
-    const firstResult = Array.isArray(response.results) ? getObjectRecord(response.results[0]) : {};
+    const result = await createOrUpdateHubSpotContact({
+      accessToken: token,
+      email: payload.email,
+      firstName: payload.firstName,
+      lastName: payload.lastName,
+      phone: payload.phone,
+      objectWriteTraceId: payload.objectWriteTraceId,
+    });
     return {
-      externalRecordId: getFirstString(firstResult.id),
+      externalRecordId: result.contactId,
       requestPayload: payload,
-      responsePayload: response,
+      responsePayload: { contactId: result.contactId },
     };
   }
 
   const payload = { properties };
-  const response = await hubspotFetch<Record<string, unknown>>(
+  const response = await crmFetch<Record<string, unknown>>(
     "https://api.hubapi.com/crm/v3/objects/contacts",
     {
       method: "POST",
@@ -1581,7 +1639,6 @@ async function deliverLeadToHubSpot({
       },
       body: JSON.stringify(payload),
     },
-    "hubspot_contact_create",
     "HubSpot lead delivery failed",
   );
   return {
@@ -1701,43 +1758,20 @@ export async function sendWorkspaceHubSpotTestLead({
     throw new Error("HubSpot is not connected for this workspace.");
   }
 
-  const token = decryptCrmSecret(connection);
-  if (!token) {
-    throw new Error("HubSpot token is unavailable.");
-  }
+  const token = await getHubSpotAccessToken({
+    admin,
+    connection,
+    requireOAuth: true,
+  });
+  const result = await createOrUpdateHubSpotContact({
+    accessToken: token,
+    email: CRM_TEST_LEAD.email,
+    firstName: CRM_TEST_LEAD.firstName,
+    lastName: CRM_TEST_LEAD.lastName,
+    phone: CRM_TEST_LEAD.phone,
+    objectWriteTraceId: `sidekick-hubspot-test-${workspaceId}`,
+  });
 
-  const payload = {
-    inputs: [
-      {
-        id: CRM_TEST_LEAD.email,
-        idProperty: "email",
-        properties: {
-          email: CRM_TEST_LEAD.email,
-          firstname: CRM_TEST_LEAD.firstName,
-          lastname: CRM_TEST_LEAD.lastName,
-          phone: CRM_TEST_LEAD.phone,
-        },
-        objectWriteTraceId: `sidekick-hubspot-test-${workspaceId}`,
-      },
-    ],
-  };
-
-  const response = await hubspotFetch<Record<string, unknown>>(
-    "https://api.hubapi.com/crm/v3/objects/contacts/batch/upsert",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(payload),
-    },
-    "hubspot_test_contact_upsert",
-    "HubSpot test delivery failed",
-  );
-
-  const firstResult = Array.isArray(response.results) ? getObjectRecord(response.results[0]) : {};
   return {
     success: true,
     provider: "hubspot",
@@ -1745,7 +1779,7 @@ export async function sendWorkspaceHubSpotTestLead({
     safeMessage: "Test contact sent to HubSpot.",
     createdObjectType: "contact",
     providerRecordIds: {
-      contactId: getFirstString(firstResult.id),
+      contactId: result.contactId,
     },
   } satisfies CrmTestDeliveryResult;
 }
@@ -1786,7 +1820,7 @@ async function deliverLeadViaProvider({
     case "gohighlevel":
       return deliverLeadToGoHighLevel({ admin, connection, destination, lead });
     case "hubspot":
-      return deliverLeadToHubSpot({ connection, lead });
+      return deliverLeadToHubSpot({ admin, connection, lead });
     default:
       throw new Error(`${connection.provider} delivery is not implemented yet.`);
   }

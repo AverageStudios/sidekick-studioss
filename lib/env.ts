@@ -46,6 +46,10 @@ export const env = {
   pipedriveClientId: readEnv("PIPEDRIVE_CLIENT_ID"),
   pipedriveClientSecret: readEnv("PIPEDRIVE_CLIENT_SECRET"),
   pipedriveRedirectUri: readEnv("PIPEDRIVE_REDIRECT_URI"),
+  hubspotClientId: readEnv("HUBSPOT_CLIENT_ID"),
+  hubspotClientSecret: readEnv("HUBSPOT_CLIENT_SECRET"),
+  hubspotRedirectUri: readEnv("HUBSPOT_REDIRECT_URI"),
+  hubspotScopes: readEnv("HUBSPOT_SCOPES"),
 } as const;
 
 export function getSupabasePublicEnvStatus() {
@@ -106,6 +110,14 @@ export function getPipedriveEnvStatus() {
   };
 }
 
+export function getHubSpotEnvStatus() {
+  const missingKeys = missing(["HUBSPOT_CLIENT_ID", "HUBSPOT_CLIENT_SECRET", "HUBSPOT_REDIRECT_URI", "HUBSPOT_SCOPES"]);
+  return {
+    configured: missingKeys.length === 0,
+    missingKeys,
+  };
+}
+
 export function isSupabasePublicConfigured() {
   return getSupabasePublicEnvStatus().configured;
 }
@@ -137,6 +149,10 @@ export function isGhlConfigured() {
 
 export function isPipedriveConfigured() {
   return getPipedriveEnvStatus().configured;
+}
+
+export function isHubSpotConfigured() {
+  return getHubSpotEnvStatus().configured;
 }
 
 export function getSupabaseFallbackMessage() {

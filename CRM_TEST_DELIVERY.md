@@ -78,6 +78,11 @@ Success message:
 
 - `Test contact sent to HubSpot.`
 
+Connection requirement:
+
+- HubSpot must be connected through OAuth
+- older manual private-token connections should be reconnected
+
 ## Security notes
 
 - CRM access tokens stay server-side only

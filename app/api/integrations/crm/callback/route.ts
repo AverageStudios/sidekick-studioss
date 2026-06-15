@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { parseCrmOAuthState } from "@/lib/crm-oauth-state";
-import { connectWorkspaceGoHighLevelOAuthProvider } from "@/lib/crm-integration";
+import { connectWorkspaceGoHighLevelOAuthProvider, connectWorkspaceHubSpotOAuthProvider } from "@/lib/crm-integration";
 import { env } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
@@ -117,6 +117,14 @@ export async function GET(request: NextRequest) {
     switch (statePayload.provider) {
       case "gohighlevel":
         await connectWorkspaceGoHighLevelOAuthProvider({
+          admin,
+          workspaceId,
+          userId: user.id,
+          code,
+        });
+        break;
+      case "hubspot":
+        await connectWorkspaceHubSpotOAuthProvider({
           admin,
           workspaceId,
           userId: user.id,

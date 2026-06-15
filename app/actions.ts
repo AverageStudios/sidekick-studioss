@@ -3585,6 +3585,10 @@ export async function saveCrmConnectionAction(formData: FormData) {
     redirect("/workspace/settings?section=integrations&error=Connect%20GoHighLevel%20through%20the%20OAuth%20install%20flow.");
   }
 
+  if (provider === "hubspot") {
+    redirect("/workspace/settings?section=integrations&error=Connect%20HubSpot%20through%20the%20OAuth%20flow.");
+  }
+
   if (!provider || !accessToken) {
     redirect("/workspace/settings?section=integrations&error=Provider%20and%20access%20token%20are%20required.");
   }

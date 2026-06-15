@@ -15,7 +15,6 @@ import {
   refreshMetaIntegrationAssetsAction,
   retryCrmDeliveryAction,
   retryFailedCrmDeliveriesAction,
-  saveCrmConnectionAction,
   saveMetaIntegrationSelectionsAction,
   testCrmDeliveryAction,
   syncMetaLeadsAction,
@@ -34,7 +33,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isMetaConfigured } from "@/lib/meta";
 import { getWorkspaceMetaIntegrationState } from "@/lib/meta-integration";
 import { getWorkspaceLeadSyncHealth } from "@/lib/meta-leads";
-import { getGhlEnvStatus, getPipedriveEnvStatus, isSupabaseServerConfigured } from "@/lib/env";
+import { getGhlEnvStatus, getHubSpotEnvStatus, getPipedriveEnvStatus, isSupabaseServerConfigured } from "@/lib/env";
 
 const workspaceSections = [
   { id: "general", label: "General", icon: Settings2 },
@@ -153,10 +152,13 @@ export default async function WorkspaceSettingsPage({
   const hubspotConnection = crmConnections.find((item) => item.provider === "hubspot") || null;
   const pipedriveConnection = crmConnections.find((item) => item.provider === "pipedrive") || null;
   const ghlEnvStatus = getGhlEnvStatus();
+  const hubspotEnvStatus = getHubSpotEnvStatus();
   const pipedriveEnvStatus = getPipedriveEnvStatus();
   const providerDestinations = crmState.destinations.filter((destination) => destination.is_available);
   const canSendCrmTests =
     currentRole === "admin" || workspaceRole === "owner" || workspaceRole === "admin";
+  const hubspotOauthConnected = hubspotConnection?.metadata_json?.auth_type === "oauth";
+  const hubspotNeedsReconnect = Boolean(hubspotConnection && !hubspotOauthConnected);
   const metaConnectNext = encodeURIComponent("/workspace/settings?section=integrations");
   const selectedPageLeadFormAccess =
     connection?.metadata_json &&
@@ -815,7 +817,12 @@ export default async function WorkspaceSettingsPage({
                         <div className="border-t border-[var(--line)] px-5 py-5">
                           {hubspotConnection ? (
                             <div className="flex flex-wrap gap-2">
-                              {workspaceId && canSendCrmTests && isCrmTestDeliverySupported("hubspot") ? (
+                              <Button asChild disabled={!hubspotEnvStatus.configured}>
+                                <Link href="/api/integrations/hubspot/connect?next=/workspace/settings?section=integrations">
+                                  Reconnect
+                                </Link>
+                              </Button>
+                              {workspaceId && canSendCrmTests && isCrmTestDeliverySupported("hubspot") && hubspotOauthConnected ? (
                                 <form action={testCrmDeliveryAction}>
                                   <input type="hidden" name="workspaceId" value={workspaceId} />
                                   <input type="hidden" name="provider" value="hubspot" />
@@ -829,19 +836,18 @@ export default async function WorkspaceSettingsPage({
                               </form>
                             </div>
                           ) : (
-                            <form action={saveCrmConnectionAction} className="flex max-w-[24rem] flex-col gap-3">
-                              <input type="hidden" name="provider" value="hubspot" />
-                              <Input
-                                type="password"
-                                name="accessToken"
-                                required
-                                placeholder="HubSpot private app token"
-                              />
-                              <Button type="submit" className="self-start">Connect</Button>
-                            </form>
+                            <Button asChild disabled={!hubspotEnvStatus.configured}>
+                              <Link href="/api/integrations/hubspot/connect?next=/workspace/settings?section=integrations">
+                                Connect HubSpot
+                              </Link>
+                            </Button>
                           )}
                           {hubspotConnection ? (
-                            canSendCrmTests ? null : (
+                            hubspotNeedsReconnect ? (
+                              <p className="mt-3 text-xs text-[var(--muted)]">
+                                Reconnect HubSpot to replace this older manual token connection with OAuth.
+                              </p>
+                            ) : canSendCrmTests ? null : (
                               <p className="mt-3 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
                             )
                           ) : (
