@@ -58,6 +58,7 @@ import {
   disconnectWorkspaceCrmProvider,
   getCrmProviderLabel,
   isCrmTestDeliverySupported,
+  logCrmTestDeliveryFailure,
   processLeadCrmDelivery,
   queueLeadForCrmDelivery,
   retryFailedCrmDeliveriesForWorkspace,
@@ -3712,7 +3713,13 @@ export async function testCrmDeliveryAction(formData: FormData) {
     });
     revalidatePath("/workspace/settings");
     redirect(appendQueryParam(redirectTo, "saved", result.safeMessage));
-  } catch {
+  } catch (error) {
+    logCrmTestDeliveryFailure({
+      provider,
+      workspaceId,
+      step: "server_action_dispatch",
+      error,
+    });
     const providerLabel = getCrmProviderLabel(provider);
     redirect(
       appendQueryParam(

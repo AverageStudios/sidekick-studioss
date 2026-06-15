@@ -70,6 +70,10 @@ Creates or updates:
 
 - Contact
 
+Required HubSpot scope:
+
+- `crm.objects.contacts.write`
+
 Success message:
 
 - `Test contact sent to HubSpot.`
@@ -100,6 +104,10 @@ If test delivery fails:
 3. Confirm the correct workspace is active
 4. Confirm you are a workspace owner/admin or a global admin
 5. Retry after a minute if the provider recently refreshed tokens
+
+HubSpot-specific note:
+
+- if the saved token is invalid, expired, or missing `crm.objects.contacts.write`, reconnect HubSpot with a valid contact-write token
 
 If the provider is connected but the UI does not show a test button:
 

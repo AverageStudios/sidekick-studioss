@@ -145,6 +145,14 @@ type DeliveryResult = {
   responsePayload: Record<string, unknown>;
 };
 
+type CrmDiagnosticError = Error & {
+  status?: number;
+  category?: string | null;
+  code?: string | null;
+  provider?: CrmProvider;
+  step?: string;
+};
+
 type GoHighLevelOAuthTokenResponse = {
   access_token?: string;
   token_type?: string;
@@ -309,6 +317,69 @@ function normalizeAccessToken(value: string) {
   return trimmed.replace(/^Bearer\s+/i, "").trim();
 }
 
+function createCrmDiagnosticError(
+  message: string,
+  fields: Partial<Pick<CrmDiagnosticError, "status" | "category" | "code" | "provider" | "step">>,
+) {
+  return Object.assign(new Error(message), fields) as CrmDiagnosticError;
+}
+
+function getCrmDiagnostic(error: unknown) {
+  if (!(error instanceof Error)) {
+    return {
+      message: "Unexpected CRM error",
+      status: null,
+      category: null,
+      code: null,
+      provider: null,
+      step: null,
+    };
+  }
+
+  const crmError = error as CrmDiagnosticError;
+  return {
+    message: crmError.message,
+    status: typeof crmError.status === "number" ? crmError.status : null,
+    category: typeof crmError.category === "string" ? crmError.category : null,
+    code: typeof crmError.code === "string" ? crmError.code : null,
+    provider: typeof crmError.provider === "string" ? crmError.provider : null,
+    step: typeof crmError.step === "string" ? crmError.step : null,
+  };
+}
+
+export function logCrmTestDeliveryFailure({
+  provider,
+  workspaceId,
+  step,
+  error,
+}: {
+  provider: CrmProvider;
+  workspaceId: string;
+  step: string;
+  error: unknown;
+}) {
+  const diagnostic = getCrmDiagnostic(error);
+  console.error(
+    "[crm-test-delivery]",
+    JSON.stringify({
+      provider,
+      workspaceId,
+      step,
+      status: diagnostic.status,
+      category: diagnostic.category,
+      code: diagnostic.code,
+      errorCategory:
+        diagnostic.status === 401
+          ? "auth"
+          : diagnostic.status === 403
+            ? "scope"
+            : diagnostic.status && diagnostic.status >= 500
+              ? "provider"
+              : "request",
+    }),
+  );
+}
+
 async function crmFetch<T>(url: string, init: RequestInit & { headers?: HeadersInit }, errorPrefix: string) {
   const response = await fetch(url, init);
   const raw = await response.text();
@@ -325,6 +396,47 @@ async function crmFetch<T>(url: string, init: RequestInit & { headers?: HeadersI
     throw new Error(`${errorPrefix}: ${response.status} ${response.statusText}`);
   }
   return data;
+}
+
+async function hubspotFetch<T>(
+  url: string,
+  init: RequestInit & { headers?: HeadersInit },
+  step: string,
+  errorPrefix: string,
+) {
+  const response = await fetch(url, init);
+  const raw = await response.text();
+  const data = raw
+    ? (() => {
+        try {
+          return JSON.parse(raw) as Record<string, unknown> & T;
+        } catch {
+          return ({ raw } as unknown) as Record<string, unknown> & T;
+        }
+      })()
+    : ({} as Record<string, unknown> & T);
+
+  if (!response.ok) {
+    const category = typeof data.category === "string" ? data.category : null;
+    const code =
+      typeof data.errorType === "string"
+        ? data.errorType
+        : typeof data.subCategory === "string"
+          ? data.subCategory
+          : null;
+    throw createCrmDiagnosticError(
+      `${errorPrefix}: ${response.status} ${response.statusText}`,
+      {
+        status: response.status,
+        category,
+        code,
+        provider: "hubspot",
+        step,
+      },
+    );
+  }
+
+  return data as T;
 }
 
 async function validateGoHighLevelConnection({
@@ -414,7 +526,7 @@ async function validateHubSpotConnection({
   let validationMode = "unverified";
 
   try {
-    const meDetails = await crmFetch<Record<string, unknown>>(
+    const meDetails = await hubspotFetch<Record<string, unknown>>(
       "https://api.hubapi.com/integrations/v1/me",
       {
         method: "GET",
@@ -423,6 +535,7 @@ async function validateHubSpotConnection({
           Accept: "application/json",
         },
       },
+      "hubspot_validate_me",
       "HubSpot connection failed",
     );
     details = meDetails;
@@ -434,7 +547,7 @@ async function validateHubSpotConnection({
     validationMode = "integrations_v1_me";
   } catch (firstError) {
     try {
-      const accountDetails = await crmFetch<Record<string, unknown>>(
+      const accountDetails = await hubspotFetch<Record<string, unknown>>(
         "https://api.hubapi.com/account-info/v3/details",
         {
           method: "GET",
@@ -443,6 +556,7 @@ async function validateHubSpotConnection({
             Accept: "application/json",
           },
         },
+        "hubspot_validate_account_info",
         "HubSpot connection failed",
       );
       details = accountDetails;
@@ -452,32 +566,25 @@ async function validateHubSpotConnection({
         (typeof accountDetails.hubId === "number" ? String(accountDetails.hubId) : null);
       uiDomain = getFirstString(accountDetails.uiDomain, accountDetails.timeZone);
       validationMode = "account_info_v3_details";
-    } catch {
-      const firstMessage =
-        firstError instanceof Error ? firstError.message : "HubSpot verification could not be completed.";
+    } catch (secondError) {
+      const primaryError = secondError instanceof Error ? secondError : firstError;
+      const diagnostic = getCrmDiagnostic(primaryError);
 
-      return {
-        providerUserId: null,
-        providerUserName: "HubSpot account",
-        tokenType: "Bearer",
-        scopes: ["crm.objects.contacts.write"],
-        metadata: {
-          validated_at: new Date().toISOString(),
-          validation_mode: "unverified",
-          validation_warning: firstMessage,
-        },
-        destinations: [
-          {
-            assetId: "contacts",
-            name: "HubSpot contacts",
-            metadata: {
-              destinationType: "contacts",
-              objectType: "contacts",
-            },
-            selected: true,
-          },
-        ],
-      };
+      if (diagnostic.status === 401 || diagnostic.category === "EXPIRED_AUTHENTICATION") {
+        throw new Error(
+          "HubSpot token is invalid or expired. Reconnect HubSpot with a valid token that includes crm.objects.contacts.write.",
+        );
+      }
+
+      if (diagnostic.status === 403) {
+        throw new Error(
+          "HubSpot token is missing contact write access. Reconnect HubSpot with crm.objects.contacts.write enabled.",
+        );
+      }
+
+      throw new Error(
+        diagnostic.message || "HubSpot verification could not be completed.",
+      );
     }
   }
 
@@ -1440,7 +1547,7 @@ async function deliverLeadToHubSpot({
         },
       ],
     };
-    const response = await crmFetch<Record<string, unknown>>(
+    const response = await hubspotFetch<Record<string, unknown>>(
       "https://api.hubapi.com/crm/v3/objects/contacts/batch/upsert",
       {
         method: "POST",
@@ -1451,6 +1558,7 @@ async function deliverLeadToHubSpot({
         },
         body: JSON.stringify(payload),
       },
+      "hubspot_contact_batch_upsert",
       "HubSpot lead delivery failed",
     );
     const firstResult = Array.isArray(response.results) ? getObjectRecord(response.results[0]) : {};
@@ -1462,7 +1570,7 @@ async function deliverLeadToHubSpot({
   }
 
   const payload = { properties };
-  const response = await crmFetch<Record<string, unknown>>(
+  const response = await hubspotFetch<Record<string, unknown>>(
     "https://api.hubapi.com/crm/v3/objects/contacts",
     {
       method: "POST",
@@ -1473,6 +1581,7 @@ async function deliverLeadToHubSpot({
       },
       body: JSON.stringify(payload),
     },
+    "hubspot_contact_create",
     "HubSpot lead delivery failed",
   );
   return {
@@ -1613,7 +1722,7 @@ export async function sendWorkspaceHubSpotTestLead({
     ],
   };
 
-  const response = await crmFetch<Record<string, unknown>>(
+  const response = await hubspotFetch<Record<string, unknown>>(
     "https://api.hubapi.com/crm/v3/objects/contacts/batch/upsert",
     {
       method: "POST",
@@ -1624,6 +1733,7 @@ export async function sendWorkspaceHubSpotTestLead({
       },
       body: JSON.stringify(payload),
     },
+    "hubspot_test_contact_upsert",
     "HubSpot test delivery failed",
   );
 
