@@ -3590,7 +3590,7 @@ export async function saveCrmConnectionAction(formData: FormData) {
       admin,
       workspaceId,
       userId: user.id,
-      provider: provider as "gohighlevel" | "hubspot",
+      provider: provider as "gohighlevel" | "hubspot" | "pipedrive",
       accessToken,
       metadata: locationId ? { locationId } : {},
     });
@@ -3638,7 +3638,7 @@ export async function disconnectCrmConnectionAction(formData: FormData) {
     await disconnectWorkspaceCrmProvider({
       admin,
       workspaceId,
-      provider: provider as "gohighlevel" | "hubspot",
+      provider: provider as "gohighlevel" | "hubspot" | "pipedrive",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not disconnect CRM.";

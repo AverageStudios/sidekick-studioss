@@ -43,6 +43,9 @@ export const env = {
   ghlClientId: readEnv("GHL_CLIENT_ID"),
   ghlClientSecret: readEnv("GHL_CLIENT_SECRET"),
   ghlInstallUrl: readEnv("GHL_INSTALL_URL"),
+  pipedriveClientId: readEnv("PIPEDRIVE_CLIENT_ID"),
+  pipedriveClientSecret: readEnv("PIPEDRIVE_CLIENT_SECRET"),
+  pipedriveRedirectUri: readEnv("PIPEDRIVE_REDIRECT_URI"),
 } as const;
 
 export function getSupabasePublicEnvStatus() {
@@ -95,6 +98,14 @@ export function getGhlEnvStatus() {
   };
 }
 
+export function getPipedriveEnvStatus() {
+  const missingKeys = missing(["PIPEDRIVE_CLIENT_ID", "PIPEDRIVE_CLIENT_SECRET", "PIPEDRIVE_REDIRECT_URI"]);
+  return {
+    configured: missingKeys.length === 0,
+    missingKeys,
+  };
+}
+
 export function isSupabasePublicConfigured() {
   return getSupabasePublicEnvStatus().configured;
 }
@@ -122,6 +133,10 @@ export function isMetaConfigured() {
 
 export function isGhlConfigured() {
   return getGhlEnvStatus().configured;
+}
+
+export function isPipedriveConfigured() {
+  return getPipedriveEnvStatus().configured;
 }
 
 export function getSupabaseFallbackMessage() {

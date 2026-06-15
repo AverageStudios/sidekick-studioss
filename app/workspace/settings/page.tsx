@@ -33,7 +33,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isMetaConfigured } from "@/lib/meta";
 import { getWorkspaceMetaIntegrationState } from "@/lib/meta-integration";
 import { getWorkspaceLeadSyncHealth } from "@/lib/meta-leads";
-import { getGhlEnvStatus, isSupabaseServerConfigured } from "@/lib/env";
+import { getGhlEnvStatus, getPipedriveEnvStatus, isSupabaseServerConfigured } from "@/lib/env";
 
 const workspaceSections = [
   { id: "general", label: "General", icon: Settings2 },
@@ -148,7 +148,9 @@ export default async function WorkspaceSettingsPage({
   const crmConnections = crmState.connections.filter((item) => item.is_active);
   const ghlConnection = crmConnections.find((item) => item.provider === "gohighlevel") || null;
   const hubspotConnection = crmConnections.find((item) => item.provider === "hubspot") || null;
+  const pipedriveConnection = crmConnections.find((item) => item.provider === "pipedrive") || null;
   const ghlEnvStatus = getGhlEnvStatus();
+  const pipedriveEnvStatus = getPipedriveEnvStatus();
   const providerDestinations = crmState.destinations.filter((destination) => destination.is_available);
   const metaConnectNext = encodeURIComponent("/workspace/settings?section=integrations");
   const selectedPageLeadFormAccess =
@@ -806,6 +808,48 @@ export default async function WorkspaceSettingsPage({
                           )}
                         </div>
                       </details>
+
+                      <details open={Boolean(pipedriveConnection)} className="group rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)]">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <p className="text-base font-semibold text-[var(--ink)]">Pipedrive</p>
+                              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", formatStatusTone(Boolean(pipedriveConnection)))}>
+                                {pipedriveConnection ? "Connected" : "Not connected"}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm text-[var(--muted)]">
+                              Connect this workspace to Pipedrive with a simple OAuth sign-in flow.
+                            </p>
+                            {pipedriveConnection ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">
+                                {typeof pipedriveConnection.metadata_json.company_name === "string"
+                                  ? pipedriveConnection.metadata_json.company_name
+                                  : pipedriveConnection.provider_user_name || "Pipedrive account connected"}
+                              </p>
+                            ) : !pipedriveEnvStatus.configured ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">OAuth setup is not configured yet.</p>
+                            ) : null}
+                          </div>
+                          <ChevronDown className="h-4 w-4 shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180" />
+                        </summary>
+
+                        <div className="border-t border-[var(--line)] px-5 py-5">
+                          <div className="flex flex-wrap gap-2">
+                            <Button asChild disabled={!pipedriveEnvStatus.configured}>
+                              <Link href="/api/integrations/pipedrive/connect?next=/workspace/settings?section=integrations">
+                                {pipedriveConnection ? "Reconnect" : "Connect"}
+                              </Link>
+                            </Button>
+                            {pipedriveConnection ? (
+                              <form action={disconnectCrmConnectionAction}>
+                                <input type="hidden" name="provider" value="pipedrive" />
+                                <Button type="submit" variant="outline">Disconnect</Button>
+                              </form>
+                            ) : null}
+                          </div>
+                        </div>
+                      </details>
                     </div>
 
                     <div className="mt-6 rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] p-5">
@@ -836,6 +880,8 @@ export default async function WorkspaceSettingsPage({
                                 ? "GoHighLevel"
                                 : destination.provider === "hubspot"
                                   ? "HubSpot"
+                                  : destination.provider === "pipedrive"
+                                    ? "Pipedrive"
                                   : destination.provider}
                             </span>
                           ))}

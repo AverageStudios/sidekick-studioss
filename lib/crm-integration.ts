@@ -2,6 +2,11 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { decryptCrmSecret, decryptEncryptedSecret, encryptCrmSecret } from "@/lib/crm-security";
 import { env, isGhlConfigured } from "@/lib/env";
 import {
+  exchangeCodeForTokens as exchangePipedriveCodeForTokens,
+  getCurrentUser as getPipedriveCurrentUser,
+  getTokenMetadata as getPipedriveTokenMetadata,
+} from "@/lib/integrations/pipedrive";
+import {
   CampaignRecord,
   CrmConnectionStatus,
   CrmDeliveryState,
@@ -143,6 +148,21 @@ type GoHighLevelOAuthTokenResponse = {
   traceId?: string;
   refreshTokenId?: string;
   isBulkInstallation?: boolean;
+};
+
+type PipedriveMetadata = {
+  apiDomain?: string | null;
+  tokenType?: string | null;
+  expiresIn?: number | string | null;
+  refreshToken?: string | null;
+  scope?: string | string[] | null;
+  companyId?: string | null;
+  companyName?: string | null;
+  companyDomain?: string | null;
+  email?: string | null;
+  locale?: string | null;
+  language?: string | null;
+  timezoneName?: string | null;
 };
 
 const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce"];
@@ -490,9 +510,61 @@ async function validateCrmConnection(input: {
     }
     case "hubspot":
       return validateHubSpotConnection({ accessToken: input.accessToken });
+    case "pipedrive":
+      return validatePipedriveConnection({
+        accessToken: input.accessToken,
+        metadata: input.metadata as PipedriveMetadata | undefined,
+      });
     default:
       throw new Error(`${input.provider} is not available in this first CRM pass yet.`);
   }
+}
+
+async function validatePipedriveConnection({
+  accessToken,
+  metadata,
+}: {
+  accessToken: string;
+  metadata?: PipedriveMetadata;
+}): Promise<ValidatedConnection> {
+  const apiDomain = getFirstString(metadata?.apiDomain);
+  if (!apiDomain) {
+    throw new Error("Pipedrive did not provide an API domain.");
+  }
+
+  const currentUser = await getPipedriveCurrentUser({
+    accessToken,
+    apiDomain,
+  });
+
+  return {
+    providerUserId: getFirstString(currentUser.companyId, currentUser.userId),
+    providerUserName: getFirstString(currentUser.companyName, currentUser.companyDomain, currentUser.userName),
+    tokenType: getFirstString(metadata?.tokenType) || "Bearer",
+    tokenExpiresAt: buildTokenExpiry(
+      typeof metadata?.expiresIn === "number"
+        ? metadata.expiresIn
+        : typeof metadata?.expiresIn === "string"
+          ? Number(metadata.expiresIn)
+          : undefined,
+    ),
+    refreshToken: getFirstString(metadata?.refreshToken),
+    scopes: getScopeList(metadata?.scope),
+    metadata: {
+      validated_at: new Date().toISOString(),
+      api_domain: apiDomain,
+      company_id: currentUser.companyId,
+      company_name: currentUser.companyName,
+      company_domain: currentUser.companyDomain,
+      user_id: currentUser.userId,
+      user_name: currentUser.userName,
+      email: currentUser.email,
+      locale: currentUser.locale,
+      language: currentUser.language,
+      timezone_name: currentUser.timezoneName,
+    },
+    destinations: [],
+  };
 }
 
 async function exchangeGoHighLevelCodeForToken({
@@ -962,6 +1034,36 @@ export async function connectWorkspaceGoHighLevelOAuthProvider({
       expiresIn: locationToken.expires_in,
       refreshToken: locationToken.refresh_token || null,
       tokenType: locationToken.token_type || "Bearer",
+    },
+  });
+}
+
+export async function connectWorkspacePipedriveOAuthProvider({
+  admin,
+  workspaceId,
+  userId,
+  code,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+  userId: string;
+  code: string;
+}) {
+  const token = await exchangePipedriveCodeForTokens(code);
+  const tokenMetadata = getPipedriveTokenMetadata(token);
+
+  return connectWorkspaceCrmProvider({
+    admin,
+    workspaceId,
+    userId,
+    provider: "pipedrive",
+    accessToken: normalizeAccessToken(token.access_token || ""),
+    metadata: {
+      apiDomain: tokenMetadata.apiDomain,
+      scope: token.scope || tokenMetadata.scopes,
+      refreshToken: tokenMetadata.refreshToken,
+      expiresIn: tokenMetadata.expiresIn,
+      tokenType: tokenMetadata.tokenType,
     },
   });
 }
