@@ -60,6 +60,7 @@ import {
   queueLeadForCrmDelivery,
   retryFailedCrmDeliveriesForWorkspace,
   saveWorkspaceCrmRoutingRule,
+  sendWorkspacePipedriveTestLead,
 } from "@/lib/crm-integration";
 import {
   appendSupportTicketMessage,
@@ -3647,6 +3648,62 @@ export async function disconnectCrmConnectionAction(formData: FormData) {
 
   revalidatePath("/workspace/settings");
   redirect(`/workspace/settings?section=integrations&saved=${encodeURIComponent(`${provider} disconnected`)}`);
+}
+
+export async function testPipedriveDeliveryAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  const workspaceId = String(formData.get("workspaceId") || "").trim();
+  const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=integrations");
+
+  if (!workspaceId) {
+    redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect Pipedrive or try again."));
+  }
+
+  await enforceActionRateLimit({
+    key: "crm:test-pipedrive-delivery",
+    limit: 5,
+    windowMs: 60 * 60 * 1000,
+    redirectTo,
+    userId: user.id,
+  });
+
+  if (!isSupabaseServerConfigured()) {
+    redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect Pipedrive or try again."));
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect Pipedrive or try again."));
+  }
+
+  const globalRole = await getCurrentRole();
+  const membershipRole = await getWorkspaceMembershipRole({
+    admin,
+    workspaceId,
+    userId: user.id,
+  });
+  const canTriggerTest =
+    globalRole === "admin" || membershipRole === "owner" || membershipRole === "admin";
+
+  if (!canTriggerTest) {
+    redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect Pipedrive or try again."));
+  }
+
+  try {
+    await sendWorkspacePipedriveTestLead({
+      admin,
+      workspaceId,
+    });
+  } catch {
+    redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect Pipedrive or try again."));
+  }
+
+  revalidatePath("/workspace/settings");
+  redirect(appendQueryParam(redirectTo, "saved", "Test lead sent to Pipedrive."));
 }
 
 export async function saveCrmRoutingAction(formData: FormData) {

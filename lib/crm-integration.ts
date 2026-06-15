@@ -5,6 +5,8 @@ import {
   exchangeCodeForTokens as exchangePipedriveCodeForTokens,
   getCurrentUser as getPipedriveCurrentUser,
   getTokenMetadata as getPipedriveTokenMetadata,
+  refreshAccessToken as refreshPipedriveAccessToken,
+  sendTestLead as sendPipedriveTestLead,
 } from "@/lib/integrations/pipedrive";
 import {
   CampaignRecord,
@@ -1227,6 +1229,94 @@ async function getGoHighLevelAccessToken({
   }).catch(() => accessToken);
 }
 
+async function refreshPipedriveToken({
+  admin,
+  connection,
+  refreshToken,
+}: {
+  admin: SupabaseAdmin;
+  connection: WorkspaceCrmConnectionRow;
+  refreshToken: string;
+}) {
+  const refreshed = await refreshPipedriveAccessToken(refreshToken);
+  const metadata = getPipedriveTokenMetadata(refreshed);
+  const accessPayload = encryptCrmSecret(refreshed.access_token || "");
+  const nextRefreshToken = metadata.refreshToken || refreshToken;
+  const refreshPayload = nextRefreshToken ? encryptCrmSecret(nextRefreshToken) : null;
+
+  const { error } = await admin
+    .from("workspace_provider_connections")
+    .update({
+      token_ciphertext: accessPayload.ciphertext,
+      token_iv: accessPayload.iv,
+      token_tag: accessPayload.tag,
+      refresh_token_ciphertext: refreshPayload?.ciphertext || null,
+      refresh_token_iv: refreshPayload?.iv || null,
+      refresh_token_tag: refreshPayload?.tag || null,
+      token_type: metadata.tokenType || connection.token_type || "Bearer",
+      token_expires_at: buildTokenExpiry(
+        typeof metadata.expiresIn === "number" ? metadata.expiresIn : undefined,
+      ),
+      scopes: metadata.scopes.length ? metadata.scopes : connection.scopes,
+      metadata_json: {
+        ...connection.metadata_json,
+        ...(metadata.apiDomain ? { api_domain: metadata.apiDomain } : {}),
+      },
+      last_synced_at: new Date().toISOString(),
+      status: "connected",
+      disconnected_at: null,
+      is_active: true,
+    })
+    .eq("id", connection.id);
+
+  if (error) throw new Error(error.message);
+
+  return {
+    accessToken: refreshed.access_token || "",
+    apiDomain: metadata.apiDomain || getFirstString(connection.metadata_json.api_domain) || "",
+  };
+}
+
+async function getPipedriveAccessToken({
+  admin,
+  connection,
+}: {
+  admin: SupabaseAdmin;
+  connection: WorkspaceCrmConnectionRow;
+}) {
+  const accessToken = decryptCrmSecret(connection);
+  if (!accessToken) {
+    throw new Error("Pipedrive token is unavailable.");
+  }
+
+  const apiDomain = getFirstString(connection.metadata_json.api_domain);
+  if (!apiDomain) {
+    throw new Error("Pipedrive API domain is unavailable.");
+  }
+
+  const expiresAt = connection.token_expires_at ? new Date(connection.token_expires_at).getTime() : null;
+  const expiresSoon = typeof expiresAt === "number" && Number.isFinite(expiresAt) && expiresAt <= Date.now() + 60_000;
+
+  if (!expiresSoon) {
+    return { accessToken, apiDomain };
+  }
+
+  const refreshToken = decryptEncryptedSecret({
+    ciphertext: connection.refresh_token_ciphertext,
+    iv: connection.refresh_token_iv,
+    tag: connection.refresh_token_tag,
+  });
+  if (!refreshToken) {
+    return { accessToken, apiDomain };
+  }
+
+  return refreshPipedriveToken({
+    admin,
+    connection,
+    refreshToken,
+  }).catch(() => ({ accessToken, apiDomain }));
+}
+
 async function deliverLeadToGoHighLevel({
   admin,
   connection,
@@ -1357,6 +1447,33 @@ async function deliverLeadToHubSpot({
     requestPayload: payload,
     responsePayload: response,
   };
+}
+
+export async function sendWorkspacePipedriveTestLead({
+  admin,
+  workspaceId,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+}) {
+  const connections = await listCrmConnections(admin, workspaceId);
+  const connection =
+    connections.find((entry) => entry.provider === "pipedrive" && entry.is_active && entry.status === "connected") ||
+    null;
+
+  if (!connection) {
+    throw new Error("Pipedrive is not connected for this workspace.");
+  }
+
+  const { accessToken, apiDomain } = await getPipedriveAccessToken({
+    admin,
+    connection,
+  });
+
+  return sendPipedriveTestLead({
+    accessToken,
+    apiDomain,
+  });
 }
 
 async function deliverLeadViaProvider({

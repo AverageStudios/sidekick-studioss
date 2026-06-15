@@ -17,13 +17,14 @@ import {
   retryFailedCrmDeliveriesAction,
   saveCrmConnectionAction,
   saveMetaIntegrationSelectionsAction,
+  testPipedriveDeliveryAction,
   syncMetaLeadsAction,
   updateWorkspaceGeneralAction,
   updateWorkspaceIconAction,
 } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { requireUser } from "@/lib/auth";
+import { getCurrentRole, requireUser } from "@/lib/auth";
 import { getDashboardSnapshot } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
@@ -81,14 +82,16 @@ export default async function WorkspaceSettingsPage({
   searchParams: Promise<{ section?: string; saved?: string; error?: string; created?: string }>;
 }) {
   const user = await requireUser();
-  const [{ section: rawSection, saved, error, created }, workspaceContext, dashboardSnapshot] = await Promise.all([
+  const [{ section: rawSection, saved, error, created }, workspaceContext, dashboardSnapshot, currentRole] = await Promise.all([
     searchParams,
     getCurrentWorkspaceContext(),
     getDashboardSnapshot(user.id),
+    getCurrentRole(),
   ]);
 
   const section = getSection(rawSection);
   const workspaceName = workspaceContext?.activeWorkspace.name || "My Workspace";
+  const workspaceRole = workspaceContext?.activeWorkspace.role || null;
   const businessProfile = workspaceContext?.businessProfile;
   const workspaceId = workspaceContext?.activeWorkspace.id || null;
   const workspaceContextMissing = !workspaceContext && isSupabaseServerConfigured();
@@ -177,6 +180,12 @@ export default async function WorkspaceSettingsPage({
   const publishedCampaigns = campaigns.filter((campaign) => campaign.status === "published");
   const draftCampaigns = campaigns.filter((campaign) => campaign.status === "draft");
   const archivedCampaigns = campaigns.filter((campaign) => campaign.status === "archived");
+  const savedMessage =
+    saved && saved !== "1"
+      ? saved
+      : saved
+        ? "Workspace settings saved."
+        : null;
   return (
     <AppShell currentPath="/settings">
       <div className="overflow-hidden rounded-[2rem] border border-[var(--line)] bg-white shadow-[0_18px_50px_rgba(15,23,42,0.05)]">
@@ -225,9 +234,9 @@ export default async function WorkspaceSettingsPage({
           </aside>
 
           <div className="px-6 py-8 sm:px-8 sm:py-10 lg:px-12">
-            {saved ? (
+            {savedMessage ? (
               <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                Workspace settings saved.
+                {savedMessage}
               </div>
             ) : null}
             {error ? (
@@ -841,6 +850,15 @@ export default async function WorkspaceSettingsPage({
                                 {pipedriveConnection ? "Reconnect" : "Connect"}
                               </Link>
                             </Button>
+                            {pipedriveConnection &&
+                            workspaceId &&
+                            (currentRole === "admin" || workspaceRole === "owner" || workspaceRole === "admin") ? (
+                              <form action={testPipedriveDeliveryAction}>
+                                <input type="hidden" name="workspaceId" value={workspaceId} />
+                                <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
+                                <Button type="submit" variant="secondary">Send Test Lead</Button>
+                              </form>
+                            ) : null}
                             {pipedriveConnection ? (
                               <form action={disconnectCrmConnectionAction}>
                                 <input type="hidden" name="provider" value="pipedrive" />

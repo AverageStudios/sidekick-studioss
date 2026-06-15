@@ -25,6 +25,25 @@ type PipedriveCurrentUserResponse = {
   };
 };
 
+type PipedriveCreateResponse = {
+  success?: boolean;
+  data?: {
+    id?: number | string;
+  };
+};
+
+type PipedrivePersonInput = {
+  name: string;
+  email: string;
+  phone: string;
+};
+
+type PipedriveDealInput = {
+  title: string;
+  personId: string;
+  note?: string | null;
+};
+
 function getRequiredClientId() {
   if (!isPipedriveConfigured() || !env.pipedriveClientId) {
     throw new Error("Pipedrive OAuth env vars are missing.");
@@ -79,6 +98,38 @@ function getSafeProviderError(prefix: string, status: number, payload: unknown) 
 function getScopeList(value: unknown) {
   if (typeof value !== "string") return [];
   return Array.from(new Set(value.split(/[,\s]+/).map((entry) => entry.trim()).filter(Boolean)));
+}
+
+async function requestJson<T>({
+  url,
+  accessToken,
+  method = "GET",
+  body,
+  errorPrefix,
+}: {
+  url: string;
+  accessToken: string;
+  method?: "GET" | "POST";
+  body?: Record<string, unknown>;
+  errorPrefix: string;
+}) {
+  const response = await fetch(url, {
+    method,
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+    cache: "no-store",
+  });
+
+  const payload = (await response.json().catch(() => ({}))) as T & Record<string, unknown>;
+  if (!response.ok) {
+    throw new Error(getSafeProviderError(errorPrefix, response.status, payload));
+  }
+
+  return payload;
 }
 
 export function buildAuthorizationUrl(state: string) {
@@ -187,5 +238,110 @@ export function getTokenMetadata(token: PipedriveTokenResponse) {
     expiresIn: typeof token.expires_in === "number" ? token.expires_in : null,
     scopes: getScopeList(token.scope),
     apiDomain: typeof token.api_domain === "string" ? token.api_domain : null,
+  };
+}
+
+export async function createPerson({
+  accessToken,
+  apiDomain,
+  person,
+}: {
+  accessToken: string;
+  apiDomain: string;
+  person: PipedrivePersonInput;
+}) {
+  const payload = await requestJson<PipedriveCreateResponse>({
+    url: `${getApiDomain(apiDomain)}/api/v1/persons`,
+    accessToken,
+    method: "POST",
+    body: {
+      name: person.name,
+      email: [{ value: person.email, primary: true }],
+      phone: [{ value: person.phone, primary: true }],
+    },
+    errorPrefix: "Pipedrive person creation failed",
+  });
+
+  const personId = payload.data?.id != null ? String(payload.data.id) : null;
+  if (!payload.success || !personId) {
+    throw new Error("Pipedrive person creation failed.");
+  }
+
+  return { personId };
+}
+
+export async function createDeal({
+  accessToken,
+  apiDomain,
+  deal,
+}: {
+  accessToken: string;
+  apiDomain: string;
+  deal: PipedriveDealInput;
+}) {
+  const payload = await requestJson<PipedriveCreateResponse>({
+    url: `${getApiDomain(apiDomain)}/api/v1/deals`,
+    accessToken,
+    method: "POST",
+    body: {
+      title: deal.title,
+      person_id: Number(deal.personId),
+    },
+    errorPrefix: "Pipedrive deal creation failed",
+  });
+
+  const dealId = payload.data?.id != null ? String(payload.data.id) : null;
+  if (!payload.success || !dealId) {
+    throw new Error("Pipedrive deal creation failed.");
+  }
+
+  if (deal.note) {
+    await requestJson<PipedriveCreateResponse>({
+      url: `${getApiDomain(apiDomain)}/api/v1/notes`,
+      accessToken,
+      method: "POST",
+      body: {
+        content: deal.note,
+        deal_id: Number(dealId),
+      },
+      errorPrefix: "Pipedrive note creation failed",
+    });
+  }
+
+  return { dealId };
+}
+
+export async function sendTestLead({
+  accessToken,
+  apiDomain,
+}: {
+  accessToken: string;
+  apiDomain: string;
+}) {
+  const person = await createPerson({
+    accessToken,
+    apiDomain,
+    person: {
+      name: "SideKick Test Lead",
+      email: "test+sidekick@sidekickstudioss.com",
+      phone: "555-010-2026",
+    },
+  });
+
+  const deal = await createDeal({
+    accessToken,
+    apiDomain,
+    deal: {
+      title: "SideKick Test Lead - CRM Delivery Test",
+      personId: person.personId,
+      note: "Created by SideKick Studioss to verify the Pipedrive integration.",
+    },
+  });
+
+  return {
+    success: true as const,
+    personId: person.personId,
+    dealId: deal.dealId,
+    safeMessage: "Test lead sent to Pipedrive.",
   };
 }
