@@ -44,6 +44,11 @@ type PipedriveDealInput = {
   note?: string | null;
 };
 
+type PipedriveLeadInput = {
+  title: string;
+  personId: string;
+};
+
 function getRequiredClientId() {
   if (!isPipedriveConfigured() || !env.pipedriveClientId) {
     throw new Error("Pipedrive OAuth env vars are missing.");
@@ -311,6 +316,35 @@ export async function createDeal({
   return { dealId };
 }
 
+export async function createLead({
+  accessToken,
+  apiDomain,
+  lead,
+}: {
+  accessToken: string;
+  apiDomain: string;
+  lead: PipedriveLeadInput;
+}) {
+  const payload = await requestJson<PipedriveCreateResponse>({
+    url: `${getApiDomain(apiDomain)}/api/v1/leads`,
+    accessToken,
+    method: "POST",
+    body: {
+      title: lead.title,
+      person_id: Number(lead.personId),
+      origin_id: "sidekick-crm-test",
+    },
+    errorPrefix: "Pipedrive lead creation failed",
+  });
+
+  const leadId = payload.data?.id != null ? String(payload.data.id) : null;
+  if (!payload.success || !leadId) {
+    throw new Error("Pipedrive lead creation failed.");
+  }
+
+  return { leadId };
+}
+
 export async function sendTestLead({
   accessToken,
   apiDomain,
@@ -328,20 +362,19 @@ export async function sendTestLead({
     },
   });
 
-  const deal = await createDeal({
+  const lead = await createLead({
     accessToken,
     apiDomain,
-    deal: {
+    lead: {
       title: "SideKick Test Lead - CRM Delivery Test",
       personId: person.personId,
-      note: "Created by SideKick Studioss to verify the Pipedrive integration.",
     },
   });
 
   return {
     success: true as const,
     personId: person.personId,
-    dealId: deal.dealId,
-    safeMessage: "Test lead sent to Pipedrive.",
+    leadId: lead.leadId,
+    safeMessage: "Test lead sent to Pipedrive Leads Inbox.",
   };
 }

@@ -29,6 +29,13 @@ For this first OAuth connection pass, keep scopes limited to what SideKick needs
 - `base`
 - people or contacts write scopes only when you are ready to send leads into Pipedrive
 
+For Pipedrive Leads Inbox delivery specifically:
+
+- SideKick needs access to create a `Person`
+- SideKick needs access to create a `Lead`
+
+Based on Pipedrive's current public docs, there is not a separately documented dedicated OAuth scope just for Leads creation in the API reference. Their Leads API docs document the `POST /api/v1/leads` endpoint, and their changelog noted that Leads did not have a separate OAuth scope when the resource was introduced. In practice, if your app permissions are too narrow, update the app permissions in the Pipedrive Developer Hub so the app can create contact/person records and leads.
+
 ## OAuth flow
 
 1. User clicks `Connect Pipedrive` in Workspace Settings.
@@ -59,6 +66,13 @@ For this first OAuth connection pass, keep scopes limited to what SideKick needs
 - OAuth state is signed and workspace-scoped before token exchange is allowed.
 - Callback completion verifies the signed-in user still belongs to the target workspace.
 
-## Current limitation
+## Current behavior
 
-This v1 work adds the workspace OAuth connection cleanly without changing SideKick into a Pipedrive-native CRM flow. Pipedrive lead delivery can be added later on top of this connection layer.
+The workspace test flow now creates:
+
+- a `Person`: `SideKick Test Lead`
+- a `Lead`: `SideKick Test Lead - CRM Delivery Test`
+
+This places the test record in the Pipedrive Leads Inbox by default.
+
+The Deal helper is still kept in code for future support if SideKick adds a `send as deal` setting later.

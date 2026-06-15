@@ -3703,7 +3703,7 @@ export async function testPipedriveDeliveryAction(formData: FormData) {
   }
 
   revalidatePath("/workspace/settings");
-  redirect(appendQueryParam(redirectTo, "saved", "Test lead sent to Pipedrive."));
+  redirect(appendQueryParam(redirectTo, "saved", "Test lead sent to Pipedrive Leads Inbox."));
 }
 
 export async function saveCrmRoutingAction(formData: FormData) {
