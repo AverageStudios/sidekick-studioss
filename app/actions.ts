@@ -56,11 +56,13 @@ import {
 import {
   connectWorkspaceCrmProvider,
   disconnectWorkspaceCrmProvider,
+  getCrmProviderLabel,
+  isCrmTestDeliverySupported,
   processLeadCrmDelivery,
   queueLeadForCrmDelivery,
   retryFailedCrmDeliveriesForWorkspace,
   saveWorkspaceCrmRoutingRule,
-  sendWorkspacePipedriveTestLead,
+  sendWorkspaceCrmTestLead,
 } from "@/lib/crm-integration";
 import {
   appendSupportTicketMessage,
@@ -3650,7 +3652,7 @@ export async function disconnectCrmConnectionAction(formData: FormData) {
   redirect(`/workspace/settings?section=integrations&saved=${encodeURIComponent(`${provider} disconnected`)}`);
 }
 
-export async function testPipedriveDeliveryAction(formData: FormData) {
+export async function testCrmDeliveryAction(formData: FormData) {
   const user = await getCurrentUser();
   if (!user) {
     redirect("/login");
@@ -3658,13 +3660,18 @@ export async function testPipedriveDeliveryAction(formData: FormData) {
 
   const workspaceId = String(formData.get("workspaceId") || "").trim();
   const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=integrations");
+  const provider = String(formData.get("provider") || "").trim() as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce";
 
   if (!workspaceId) {
-    redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect Pipedrive or try again."));
+    redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect your CRM or try again."));
+  }
+
+  if (!provider || !["gohighlevel", "hubspot", "pipedrive", "salesforce"].includes(provider)) {
+    redirect(appendQueryParam(redirectTo, "error", "Test not available yet."));
   }
 
   await enforceActionRateLimit({
-    key: "crm:test-pipedrive-delivery",
+    key: `crm:test-delivery:${provider}:${workspaceId}`,
     limit: 5,
     windowMs: 60 * 60 * 1000,
     redirectTo,
@@ -3672,12 +3679,12 @@ export async function testPipedriveDeliveryAction(formData: FormData) {
   });
 
   if (!isSupabaseServerConfigured()) {
-    redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect Pipedrive or try again."));
+    redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect your CRM or try again."));
   }
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
-    redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect Pipedrive or try again."));
+    redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect your CRM or try again."));
   }
 
   const globalRole = await getCurrentRole();
@@ -3690,20 +3697,31 @@ export async function testPipedriveDeliveryAction(formData: FormData) {
     globalRole === "admin" || membershipRole === "owner" || membershipRole === "admin";
 
   if (!canTriggerTest) {
-    redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect Pipedrive or try again."));
+    redirect(appendQueryParam(redirectTo, "error", "Only workspace owners or admins can send test leads."));
+  }
+
+  if (!isCrmTestDeliverySupported(provider)) {
+    redirect(appendQueryParam(redirectTo, "error", `${getCrmProviderLabel(provider)} test delivery is not available yet.`));
   }
 
   try {
-    await sendWorkspacePipedriveTestLead({
+    const result = await sendWorkspaceCrmTestLead({
       admin,
       workspaceId,
+      provider,
     });
+    revalidatePath("/workspace/settings");
+    redirect(appendQueryParam(redirectTo, "saved", result.safeMessage));
   } catch {
-    redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect Pipedrive or try again."));
+    const providerLabel = getCrmProviderLabel(provider);
+    redirect(
+      appendQueryParam(
+        redirectTo,
+        "error",
+        `Test failed. Please reconnect ${providerLabel} or try again.`,
+      ),
+    );
   }
-
-  revalidatePath("/workspace/settings");
-  redirect(appendQueryParam(redirectTo, "saved", "Test lead sent to Pipedrive Leads Inbox."));
 }
 
 export async function saveCrmRoutingAction(formData: FormData) {

@@ -17,7 +17,7 @@ import {
   retryFailedCrmDeliveriesAction,
   saveCrmConnectionAction,
   saveMetaIntegrationSelectionsAction,
-  testPipedriveDeliveryAction,
+  testCrmDeliveryAction,
   syncMetaLeadsAction,
   updateWorkspaceGeneralAction,
   updateWorkspaceIconAction,
@@ -28,7 +28,7 @@ import { getCurrentRole, requireUser } from "@/lib/auth";
 import { getDashboardSnapshot } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
-import { getWorkspaceCrmState } from "@/lib/crm-integration";
+import { getCrmProviderLabel, getWorkspaceCrmState, isCrmTestDeliverySupported } from "@/lib/crm-integration";
 import { getCurrentWorkspaceContext } from "@/lib/workspaces";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isMetaConfigured } from "@/lib/meta";
@@ -155,6 +155,8 @@ export default async function WorkspaceSettingsPage({
   const ghlEnvStatus = getGhlEnvStatus();
   const pipedriveEnvStatus = getPipedriveEnvStatus();
   const providerDestinations = crmState.destinations.filter((destination) => destination.is_available);
+  const canSendCrmTests =
+    currentRole === "admin" || workspaceRole === "owner" || workspaceRole === "admin";
   const metaConnectNext = encodeURIComponent("/workspace/settings?section=integrations");
   const selectedPageLeadFormAccess =
     connection?.metadata_json &&
@@ -764,6 +766,14 @@ export default async function WorkspaceSettingsPage({
                                 {ghlConnection ? "Reconnect" : "Connect"}
                               </Link>
                             </Button>
+                            {ghlConnection && workspaceId && canSendCrmTests && isCrmTestDeliverySupported("gohighlevel") ? (
+                              <form action={testCrmDeliveryAction}>
+                                <input type="hidden" name="workspaceId" value={workspaceId} />
+                                <input type="hidden" name="provider" value="gohighlevel" />
+                                <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
+                                <Button type="submit" variant="secondary">Send Test Lead</Button>
+                              </form>
+                            ) : null}
                             {ghlConnection ? (
                               <form action={disconnectCrmConnectionAction}>
                                 <input type="hidden" name="provider" value="gohighlevel" />
@@ -771,6 +781,13 @@ export default async function WorkspaceSettingsPage({
                               </form>
                             ) : null}
                           </div>
+                          {ghlConnection ? (
+                            canSendCrmTests ? null : (
+                              <p className="mt-3 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
+                            )
+                          ) : (
+                            <p className="mt-3 text-xs text-[var(--muted)]">Connect GoHighLevel to send a test lead.</p>
+                          )}
                         </div>
                       </details>
 
@@ -815,6 +832,15 @@ export default async function WorkspaceSettingsPage({
                               <Button type="submit" className="self-start">Connect</Button>
                             </form>
                           )}
+                          {hubspotConnection ? (
+                            canSendCrmTests ? (
+                              <p className="mt-3 text-xs text-[var(--muted)]">HubSpot test delivery is not available yet.</p>
+                            ) : (
+                              <p className="mt-3 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
+                            )
+                          ) : (
+                            <p className="mt-3 text-xs text-[var(--muted)]">Connect HubSpot to send a test lead.</p>
+                          )}
                         </div>
                       </details>
 
@@ -850,11 +876,10 @@ export default async function WorkspaceSettingsPage({
                                 {pipedriveConnection ? "Reconnect" : "Connect"}
                               </Link>
                             </Button>
-                            {pipedriveConnection &&
-                            workspaceId &&
-                            (currentRole === "admin" || workspaceRole === "owner" || workspaceRole === "admin") ? (
-                              <form action={testPipedriveDeliveryAction}>
+                            {pipedriveConnection && workspaceId && canSendCrmTests && isCrmTestDeliverySupported("pipedrive") ? (
+                              <form action={testCrmDeliveryAction}>
                                 <input type="hidden" name="workspaceId" value={workspaceId} />
+                                <input type="hidden" name="provider" value="pipedrive" />
                                 <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
                                 <Button type="submit" variant="secondary">Send Test Lead</Button>
                               </form>
@@ -866,6 +891,13 @@ export default async function WorkspaceSettingsPage({
                               </form>
                             ) : null}
                           </div>
+                          {pipedriveConnection ? (
+                            canSendCrmTests ? null : (
+                              <p className="mt-3 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
+                            )
+                          ) : (
+                            <p className="mt-3 text-xs text-[var(--muted)]">Connect Pipedrive to send a test lead.</p>
+                          )}
                         </div>
                       </details>
                     </div>
@@ -894,13 +926,7 @@ export default async function WorkspaceSettingsPage({
                               key={destination.id}
                               className="rounded-full border border-[var(--line)] bg-white px-3 py-1 text-xs font-semibold text-[var(--muted-strong)]"
                             >
-                              {destination.provider === "gohighlevel"
-                                ? "GoHighLevel"
-                                : destination.provider === "hubspot"
-                                  ? "HubSpot"
-                                  : destination.provider === "pipedrive"
-                                    ? "Pipedrive"
-                                  : destination.provider}
+                              {getCrmProviderLabel(destination.provider)}
                             </span>
                           ))}
                         </div>

@@ -112,6 +112,15 @@ export type WorkspaceCrmState = {
   deliveryCounts: Record<CrmDeliveryState, number>;
 };
 
+export type CrmTestDeliveryResult = {
+  success: boolean;
+  provider: CrmProvider;
+  providerName: string;
+  safeMessage: string;
+  createdObjectType: "contact" | "lead" | "person" | "deal";
+  providerRecordIds?: Record<string, string | null>;
+};
+
 type CrmDestinationSeed = {
   assetId: string;
   name: string;
@@ -168,9 +177,33 @@ type PipedriveMetadata = {
 };
 
 const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce"];
+const CRM_TEST_PROVIDER_LABELS: Record<CrmProvider, string> = {
+  gohighlevel: "GoHighLevel",
+  hubspot: "HubSpot",
+  pipedrive: "Pipedrive",
+  salesforce: "Salesforce",
+};
+
+const CRM_TEST_LEAD = {
+  name: "SideKick Test Lead",
+  firstName: "SideKick",
+  lastName: "Test Lead",
+  email: "test+sidekick@sidekickstudioss.com",
+  phone: "555-010-2026",
+  source: "SideKick CRM Delivery Test",
+  note: "Created by SideKick Studioss to verify the CRM integration.",
+} as const;
 
 function getObjectRecord(value: unknown) {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+export function getCrmProviderLabel(provider: CrmProvider) {
+  return CRM_TEST_PROVIDER_LABELS[provider] || provider;
+}
+
+export function isCrmTestDeliverySupported(provider: CrmProvider) {
+  return provider === "gohighlevel" || provider === "pipedrive";
 }
 
 function getString(value: unknown) {
@@ -1474,6 +1507,92 @@ export async function sendWorkspacePipedriveTestLead({
     accessToken,
     apiDomain,
   });
+}
+
+export async function sendWorkspaceGoHighLevelTestLead({
+  admin,
+  workspaceId,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+}) {
+  const connections = await listCrmConnections(admin, workspaceId);
+  const connection =
+    connections.find((entry) => entry.provider === "gohighlevel" && entry.is_active && entry.status === "connected") ||
+    null;
+
+  if (!connection) {
+    throw new Error("GoHighLevel is not connected for this workspace.");
+  }
+
+  const accessToken = await getGoHighLevelAccessToken({
+    admin,
+    connection,
+  });
+
+  const locationId =
+    getFirstString(connection.metadata_json.location_id, connection.metadata_json.locationId, connection.provider_user_id) ||
+    "";
+  if (!locationId) {
+    throw new Error("GoHighLevel location ID is missing.");
+  }
+
+  const payload = {
+    locationId,
+    firstName: CRM_TEST_LEAD.firstName,
+    lastName: CRM_TEST_LEAD.lastName,
+    name: CRM_TEST_LEAD.name,
+    email: CRM_TEST_LEAD.email,
+    phone: CRM_TEST_LEAD.phone,
+    source: CRM_TEST_LEAD.source,
+    tags: ["sidekick", "crm-delivery-test"],
+  };
+
+  const response = await crmFetch<Record<string, unknown>>(
+    "https://services.leadconnectorhq.com/contacts/upsert",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Version: "2023-02-21",
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "GoHighLevel test delivery failed",
+  );
+
+  const contact = getObjectRecord(response.contact);
+  return {
+    success: true,
+    provider: "gohighlevel",
+    providerName: "GoHighLevel",
+    safeMessage: "Test contact sent to GoHighLevel.",
+    createdObjectType: "contact",
+    providerRecordIds: {
+      contactId: getFirstString(contact.id),
+    },
+  } satisfies CrmTestDeliveryResult;
+}
+
+export async function sendWorkspaceCrmTestLead({
+  admin,
+  workspaceId,
+  provider,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+  provider: CrmProvider;
+}) {
+  switch (provider) {
+    case "pipedrive":
+      return sendWorkspacePipedriveTestLead({ admin, workspaceId });
+    case "gohighlevel":
+      return sendWorkspaceGoHighLevelTestLead({ admin, workspaceId });
+    default:
+      throw new Error(`${getCrmProviderLabel(provider)} test delivery is not available yet.`);
+  }
 }
 
 async function deliverLeadViaProvider({

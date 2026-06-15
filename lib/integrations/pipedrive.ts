@@ -373,8 +373,15 @@ export async function sendTestLead({
 
   return {
     success: true as const,
+    provider: "pipedrive" as const,
+    providerName: "Pipedrive",
     personId: person.personId,
     leadId: lead.leadId,
+    createdObjectType: "lead" as const,
+    providerRecordIds: {
+      personId: person.personId,
+      leadId: lead.leadId,
+    },
     safeMessage: "Test lead sent to Pipedrive Leads Inbox.",
   };
 }
