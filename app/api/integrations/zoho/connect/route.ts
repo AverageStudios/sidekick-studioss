@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { logRouteError } from "@/lib/api-security";
 import { createCrmOAuthState } from "@/lib/crm-oauth-state";
 import { env } from "@/lib/env";
-import { buildHubSpotAuthorizationUrl } from "@/lib/integrations/hubspot";
+import { buildZohoAuthorizationUrl } from "@/lib/integrations/zoho";
 import { checkRateLimit, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     const loginUrl = new URL("/login", getAppOrigin(request));
-    loginUrl.searchParams.set("error", "Sign in before connecting HubSpot.");
+    loginUrl.searchParams.set("error", "Sign in before connecting Zoho CRM.");
     return NextResponse.redirect(loginUrl);
   }
 
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
 
   const next = request.nextUrl.searchParams.get("next");
   const safeNext = next?.startsWith("/") ? next : "/workspace/settings?section=integrations";
-  const provider = "hubspot";
+  const provider = "zoho";
   const state = createCrmOAuthState({
     nonce: randomUUID(),
     provider,
@@ -73,8 +73,9 @@ export async function GET(request: NextRequest) {
     integrationsUrl.searchParams.set("error", CRM_OAUTH_RATE_LIMIT_MESSAGE);
     return NextResponse.redirect(integrationsUrl);
   }
+
   try {
-    const oauthUrl = buildHubSpotAuthorizationUrl(state);
+    const oauthUrl = buildZohoAuthorizationUrl(state);
     const response = NextResponse.redirect(oauthUrl);
     response.cookies.set("crm_oauth_state", state, {
       httpOnly: true,
@@ -97,7 +98,7 @@ export async function GET(request: NextRequest) {
       path: "/",
       maxAge: 60 * 10,
     });
-    response.cookies.set("crm_oauth_provider", "hubspot", {
+    response.cookies.set("crm_oauth_provider", "zoho", {
       httpOnly: true,
       sameSite: "lax",
       secure: request.nextUrl.protocol === "https:",
@@ -106,9 +107,9 @@ export async function GET(request: NextRequest) {
     });
     return response;
   } catch (error) {
-    logRouteError("hubspot connect", error);
+    logRouteError("zoho connect", error);
     const integrationsUrl = buildIntegrationsUrl(request);
-    integrationsUrl.searchParams.set("error", "Could not start HubSpot connection.");
+    integrationsUrl.searchParams.set("error", "Could not start Zoho CRM connection.");
     return NextResponse.redirect(integrationsUrl);
   }
 }

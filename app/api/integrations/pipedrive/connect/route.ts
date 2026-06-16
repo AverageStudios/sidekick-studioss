@@ -16,6 +16,9 @@ function buildIntegrationsUrl(request: NextRequest) {
   return new URL("/workspace/settings?section=integrations", getAppOrigin(request));
 }
 
+const CRM_OAUTH_RATE_LIMIT_MESSAGE =
+  "You've tried connecting this CRM too many times in a short period. Please wait a few minutes and try again.";
+
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -25,24 +28,6 @@ export async function GET(request: NextRequest) {
   }
 
   const ip = getIpFromRequest(request);
-  const rateLimit = await checkRateLimit({
-    key: "api:pipedrive-connect",
-    limit: 10,
-    windowMs: 60 * 60 * 1000,
-    identifiers: { ip, userId: user.id },
-  });
-  if (!rateLimit.allowed) {
-    logRateLimitHit({
-      key: "api:pipedrive-connect",
-      retryAfterSeconds: rateLimit.retryAfterSeconds,
-      matchedOn: rateLimit.matchedOn,
-      ip,
-      userId: user.id,
-    });
-    const integrationsUrl = buildIntegrationsUrl(request);
-    integrationsUrl.searchParams.set("error", "Too many attempts right now. Please wait a moment and try again.");
-    return NextResponse.redirect(integrationsUrl);
-  }
 
   let workspaceContext;
   try {
@@ -65,12 +50,32 @@ export async function GET(request: NextRequest) {
 
   const next = request.nextUrl.searchParams.get("next");
   const safeNext = next?.startsWith("/") ? next : "/workspace/settings?section=integrations";
+  const provider = "pipedrive";
   const state = createCrmOAuthState({
     nonce: randomUUID(),
-    provider: "pipedrive",
+    provider,
     workspaceId,
     next: safeNext,
   });
+
+  const rateLimit = await checkRateLimit({
+    key: `api:crm-oauth:connect:${provider}:${workspaceId}`,
+    limit: 30,
+    windowMs: 60 * 60 * 1000,
+    identifiers: { ip, userId: user.id },
+  });
+  if (!rateLimit.allowed) {
+    logRateLimitHit({
+      key: `api:crm-oauth:connect:${provider}:${workspaceId}`,
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+      matchedOn: rateLimit.matchedOn,
+      ip,
+      userId: user.id,
+    });
+    const integrationsUrl = buildIntegrationsUrl(request);
+    integrationsUrl.searchParams.set("error", CRM_OAUTH_RATE_LIMIT_MESSAGE);
+    return NextResponse.redirect(integrationsUrl);
+  }
 
   try {
     const oauthUrl = buildAuthorizationUrl(state);

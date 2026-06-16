@@ -33,7 +33,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isMetaConfigured } from "@/lib/meta";
 import { getWorkspaceMetaIntegrationState } from "@/lib/meta-integration";
 import { getWorkspaceLeadSyncHealth } from "@/lib/meta-leads";
-import { getGhlEnvStatus, getHubSpotEnvStatus, getPipedriveEnvStatus, isSupabaseServerConfigured } from "@/lib/env";
+import { getGhlEnvStatus, getHubSpotEnvStatus, getPipedriveEnvStatus, getZohoEnvStatus, isSupabaseServerConfigured } from "@/lib/env";
 
 const workspaceSections = [
   { id: "general", label: "General", icon: Settings2 },
@@ -151,9 +151,11 @@ export default async function WorkspaceSettingsPage({
   const ghlConnection = crmConnections.find((item) => item.provider === "gohighlevel") || null;
   const hubspotConnection = crmConnections.find((item) => item.provider === "hubspot") || null;
   const pipedriveConnection = crmConnections.find((item) => item.provider === "pipedrive") || null;
+  const zohoConnection = crmConnections.find((item) => item.provider === "zoho") || null;
   const ghlEnvStatus = getGhlEnvStatus();
   const hubspotEnvStatus = getHubSpotEnvStatus();
   const pipedriveEnvStatus = getPipedriveEnvStatus();
+  const zohoEnvStatus = getZohoEnvStatus();
   const providerDestinations = crmState.destinations.filter((destination) => destination.is_available);
   const canSendCrmTests =
     currentRole === "admin" || workspaceRole === "owner" || workspaceRole === "admin";
@@ -909,6 +911,63 @@ export default async function WorkspaceSettingsPage({
                             )
                           ) : (
                             <p className="mt-3 text-xs text-[var(--muted)]">Connect Pipedrive to send a test lead.</p>
+                          )}
+                        </div>
+                      </details>
+
+                      <details open={Boolean(zohoConnection)} className="group rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)]">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <p className="text-base font-semibold text-[var(--ink)]">Zoho CRM</p>
+                              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", formatStatusTone(Boolean(zohoConnection)))}>
+                                {zohoConnection ? "Connected" : "Not connected"}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm text-[var(--muted)]">
+                              Connect Zoho CRM to send new SideKick leads into Zoho.
+                            </p>
+                            {zohoConnection ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">
+                                {typeof zohoConnection.metadata_json.org_name === "string"
+                                  ? zohoConnection.metadata_json.org_name
+                                  : zohoConnection.provider_user_name || "Zoho CRM connected"}
+                              </p>
+                            ) : !zohoEnvStatus.configured ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">OAuth setup is not configured yet.</p>
+                            ) : null}
+                          </div>
+                          <ChevronDown className="h-4 w-4 shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180" />
+                        </summary>
+
+                        <div className="border-t border-[var(--line)] px-5 py-5">
+                          <div className="flex flex-wrap gap-2">
+                            <Button asChild disabled={!zohoEnvStatus.configured}>
+                              <Link href="/api/integrations/zoho/connect?next=/workspace/settings?section=integrations">
+                                {zohoConnection ? "Reconnect" : "Connect Zoho"}
+                              </Link>
+                            </Button>
+                            {zohoConnection && workspaceId && canSendCrmTests && isCrmTestDeliverySupported("zoho") ? (
+                              <form action={testCrmDeliveryAction}>
+                                <input type="hidden" name="workspaceId" value={workspaceId} />
+                                <input type="hidden" name="provider" value="zoho" />
+                                <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
+                                <Button type="submit" variant="secondary">Send Test Lead</Button>
+                              </form>
+                            ) : null}
+                            {zohoConnection ? (
+                              <form action={disconnectCrmConnectionAction}>
+                                <input type="hidden" name="provider" value="zoho" />
+                                <Button type="submit" variant="outline">Disconnect</Button>
+                              </form>
+                            ) : null}
+                          </div>
+                          {zohoConnection ? (
+                            canSendCrmTests ? null : (
+                              <p className="mt-3 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
+                            )
+                          ) : (
+                            <p className="mt-3 text-xs text-[var(--muted)]">Connect Zoho CRM to send a test lead.</p>
                           )}
                         </div>
                       </details>

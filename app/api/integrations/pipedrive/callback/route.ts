@@ -31,6 +31,9 @@ function failRedirect(request: NextRequest, error: string) {
   return response;
 }
 
+const CRM_OAUTH_RATE_LIMIT_MESSAGE =
+  "You've tried connecting this CRM too many times in a short period. Please wait a few minutes and try again.";
+
 export async function GET(request: NextRequest) {
   const providerError = request.nextUrl.searchParams.get("error");
   if (providerError) {
@@ -73,21 +76,22 @@ export async function GET(request: NextRequest) {
   }
 
   const ip = getIpFromRequest(request);
+  const provider = "pipedrive";
   const rateLimit = await checkRateLimit({
-    key: "api:pipedrive-callback",
-    limit: 10,
+    key: `api:crm-oauth:callback:${provider}`,
+    limit: 60,
     windowMs: 60 * 60 * 1000,
-    identifiers: { ip, userId: user.id },
+    identifiers: { ip },
   });
   if (!rateLimit.allowed) {
     logRateLimitHit({
-      key: "api:pipedrive-callback",
+      key: `api:crm-oauth:callback:${provider}`,
       retryAfterSeconds: rateLimit.retryAfterSeconds,
       matchedOn: rateLimit.matchedOn,
       ip,
       userId: user.id,
     });
-    return failRedirect(request, "Too many attempts right now. Please wait a moment and try again.");
+    return failRedirect(request, CRM_OAUTH_RATE_LIMIT_MESSAGE);
   }
 
   const admin = createSupabaseAdminClient();

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { logRouteError } from "@/lib/api-security";
 import { parseCrmOAuthState } from "@/lib/crm-oauth-state";
-import { connectWorkspaceHubSpotOAuthProvider } from "@/lib/crm-integration";
+import { connectWorkspaceZohoOAuthProvider } from "@/lib/crm-integration";
 import { env } from "@/lib/env";
 import { checkRateLimit, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -40,8 +40,8 @@ export async function GET(request: NextRequest) {
     return failRedirect(
       request,
       providerError === "access_denied"
-        ? "HubSpot connection was canceled before it finished."
-        : "HubSpot connection could not be completed.",
+        ? "Zoho CRM connection was canceled before it finished."
+        : "Zoho CRM connection could not be completed.",
     );
   }
 
@@ -59,24 +59,24 @@ export async function GET(request: NextRequest) {
   if (
     !code ||
     !statePayload ||
-    statePayload.provider !== "hubspot" ||
+    statePayload.provider !== "zoho" ||
     (state && stateCookie && state !== stateCookie) ||
-    (providerCookie && providerCookie !== "hubspot")
+    (providerCookie && providerCookie !== "zoho")
   ) {
-    return failRedirect(request, "HubSpot connection was canceled or expired. Please try again.");
+    return failRedirect(request, "Zoho CRM connection was canceled or expired. Please try again.");
   }
 
   const user = await getCurrentUser();
   if (!user) {
     const loginUrl = new URL("/login", getAppOrigin(request));
-    loginUrl.searchParams.set("error", "Sign in before connecting HubSpot.");
+    loginUrl.searchParams.set("error", "Sign in before connecting Zoho CRM.");
     const response = NextResponse.redirect(loginUrl);
     clearOauthCookies(response);
     return response;
   }
 
   const ip = getIpFromRequest(request);
-  const provider = "hubspot";
+  const provider = "zoho";
   const rateLimit = await checkRateLimit({
     key: `api:crm-oauth:callback:${provider}`,
     limit: 60,
@@ -124,19 +124,21 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    await connectWorkspaceHubSpotOAuthProvider({
+    await connectWorkspaceZohoOAuthProvider({
       admin,
       workspaceId,
       userId: user.id,
       code,
+      accountsServer: request.nextUrl.searchParams.get("accounts-server"),
     });
+
     const redirectUrl = new URL(safeNext, getAppOrigin(request));
-    redirectUrl.searchParams.set("saved", "hubspot connected");
+    redirectUrl.searchParams.set("saved", "zoho connected");
     const response = NextResponse.redirect(redirectUrl);
     clearOauthCookies(response);
     return response;
   } catch (error) {
-    logRouteError("hubspot callback", error);
-    return failRedirect(request, "HubSpot connection failed. Please try again.");
+    logRouteError("zoho callback", error);
+    return failRedirect(request, "Zoho CRM connection failed. Please try again.");
   }
 }

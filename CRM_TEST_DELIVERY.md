@@ -25,6 +25,7 @@ Current test-delivery support:
 - GoHighLevel
 - Pipedrive
 - HubSpot
+- Zoho CRM
 
 Not available yet:
 
@@ -82,6 +83,23 @@ Connection requirement:
 
 - HubSpot must be connected through OAuth
 - older manual private-token connections should be reconnected
+
+### Zoho CRM
+
+Creates:
+
+- Lead
+
+Required Zoho scopes:
+
+- `ZohoCRM.modules.Leads.CREATE`
+- `ZohoCRM.modules.Leads.READ`
+- `ZohoCRM.modules.Leads.UPDATE`
+- `ZohoCRM.org.READ`
+
+Success message:
+
+- `Test lead sent to Zoho CRM.`
 
 ## Security notes
 

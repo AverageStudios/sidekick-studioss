@@ -1,6 +1,6 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { decryptCrmSecret, decryptEncryptedSecret, encryptCrmSecret } from "@/lib/crm-security";
-import { env, isGhlConfigured, isHubSpotConfigured } from "@/lib/env";
+import { env, isGhlConfigured, isHubSpotConfigured, isZohoConfigured } from "@/lib/env";
 import {
   createOrUpdateHubSpotContact,
   exchangeHubSpotCodeForTokens,
@@ -15,6 +15,13 @@ import {
   refreshAccessToken as refreshPipedriveAccessToken,
   sendTestLead as sendPipedriveTestLead,
 } from "@/lib/integrations/pipedrive";
+import {
+  createZohoLead,
+  exchangeZohoCodeForTokens,
+  getZohoOrgInfo,
+  getZohoTokenMetadata,
+  refreshZohoAccessToken,
+} from "@/lib/integrations/zoho";
 import {
   CampaignRecord,
   CrmConnectionStatus,
@@ -199,12 +206,22 @@ type HubSpotMetadata = {
   authType?: string | null;
 };
 
-const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce"];
+type ZohoMetadata = {
+  tokenType?: string | null;
+  expiresIn?: number | string | null;
+  refreshToken?: string | null;
+  scope?: string | string[] | null;
+  apiDomain?: string | null;
+  accountsServer?: string | null;
+};
+
+const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho"];
 const CRM_TEST_PROVIDER_LABELS: Record<CrmProvider, string> = {
   gohighlevel: "GoHighLevel",
   hubspot: "HubSpot",
   pipedrive: "Pipedrive",
   salesforce: "Salesforce",
+  zoho: "Zoho CRM",
 };
 
 const CRM_TEST_LEAD = {
@@ -226,7 +243,7 @@ export function getCrmProviderLabel(provider: CrmProvider) {
 }
 
 export function isCrmTestDeliverySupported(provider: CrmProvider) {
-  return provider === "gohighlevel" || provider === "pipedrive" || provider === "hubspot";
+  return provider === "gohighlevel" || provider === "pipedrive" || provider === "hubspot" || provider === "zoho";
 }
 
 function getString(value: unknown) {
@@ -291,11 +308,11 @@ function normalizeCrmDatabaseError(error: { message?: string | null } | null | u
   const message = error?.message || "";
 
   if (message.includes("workspace_provider_connections_provider_check")) {
-    return "CRM providers are not enabled in this database yet. Apply supabase/migrations/021_crm_integrations.sql, then try connecting again.";
+    return "CRM providers are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/028_zoho_crm_provider_support.sql, then try connecting again.";
   }
 
   if (message.includes("workspace_provider_assets_provider_check")) {
-    return "CRM provider assets are not enabled in this database yet. Apply supabase/migrations/021_crm_integrations.sql, then try again.";
+    return "CRM provider assets are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/028_zoho_crm_provider_support.sql, then try again.";
   }
 
   if (message.includes("workspace_provider_assets_type_check")) {
@@ -548,6 +565,77 @@ async function validateHubSpotConnection({
   }
 }
 
+async function validateZohoConnection({
+  accessToken,
+  metadata,
+}: {
+  accessToken: string;
+  metadata?: ZohoMetadata;
+}): Promise<ValidatedConnection> {
+  try {
+    const apiDomain = getFirstString(metadata?.apiDomain) || "https://www.zohoapis.com";
+    const org = await getZohoOrgInfo({
+      accessToken,
+      apiDomain,
+    });
+    const orgId = getFirstString(org.id, org.zgid, org.primary_zuid) || "zoho-org";
+    const orgName =
+      getFirstString(org.company_name, org.domain_name, org.primary_email) || `Zoho CRM org ${orgId}`;
+    return {
+      providerUserId: orgId,
+      providerUserName: orgName,
+      tokenType: getFirstString(metadata?.tokenType) || "Bearer",
+      tokenExpiresAt: buildTokenExpiry(
+        typeof metadata?.expiresIn === "number"
+          ? metadata.expiresIn
+          : typeof metadata?.expiresIn === "string"
+            ? Number(metadata.expiresIn)
+            : undefined,
+      ),
+      refreshToken: getFirstString(metadata?.refreshToken),
+      scopes: getScopeList(metadata?.scope).length
+        ? getScopeList(metadata?.scope)
+        : ["ZohoCRM.modules.Leads.CREATE", "ZohoCRM.org.READ"],
+      metadata: {
+        validated_at: new Date().toISOString(),
+        auth_type: "oauth",
+        api_domain: apiDomain,
+        accounts_server: getFirstString(metadata?.accountsServer) || env.zohoAccountsUrl || null,
+        org_id: orgId,
+        org_name: orgName,
+        account_details: org,
+      },
+      destinations: [
+        {
+          assetId: "leads",
+          name: "Zoho CRM leads",
+          metadata: {
+            destinationType: "leads",
+            objectType: "Leads",
+            apiDomain,
+          },
+          selected: true,
+        },
+      ],
+    };
+  } catch (error) {
+    const diagnostic = getCrmDiagnostic(error);
+    if (diagnostic.status === 401) {
+      throw new Error(
+        "Zoho token is invalid or expired. Reconnect Zoho CRM with lead and org scopes enabled.",
+      );
+    }
+
+    if (diagnostic.status === 403) {
+      throw new Error(
+        "Zoho CRM access is missing required lead or org permissions. Reconnect Zoho with the requested scopes.",
+      );
+    }
+
+    throw new Error(diagnostic.message || "Zoho verification could not be completed.");
+  }
+}
+
 async function validateCrmConnection(input: {
   provider: CrmProvider;
   accessToken: string;
@@ -591,6 +679,11 @@ async function validateCrmConnection(input: {
       return validatePipedriveConnection({
         accessToken: input.accessToken,
         metadata: input.metadata as PipedriveMetadata | undefined,
+      });
+    case "zoho":
+      return validateZohoConnection({
+        accessToken: input.accessToken,
+        metadata: input.metadata as ZohoMetadata | undefined,
       });
     default:
       throw new Error(`${input.provider} is not available in this first CRM pass yet.`);
@@ -1175,6 +1268,43 @@ export async function connectWorkspaceHubSpotOAuthProvider({
   });
 }
 
+export async function connectWorkspaceZohoOAuthProvider({
+  admin,
+  workspaceId,
+  userId,
+  code,
+  accountsServer,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+  userId: string;
+  code: string;
+  accountsServer?: string | null;
+}) {
+  const token = await exchangeZohoCodeForTokens({
+    code,
+    accountsUrl: accountsServer,
+  });
+  const tokenMetadata = getZohoTokenMetadata(token);
+
+  return connectWorkspaceCrmProvider({
+    admin,
+    workspaceId,
+    userId,
+    provider: "zoho",
+    accessToken: normalizeAccessToken(token.access_token || ""),
+    metadata: {
+      authType: "oauth",
+      scope: token.scope || tokenMetadata.scopes,
+      refreshToken: tokenMetadata.refreshToken,
+      expiresIn: tokenMetadata.expiresIn,
+      tokenType: tokenMetadata.tokenType,
+      apiDomain: tokenMetadata.apiDomain,
+      accountsServer: accountsServer || env.zohoAccountsUrl || null,
+    },
+  });
+}
+
 export async function disconnectWorkspaceCrmProvider({
   admin,
   workspaceId,
@@ -1430,6 +1560,101 @@ async function getHubSpotAccessToken({
       throw new Error("HubSpot token is invalid or expired. Reconnect HubSpot.");
     }
     return accessToken;
+  });
+}
+
+async function refreshZohoToken({
+  admin,
+  connection,
+  refreshToken,
+}: {
+  admin: SupabaseAdmin;
+  connection: WorkspaceCrmConnectionRow;
+  refreshToken: string;
+}) {
+  if (!isZohoConfigured()) {
+    throw new Error("Zoho OAuth env vars are missing.");
+  }
+
+  const refreshed = await refreshZohoAccessToken({
+    refreshToken,
+    accountsUrl: getFirstString(connection.metadata_json.accounts_server, env.zohoAccountsUrl),
+  });
+  const metadata = getZohoTokenMetadata(refreshed);
+  const accessPayload = encryptCrmSecret(refreshed.access_token || "");
+  const nextRefreshToken = metadata.refreshToken || refreshToken;
+  const refreshPayload = nextRefreshToken ? encryptCrmSecret(nextRefreshToken) : null;
+
+  const { error } = await admin
+    .from("workspace_provider_connections")
+    .update({
+      token_ciphertext: accessPayload.ciphertext,
+      token_iv: accessPayload.iv,
+      token_tag: accessPayload.tag,
+      refresh_token_ciphertext: refreshPayload?.ciphertext || null,
+      refresh_token_iv: refreshPayload?.iv || null,
+      refresh_token_tag: refreshPayload?.tag || null,
+      token_type: metadata.tokenType || connection.token_type || "Bearer",
+      token_expires_at: buildTokenExpiry(
+        typeof metadata.expiresIn === "number" ? metadata.expiresIn : undefined,
+      ),
+      scopes: metadata.scopes.length ? metadata.scopes : connection.scopes,
+      metadata_json: {
+        ...connection.metadata_json,
+        auth_type: "oauth",
+        ...(metadata.apiDomain ? { api_domain: metadata.apiDomain } : {}),
+      },
+      last_synced_at: new Date().toISOString(),
+      status: "connected",
+      disconnected_at: null,
+      is_active: true,
+    })
+    .eq("id", connection.id);
+
+  if (error) throw new Error(error.message);
+
+  return {
+    accessToken: refreshed.access_token || "",
+    apiDomain: metadata.apiDomain || getFirstString(connection.metadata_json.api_domain) || "https://www.zohoapis.com",
+  };
+}
+
+async function getZohoAccessToken({
+  admin,
+  connection,
+}: {
+  admin: SupabaseAdmin;
+  connection: WorkspaceCrmConnectionRow;
+}) {
+  const accessToken = decryptCrmSecret(connection);
+  if (!accessToken) {
+    throw new Error("Zoho token is unavailable.");
+  }
+
+  const apiDomain = getFirstString(connection.metadata_json.api_domain) || "https://www.zohoapis.com";
+  const expiresAt = connection.token_expires_at ? new Date(connection.token_expires_at).getTime() : null;
+  const expiresSoon = typeof expiresAt === "number" && Number.isFinite(expiresAt) && expiresAt <= Date.now() + 60_000;
+
+  if (!expiresSoon) {
+    return { accessToken, apiDomain };
+  }
+
+  const refreshToken = decryptEncryptedSecret({
+    ciphertext: connection.refresh_token_ciphertext,
+    iv: connection.refresh_token_iv,
+    tag: connection.refresh_token_tag,
+  });
+
+  if (!refreshToken) {
+    throw new Error("Zoho refresh token is missing. Reconnect Zoho CRM.");
+  }
+
+  return refreshZohoToken({
+    admin,
+    connection,
+    refreshToken,
+  }).catch(() => {
+    throw new Error("Zoho token is invalid or expired. Reconnect Zoho CRM.");
   });
 }
 
@@ -1784,6 +2009,51 @@ export async function sendWorkspaceHubSpotTestLead({
   } satisfies CrmTestDeliveryResult;
 }
 
+export async function sendWorkspaceZohoTestLead({
+  admin,
+  workspaceId,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+}) {
+  const connections = await listCrmConnections(admin, workspaceId);
+  const connection =
+    connections.find((entry) => entry.provider === "zoho" && entry.is_active && entry.status === "connected") ||
+    null;
+
+  if (!connection) {
+    throw new Error("Zoho CRM is not connected for this workspace.");
+  }
+
+  const { accessToken, apiDomain } = await getZohoAccessToken({
+    admin,
+    connection,
+  });
+  const result = await createZohoLead({
+    accessToken,
+    apiDomain,
+    lead: {
+      firstName: CRM_TEST_LEAD.firstName,
+      lastName: CRM_TEST_LEAD.lastName,
+      email: CRM_TEST_LEAD.email,
+      phone: CRM_TEST_LEAD.phone,
+      leadSource: CRM_TEST_LEAD.source,
+      company: "SideKick Studioss Test",
+    },
+  });
+
+  return {
+    success: true,
+    provider: "zoho",
+    providerName: "Zoho CRM",
+    safeMessage: "Test lead sent to Zoho CRM.",
+    createdObjectType: "lead",
+    providerRecordIds: {
+      leadId: result.leadId,
+    },
+  } satisfies CrmTestDeliveryResult;
+}
+
 export async function sendWorkspaceCrmTestLead({
   admin,
   workspaceId,
@@ -1800,6 +2070,8 @@ export async function sendWorkspaceCrmTestLead({
       return sendWorkspaceGoHighLevelTestLead({ admin, workspaceId });
     case "hubspot":
       return sendWorkspaceHubSpotTestLead({ admin, workspaceId });
+    case "zoho":
+      return sendWorkspaceZohoTestLead({ admin, workspaceId });
     default:
       throw new Error(`${getCrmProviderLabel(provider)} test delivery is not available yet.`);
   }

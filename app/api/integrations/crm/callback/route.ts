@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { parseCrmOAuthState } from "@/lib/crm-oauth-state";
-import { connectWorkspaceGoHighLevelOAuthProvider, connectWorkspaceHubSpotOAuthProvider } from "@/lib/crm-integration";
+import {
+  connectWorkspaceGoHighLevelOAuthProvider,
+  connectWorkspaceHubSpotOAuthProvider,
+  connectWorkspaceZohoOAuthProvider,
+} from "@/lib/crm-integration";
 import { env } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
@@ -19,9 +23,24 @@ function clearOauthCookies(response: NextResponse) {
   response.cookies.delete("crm_oauth_provider");
 }
 
+const CRM_OAUTH_RATE_LIMIT_MESSAGE =
+  "You've tried connecting this CRM too many times in a short period. Please wait a few minutes and try again.";
+
 export async function GET(request: NextRequest) {
   const integrationsUrl = buildIntegrationsUrl();
   const code = request.nextUrl.searchParams.get("code");
+  const providerError = request.nextUrl.searchParams.get("error");
+  if (providerError) {
+    integrationsUrl.searchParams.set(
+      "error",
+      providerError === "access_denied"
+        ? "CRM connection was canceled before it finished."
+        : "CRM connection could not be completed.",
+    );
+    const response = NextResponse.redirect(integrationsUrl);
+    clearOauthCookies(response);
+    return response;
+  }
   const state = request.nextUrl.searchParams.get("state");
   const stateCookie = request.cookies.get("crm_oauth_state")?.value;
   const nextCookie = request.cookies.get("crm_oauth_next")?.value;
@@ -57,15 +76,16 @@ export async function GET(request: NextRequest) {
   }
 
   const ip = getIpFromRequest(request);
+  const provider = statePayload.provider;
   const rateLimit = await checkRateLimit({
-    key: "api:crm-callback",
-    limit: 10,
+    key: `api:crm-oauth:callback:${provider}`,
+    limit: 60,
     windowMs: 60 * 60 * 1000,
-    identifiers: { ip, userId: user.id },
+    identifiers: { ip },
   });
   if (!rateLimit.allowed) {
-    logRateLimitHit({ key: "api:crm-callback", retryAfterSeconds: rateLimit.retryAfterSeconds, matchedOn: rateLimit.matchedOn, ip, userId: user.id });
-    integrationsUrl.searchParams.set("error", "Too many attempts right now. Please wait a moment and try again.");
+    logRateLimitHit({ key: `api:crm-oauth:callback:${provider}`, retryAfterSeconds: rateLimit.retryAfterSeconds, matchedOn: rateLimit.matchedOn, ip, userId: user.id });
+    integrationsUrl.searchParams.set("error", CRM_OAUTH_RATE_LIMIT_MESSAGE);
     const response = NextResponse.redirect(integrationsUrl);
     clearOauthCookies(response);
     return response;
@@ -129,6 +149,15 @@ export async function GET(request: NextRequest) {
           workspaceId,
           userId: user.id,
           code,
+        });
+        break;
+      case "zoho":
+        await connectWorkspaceZohoOAuthProvider({
+          admin,
+          workspaceId,
+          userId: user.id,
+          code,
+          accountsServer: request.nextUrl.searchParams.get("accounts-server"),
         });
         break;
       default:

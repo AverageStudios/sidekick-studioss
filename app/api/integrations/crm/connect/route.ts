@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { createCrmOAuthState } from "@/lib/crm-oauth-state";
 import { env, isGhlConfigured } from "@/lib/env";
 import { buildHubSpotAuthorizationUrl } from "@/lib/integrations/hubspot";
+import { buildZohoAuthorizationUrl } from "@/lib/integrations/zoho";
 import { CrmProvider } from "@/types";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 import { logRouteError } from "@/lib/api-security";
@@ -13,12 +14,16 @@ function buildIntegrationsUrl() {
   return new URL("/workspace/settings?section=integrations", env.appUrl);
 }
 
+const CRM_OAUTH_RATE_LIMIT_MESSAGE =
+  "You've tried connecting this CRM too many times in a short period. Please wait a few minutes and try again.";
+
 function resolveProvider(value: string | null): CrmProvider | null {
   switch (value) {
     case "gohighlevel":
     case "hubspot":
     case "pipedrive":
     case "salesforce":
+    case "zoho":
       return value;
     default:
       return null;
@@ -37,6 +42,8 @@ function getProviderConnectUrl(provider: CrmProvider, state: string) {
     }
     case "hubspot":
       return buildHubSpotAuthorizationUrl(state);
+    case "zoho":
+      return buildZohoAuthorizationUrl(state);
     default:
       throw new Error(`${provider} connect flow is not implemented yet.`);
   }
@@ -51,18 +58,6 @@ export async function GET(request: NextRequest) {
   }
 
   const ip = getIpFromRequest(request);
-  const rateLimit = await checkRateLimit({
-    key: "api:crm-connect",
-    limit: 10,
-    windowMs: 60 * 60 * 1000,
-    identifiers: { ip, userId: user.id },
-  });
-  if (!rateLimit.allowed) {
-    logRateLimitHit({ key: "api:crm-connect", retryAfterSeconds: rateLimit.retryAfterSeconds, matchedOn: rateLimit.matchedOn, ip, userId: user.id });
-    const integrationsUrl = buildIntegrationsUrl();
-    integrationsUrl.searchParams.set("error", "Too many attempts right now. Please wait a moment and try again.");
-    return NextResponse.redirect(integrationsUrl);
-  }
 
   let workspaceContext;
   try {
@@ -96,6 +91,25 @@ export async function GET(request: NextRequest) {
     workspaceId,
     next: safeNext,
   });
+
+  const rateLimit = await checkRateLimit({
+    key: `api:crm-oauth:connect:${provider}:${workspaceId}`,
+    limit: 30,
+    windowMs: 60 * 60 * 1000,
+    identifiers: { ip, userId: user.id },
+  });
+  if (!rateLimit.allowed) {
+    logRateLimitHit({
+      key: `api:crm-oauth:connect:${provider}:${workspaceId}`,
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+      matchedOn: rateLimit.matchedOn,
+      ip,
+      userId: user.id,
+    });
+    const integrationsUrl = buildIntegrationsUrl();
+    integrationsUrl.searchParams.set("error", CRM_OAUTH_RATE_LIMIT_MESSAGE);
+    return NextResponse.redirect(integrationsUrl);
+  }
 
   try {
     const oauthUrl = getProviderConnectUrl(provider, state);

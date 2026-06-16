@@ -50,6 +50,11 @@ export const env = {
   hubspotClientSecret: readEnv("HUBSPOT_CLIENT_SECRET"),
   hubspotRedirectUri: readEnv("HUBSPOT_REDIRECT_URI"),
   hubspotScopes: readEnv("HUBSPOT_SCOPES"),
+  zohoClientId: readEnv("ZOHO_CLIENT_ID"),
+  zohoClientSecret: readEnv("ZOHO_CLIENT_SECRET"),
+  zohoRedirectUri: readEnv("ZOHO_REDIRECT_URI"),
+  zohoAccountsUrl: readEnv("ZOHO_ACCOUNTS_URL") || "https://accounts.zoho.com",
+  zohoScopes: readEnv("ZOHO_SCOPES"),
 } as const;
 
 export function getSupabasePublicEnvStatus() {
@@ -118,6 +123,14 @@ export function getHubSpotEnvStatus() {
   };
 }
 
+export function getZohoEnvStatus() {
+  const missingKeys = missing(["ZOHO_CLIENT_ID", "ZOHO_CLIENT_SECRET", "ZOHO_REDIRECT_URI", "ZOHO_ACCOUNTS_URL", "ZOHO_SCOPES"]);
+  return {
+    configured: missingKeys.length === 0,
+    missingKeys,
+  };
+}
+
 export function isSupabasePublicConfigured() {
   return getSupabasePublicEnvStatus().configured;
 }
@@ -153,6 +166,10 @@ export function isPipedriveConfigured() {
 
 export function isHubSpotConfigured() {
   return getHubSpotEnvStatus().configured;
+}
+
+export function isZohoConfigured() {
+  return getZohoEnvStatus().configured;
 }
 
 export function getSupabaseFallbackMessage() {
