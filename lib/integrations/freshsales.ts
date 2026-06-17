@@ -81,6 +81,13 @@ function getRequiredRedirectUri() {
   return env.freshsalesRedirectUri;
 }
 
+function resolveRedirectUri(override?: string | null) {
+  if (typeof override === "string" && override.trim().length > 0) {
+    return override.trim();
+  }
+  return getRequiredRedirectUri();
+}
+
 function getRequiredScopes() {
   if (!isFreshsalesConfigured() || !env.freshsalesScopes) {
     throw new Error("Freshsales OAuth env vars are missing.");
@@ -303,43 +310,43 @@ async function requestFreshsalesToken(params: URLSearchParams, step: "token_exch
   throw lastError instanceof Error ? lastError : new Error("Freshsales token request failed.");
 }
 
-export function buildFreshsalesAuthorizationUrl(state: string) {
+export function buildFreshsalesAuthorizationUrl(state: string, redirectUriOverride?: string | null) {
   const url = new URL(`${getRequiredAuthBaseUrl()}/org/oauth/v2/authorize`);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("client_id", getRequiredClientId());
   url.searchParams.set("scope", getRequiredScopes());
-  url.searchParams.set("redirect_uri", getRequiredRedirectUri());
+  url.searchParams.set("redirect_uri", resolveRedirectUri(redirectUriOverride));
   url.searchParams.set("state", state);
   return url;
 }
 
-export function getFreshsalesOAuthDebugInfo(): FreshsalesOAuthDebugInfo {
+export function getFreshsalesOAuthDebugInfo(redirectUriOverride?: string | null): FreshsalesOAuthDebugInfo {
   const scopes = getScopeList(env.freshsalesScopes);
   return {
     authBaseUrlHost: getHost(env.freshsalesAuthBaseUrl || null),
     apiBaseUrlHost: getHost(env.freshsalesApiBaseUrl || null),
-    redirectUri: env.freshsalesRedirectUri || null,
+    redirectUri: resolveRedirectUri(redirectUriOverride),
     scopes,
   };
 }
 
-export async function exchangeFreshsalesCodeForTokens(code: string) {
+export async function exchangeFreshsalesCodeForTokens(code: string, redirectUriOverride?: string | null) {
   return requestFreshsalesToken(
     new URLSearchParams({
       grant_type: "authorization_code",
       code,
-      redirect_uri: getRequiredRedirectUri(),
+      redirect_uri: resolveRedirectUri(redirectUriOverride),
     }),
     "token_exchange",
   );
 }
 
-export async function refreshFreshsalesAccessToken(refreshToken: string) {
+export async function refreshFreshsalesAccessToken(refreshToken: string, redirectUriOverride?: string | null) {
   return requestFreshsalesToken(
     new URLSearchParams({
       grant_type: "refresh_token",
       refresh_token: refreshToken,
-      redirect_uri: getRequiredRedirectUri(),
+      redirect_uri: resolveRedirectUri(redirectUriOverride),
     }),
     "token_refresh",
   );

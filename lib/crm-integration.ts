@@ -1475,13 +1475,15 @@ export async function connectWorkspaceFreshsalesOAuthProvider({
   workspaceId,
   userId,
   code,
+  redirectUri,
 }: {
   admin: SupabaseAdmin;
   workspaceId: string;
   userId: string;
   code: string;
+  redirectUri?: string | null;
 }) {
-  const oauthDebug = getFreshsalesOAuthDebugInfo();
+  const oauthDebug = getFreshsalesOAuthDebugInfo(redirectUri);
   console.info(
     "[freshsales-oauth]",
     JSON.stringify({
@@ -1497,7 +1499,7 @@ export async function connectWorkspaceFreshsalesOAuthProvider({
   );
 
   try {
-    const token = await exchangeFreshsalesCodeForTokens(code);
+    const token = await exchangeFreshsalesCodeForTokens(code, redirectUri);
     const tokenMetadata = getFreshsalesTokenMetadata(token);
 
     const saved = await connectWorkspaceCrmProvider({
@@ -1514,6 +1516,7 @@ export async function connectWorkspaceFreshsalesOAuthProvider({
         tokenType: tokenMetadata.tokenType,
         apiBaseUrl: env.freshsalesApiBaseUrl || null,
         authBaseUrl: env.freshsalesAuthBaseUrl || null,
+        redirectUri: redirectUri || env.freshsalesRedirectUri || null,
       },
     });
 
@@ -1949,7 +1952,8 @@ async function refreshFreshsalesToken({
     throw new Error("Freshsales OAuth env vars are missing.");
   }
 
-  const refreshed = await refreshFreshsalesAccessToken(refreshToken).catch((error) => {
+  const redirectUri = getFirstString(connection.metadata_json.redirect_uri, env.freshsalesRedirectUri);
+  const refreshed = await refreshFreshsalesAccessToken(refreshToken, redirectUri).catch((error) => {
     const diagnostic = getFreshsalesErrorDetails(error);
     throw Object.assign(
       new Error("Freshsales token refresh failed."),
@@ -1990,6 +1994,7 @@ async function refreshFreshsalesToken({
       metadata_json: {
         ...connection.metadata_json,
         auth_type: "oauth",
+        ...(redirectUri ? { redirect_uri: redirectUri } : {}),
       },
       last_synced_at: new Date().toISOString(),
       status: "connected",

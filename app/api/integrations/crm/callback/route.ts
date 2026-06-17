@@ -22,6 +22,10 @@ function buildIntegrationsUrl(request: NextRequest) {
   return new URL("/workspace/settings?section=integrations", getAppOrigin(request));
 }
 
+function getFreshsalesCallbackUrl(request: NextRequest) {
+  return new URL("/api/integrations/freshsales/callback", getAppOrigin(request)).toString();
+}
+
 function clearOauthCookies(response: NextResponse) {
   response.cookies.delete("crm_oauth_state");
   response.cookies.delete("crm_oauth_next");
@@ -63,7 +67,7 @@ export async function GET(request: NextRequest) {
     (nextCookie?.startsWith("/") ? nextCookie : "/workspace/settings?section=integrations");
 
   if (statePayload?.provider === "freshsales" || providerCookie === "freshsales") {
-    const debug = getFreshsalesOAuthDebugInfo();
+    const debug = getFreshsalesOAuthDebugInfo(getFreshsalesCallbackUrl(request));
     console.info(
       "[freshsales-oauth]",
       JSON.stringify({
@@ -196,6 +200,7 @@ export async function GET(request: NextRequest) {
           workspaceId,
           userId: user.id,
           code,
+          redirectUri: getFreshsalesCallbackUrl(request),
         });
         break;
       default:

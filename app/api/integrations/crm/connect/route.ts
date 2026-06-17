@@ -57,6 +57,10 @@ function getProviderConnectUrl(provider: CrmProvider, state: string) {
   }
 }
 
+function getFreshsalesCallbackUrl(request: NextRequest) {
+  return new URL("/api/integrations/freshsales/callback", getAppOrigin(request)).toString();
+}
+
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -120,9 +124,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const oauthUrl = getProviderConnectUrl(provider, state);
+    const oauthUrl =
+      provider === "freshsales"
+        ? buildFreshsalesAuthorizationUrl(state, getFreshsalesCallbackUrl(request))
+        : getProviderConnectUrl(provider, state);
     if (provider === "freshsales") {
-      const debug = getFreshsalesOAuthDebugInfo();
+      const debug = getFreshsalesOAuthDebugInfo(getFreshsalesCallbackUrl(request));
       console.info(
         "[freshsales-oauth]",
         JSON.stringify({
@@ -177,7 +184,7 @@ export async function GET(request: NextRequest) {
     logRouteError("crm connect", error);
     const integrationsUrl = buildIntegrationsUrl(request);
     if (provider === "freshsales") {
-      const debug = getFreshsalesOAuthDebugInfo();
+      const debug = getFreshsalesOAuthDebugInfo(getFreshsalesCallbackUrl(request));
       console.error(
         "[freshsales-oauth]",
         JSON.stringify({
