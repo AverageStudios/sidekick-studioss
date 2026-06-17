@@ -8,13 +8,18 @@ import {
   connectWorkspaceZohoOAuthProvider,
 } from "@/lib/crm-integration";
 import { env } from "@/lib/env";
+import { getFreshsalesOAuthDebugInfo } from "@/lib/integrations/freshsales";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 import { logRouteError } from "@/lib/api-security";
 import { checkRateLimit, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
 
-function buildIntegrationsUrl() {
-  return new URL("/workspace/settings?section=integrations", env.appUrl);
+function getAppOrigin(request: NextRequest) {
+  return request.nextUrl.origin || env.appUrl;
+}
+
+function buildIntegrationsUrl(request: NextRequest) {
+  return new URL("/workspace/settings?section=integrations", getAppOrigin(request));
 }
 
 function clearOauthCookies(response: NextResponse) {
@@ -28,7 +33,7 @@ const CRM_OAUTH_RATE_LIMIT_MESSAGE =
   "You've tried connecting this CRM too many times in a short period. Please wait a few minutes and try again.";
 
 export async function GET(request: NextRequest) {
-  const integrationsUrl = buildIntegrationsUrl();
+  const integrationsUrl = buildIntegrationsUrl(request);
   const code = request.nextUrl.searchParams.get("code");
   const providerError = request.nextUrl.searchParams.get("error");
   if (providerError) {
@@ -48,9 +53,33 @@ export async function GET(request: NextRequest) {
   const workspaceCookie = request.cookies.get("crm_oauth_workspace")?.value;
   const providerCookie = request.cookies.get("crm_oauth_provider")?.value;
   const statePayload = parseCrmOAuthState(state || stateCookie);
+  const stateValid = Boolean(
+    statePayload &&
+      !(state && stateCookie && state !== stateCookie) &&
+      !(providerCookie && statePayload.provider !== providerCookie),
+  );
   const safeNext =
     statePayload?.next ||
     (nextCookie?.startsWith("/") ? nextCookie : "/workspace/settings?section=integrations");
+
+  if (statePayload?.provider === "freshsales" || providerCookie === "freshsales") {
+    const debug = getFreshsalesOAuthDebugInfo();
+    console.info(
+      "[freshsales-oauth]",
+      JSON.stringify({
+        provider: "freshsales",
+        step: "callback_received",
+        workspaceId: statePayload?.workspaceId || workspaceCookie || null,
+        authBaseUrlHost: debug.authBaseUrlHost,
+        redirectUri: debug.redirectUri,
+        scopes: debug.scopes,
+        callbackHasCode: Boolean(code),
+        callbackStateValid: stateValid,
+        providerError: providerError || null,
+        requestOrigin: getAppOrigin(request),
+      }),
+    );
+  }
 
   if (
     !code ||
@@ -69,7 +98,7 @@ export async function GET(request: NextRequest) {
 
   const user = await getCurrentUser();
   if (!user) {
-    const loginUrl = new URL("/login", env.appUrl);
+    const loginUrl = new URL("/login", getAppOrigin(request));
     loginUrl.searchParams.set("error", "Sign in before connecting a CRM.");
     const response = NextResponse.redirect(loginUrl);
     clearOauthCookies(response);
@@ -173,14 +202,50 @@ export async function GET(request: NextRequest) {
         throw new Error(`${statePayload.provider} callback handling is not implemented yet.`);
     }
 
-    const redirectUrl = new URL(safeNext, env.appUrl);
+    const redirectUrl = new URL(safeNext, getAppOrigin(request));
     redirectUrl.searchParams.set("saved", `${statePayload.provider} connected`);
     const response = NextResponse.redirect(redirectUrl);
     clearOauthCookies(response);
     return response;
   } catch (error) {
     logRouteError("crm callback", error);
-    integrationsUrl.searchParams.set("error", "CRM connection failed. Please try again.");
+    if (statePayload.provider === "freshsales") {
+      const diagnosticError = error as Error & {
+        status?: number;
+        category?: string | null;
+        code?: string | null;
+        safeCategory?: string | null;
+      };
+      console.error(
+        "[freshsales-oauth]",
+        JSON.stringify({
+          provider: "freshsales",
+          step: "callback_failed",
+          workspaceId,
+          userId: user.id,
+          status: typeof diagnosticError.status === "number" ? diagnosticError.status : null,
+          category: typeof diagnosticError.category === "string" ? diagnosticError.category : null,
+          code: typeof diagnosticError.code === "string" ? diagnosticError.code : null,
+          safeCategory: typeof diagnosticError.safeCategory === "string" ? diagnosticError.safeCategory : null,
+          providerConstraintFailure:
+            error instanceof Error &&
+            (error.message.includes("workspace_provider_connections_provider_check") ||
+              error.message.includes("029_freshsales_crm_provider_support.sql")),
+        }),
+      );
+      const message =
+        error instanceof Error && error.message.includes("029_freshsales_crm_provider_support.sql")
+          ? "Freshsales connection failed because database migration 029 is not applied yet."
+          : error instanceof Error &&
+              (error.message.includes("redirect") ||
+                error.message.includes("invalid_client") ||
+                error.message.includes("invalid_grant"))
+            ? "Freshsales connection failed. Check your Freshworks OAuth credentials and redirect URL."
+            : "Freshsales connection failed. Please try again.";
+      integrationsUrl.searchParams.set("error", message);
+    } else {
+      integrationsUrl.searchParams.set("error", "CRM connection failed. Please try again.");
+    }
     const response = NextResponse.redirect(integrationsUrl);
     clearOauthCookies(response);
     return response;

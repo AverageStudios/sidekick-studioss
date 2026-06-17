@@ -41,6 +41,13 @@ export type FreshsalesProviderError = Error & {
   apiDomainHost?: string | null;
 };
 
+type FreshsalesOAuthDebugInfo = {
+  authBaseUrlHost: string | null;
+  apiBaseUrlHost: string | null;
+  redirectUri: string | null;
+  scopes: string[];
+};
+
 function createFreshsalesProviderError(
   message: string,
   fields: Partial<
@@ -123,6 +130,14 @@ function getApiHost(url: string | null | undefined) {
 function getScopeList(value: unknown) {
   if (typeof value !== "string") return [];
   return Array.from(new Set(value.split(/[,\s]+/).map((entry) => entry.trim()).filter(Boolean)));
+}
+
+function getHost(value: string | null | undefined) {
+  try {
+    return value ? new URL(value).host : null;
+  } catch {
+    return null;
+  }
 }
 
 function getErrorMessage(payload: FreshsalesErrorEnvelope, fallback: string) {
@@ -255,9 +270,33 @@ async function requestFreshsalesToken(params: URLSearchParams, step: "token_exch
       if (!payload.access_token) {
         throw new Error("Freshsales did not return an access token.");
       }
+      console.info(
+        "[freshsales-oauth]",
+        JSON.stringify({
+          provider: "freshsales",
+          step,
+          tokenUrlHost: getHost(url),
+          status: 200,
+          refreshTokenReturned: Boolean(payload.refresh_token),
+          scopeCount: getScopeList(payload.scope).length,
+        }),
+      );
       return payload;
     } catch (error) {
       lastError = error;
+      const providerError = error as FreshsalesProviderError;
+      console.error(
+        "[freshsales-oauth]",
+        JSON.stringify({
+          provider: "freshsales",
+          step,
+          tokenUrlHost: getHost(url),
+          status: typeof providerError?.status === "number" ? providerError.status : null,
+          code: typeof providerError?.code === "string" ? providerError.code : null,
+          category: typeof providerError?.category === "string" ? providerError.category : null,
+          safeCategory: typeof providerError?.safeCategory === "string" ? providerError.safeCategory : null,
+        }),
+      );
     }
   }
 
@@ -272,6 +311,16 @@ export function buildFreshsalesAuthorizationUrl(state: string) {
   url.searchParams.set("redirect_uri", getRequiredRedirectUri());
   url.searchParams.set("state", state);
   return url;
+}
+
+export function getFreshsalesOAuthDebugInfo(): FreshsalesOAuthDebugInfo {
+  const scopes = getScopeList(env.freshsalesScopes);
+  return {
+    authBaseUrlHost: getHost(env.freshsalesAuthBaseUrl || null),
+    apiBaseUrlHost: getHost(env.freshsalesApiBaseUrl || null),
+    redirectUri: env.freshsalesRedirectUri || null,
+    scopes,
+  };
 }
 
 export async function exchangeFreshsalesCodeForTokens(code: string) {

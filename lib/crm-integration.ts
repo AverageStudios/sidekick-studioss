@@ -12,6 +12,7 @@ import {
   createOrUpdateFreshsalesTestLead,
   exchangeFreshsalesCodeForTokens,
   getFreshsalesAccountInfo,
+  getFreshsalesOAuthDebugInfo,
   getFreshsalesErrorDetails,
   getFreshsalesTokenMetadata,
   refreshFreshsalesAccessToken,
@@ -1480,25 +1481,77 @@ export async function connectWorkspaceFreshsalesOAuthProvider({
   userId: string;
   code: string;
 }) {
-  const token = await exchangeFreshsalesCodeForTokens(code);
-  const tokenMetadata = getFreshsalesTokenMetadata(token);
+  const oauthDebug = getFreshsalesOAuthDebugInfo();
+  console.info(
+    "[freshsales-oauth]",
+    JSON.stringify({
+      provider: "freshsales",
+      step: "token_exchange_start",
+      workspaceId,
+      userId,
+      authBaseUrlHost: oauthDebug.authBaseUrlHost,
+      redirectUri: oauthDebug.redirectUri,
+      scopeCount: oauthDebug.scopes.length,
+      scopes: oauthDebug.scopes,
+    }),
+  );
 
-  return connectWorkspaceCrmProvider({
-    admin,
-    workspaceId,
-    userId,
-    provider: "freshsales",
-    accessToken: normalizeAccessToken(token.access_token || ""),
-    metadata: {
-      authType: "oauth",
-      scope: token.scope || tokenMetadata.scopes,
-      refreshToken: tokenMetadata.refreshToken,
-      expiresIn: tokenMetadata.expiresIn,
-      tokenType: tokenMetadata.tokenType,
-      apiBaseUrl: env.freshsalesApiBaseUrl || null,
-      authBaseUrl: env.freshsalesAuthBaseUrl || null,
-    },
-  });
+  try {
+    const token = await exchangeFreshsalesCodeForTokens(code);
+    const tokenMetadata = getFreshsalesTokenMetadata(token);
+
+    const saved = await connectWorkspaceCrmProvider({
+      admin,
+      workspaceId,
+      userId,
+      provider: "freshsales",
+      accessToken: normalizeAccessToken(token.access_token || ""),
+      metadata: {
+        authType: "oauth",
+        scope: token.scope || tokenMetadata.scopes,
+        refreshToken: tokenMetadata.refreshToken,
+        expiresIn: tokenMetadata.expiresIn,
+        tokenType: tokenMetadata.tokenType,
+        apiBaseUrl: env.freshsalesApiBaseUrl || null,
+        authBaseUrl: env.freshsalesAuthBaseUrl || null,
+      },
+    });
+
+    console.info(
+      "[freshsales-oauth]",
+      JSON.stringify({
+        provider: "freshsales",
+        step: "connection_saved",
+        workspaceId,
+        userId,
+        dbSaveSuccess: true,
+        connectionId: saved.id,
+      }),
+    );
+
+    return saved;
+  } catch (error) {
+    const diagnostic = getCrmDiagnostic(error);
+    console.error(
+      "[freshsales-oauth]",
+      JSON.stringify({
+        provider: "freshsales",
+        step: "connection_failed",
+        workspaceId,
+        userId,
+        dbSaveSuccess: false,
+        status: diagnostic.status,
+        category: diagnostic.category,
+        code: diagnostic.code,
+        safeCategory: diagnostic.safeCategory,
+        message:
+          typeof diagnostic.message === "string" && diagnostic.message.includes("029_freshsales_crm_provider_support.sql")
+            ? "migration_029_required"
+            : "connection_failed",
+      }),
+    );
+    throw error;
+  }
 }
 
 export async function disconnectWorkspaceCrmProvider({
