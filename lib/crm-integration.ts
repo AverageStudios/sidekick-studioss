@@ -1,6 +1,6 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { decryptCrmSecret, decryptEncryptedSecret, encryptCrmSecret } from "@/lib/crm-security";
-import { env, isGhlConfigured, isHubSpotConfigured, isZohoConfigured } from "@/lib/env";
+import { env, isCrmProviderDebugEnabled, isGhlConfigured, isHubSpotConfigured, isZohoConfigured } from "@/lib/env";
 import {
   createOrUpdateHubSpotContact,
   exchangeHubSpotCodeForTokens,
@@ -18,6 +18,7 @@ import {
 import {
   createZohoLead,
   exchangeZohoCodeForTokens,
+  getZohoErrorDetails,
   getZohoOrgInfo,
   getZohoTokenMetadata,
   refreshZohoAccessToken,
@@ -165,6 +166,9 @@ type CrmDiagnosticError = Error & {
   code?: string | null;
   provider?: CrmProvider;
   step?: string;
+  safeCategory?: string | null;
+  apiDomainHost?: string | null;
+  detailApiName?: string | null;
 };
 
 type GoHighLevelOAuthTokenResponse = {
@@ -358,6 +362,9 @@ function getCrmDiagnostic(error: unknown) {
       code: null,
       provider: null,
       step: null,
+      safeCategory: null,
+      apiDomainHost: null,
+      detailApiName: null,
     };
   }
 
@@ -369,6 +376,9 @@ function getCrmDiagnostic(error: unknown) {
     code: typeof crmError.code === "string" ? crmError.code : null,
     provider: typeof crmError.provider === "string" ? crmError.provider : null,
     step: typeof crmError.step === "string" ? crmError.step : null,
+    safeCategory: typeof crmError.safeCategory === "string" ? crmError.safeCategory : null,
+    apiDomainHost: typeof crmError.apiDomainHost === "string" ? crmError.apiDomainHost : null,
+    detailApiName: typeof crmError.detailApiName === "string" ? crmError.detailApiName : null,
   };
 }
 
@@ -384,25 +394,59 @@ export function logCrmTestDeliveryFailure({
   error: unknown;
 }) {
   const diagnostic = getCrmDiagnostic(error);
-  console.error(
-    "[crm-test-delivery]",
-    JSON.stringify({
-      provider,
-      workspaceId,
-      step,
-      status: diagnostic.status,
-      category: diagnostic.category,
-      code: diagnostic.code,
-      errorCategory:
-        diagnostic.status === 401
-          ? "auth"
-          : diagnostic.status === 403
-            ? "scope"
-            : diagnostic.status && diagnostic.status >= 500
-              ? "provider"
-              : "request",
-    }),
-  );
+  const payload = {
+    provider,
+    workspaceId,
+    step,
+    status: diagnostic.status,
+    category: diagnostic.category,
+    code: diagnostic.code,
+    safeCategory: diagnostic.safeCategory,
+    ...(provider === "zoho" && diagnostic.apiDomainHost ? { apiDomainHost: diagnostic.apiDomainHost } : {}),
+    ...(provider === "zoho" && diagnostic.detailApiName ? { detailApiName: diagnostic.detailApiName } : {}),
+    errorCategory:
+      diagnostic.status === 401
+        ? "auth"
+        : diagnostic.status === 403
+          ? "scope"
+          : diagnostic.status && diagnostic.status >= 500
+            ? "provider"
+            : "request",
+  };
+  if (provider === "zoho" || isCrmProviderDebugEnabled()) {
+    console.error("[crm-test-delivery]", JSON.stringify(payload));
+  } else {
+    console.error("[crm-test-delivery]", JSON.stringify({
+      provider: payload.provider,
+      workspaceId: payload.workspaceId,
+      step: payload.step,
+      status: payload.status,
+      category: payload.category,
+      code: payload.code,
+      errorCategory: payload.errorCategory,
+    }));
+  }
+}
+
+export function getCrmTestDeliveryFailureMessage({
+  provider,
+  error,
+}: {
+  provider: CrmProvider;
+  error: unknown;
+}) {
+  if (provider === "zoho") {
+    const diagnostic = getCrmDiagnostic(error);
+    if (
+      diagnostic.safeCategory === "REQUIRED_FIELD_MISSING" ||
+      diagnostic.safeCategory === "VALIDATION_FAILED"
+    ) {
+      return "Zoho rejected the test lead because your Lead layout has required fields SideKick is not sending yet.";
+    }
+  }
+
+  const providerLabel = getCrmProviderLabel(provider);
+  return `Test failed. Please reconnect ${providerLabel} or try again.`;
 }
 
 async function crmFetch<T>(url: string, init: RequestInit & { headers?: HeadersInit }, errorPrefix: string) {
@@ -1576,9 +1620,24 @@ async function refreshZohoToken({
     throw new Error("Zoho OAuth env vars are missing.");
   }
 
+  const accountsServer = getFirstString(connection.metadata_json.accounts_server, env.zohoAccountsUrl);
   const refreshed = await refreshZohoAccessToken({
     refreshToken,
-    accountsUrl: getFirstString(connection.metadata_json.accounts_server, env.zohoAccountsUrl),
+    accountsUrl: accountsServer,
+  }).catch((error) => {
+    const diagnostic = getZohoErrorDetails(error);
+    throw Object.assign(
+      new Error("Zoho token refresh failed."),
+      {
+        provider: "zoho" as const,
+        step: "token_refresh",
+        status: diagnostic.status ?? undefined,
+        category: diagnostic.category,
+        code: diagnostic.code,
+        safeCategory: diagnostic.safeCategory || "REFRESH_FAILED",
+        apiDomainHost: getFirstString(connection.metadata_json.api_domain)?.replace(/^https?:\/\//, "").replace(/\/.*$/, "") || null,
+      } satisfies Partial<CrmDiagnosticError>,
+    );
   });
   const metadata = getZohoTokenMetadata(refreshed);
   const accessPayload = encryptCrmSecret(refreshed.access_token || "");
@@ -1628,7 +1687,11 @@ async function getZohoAccessToken({
 }) {
   const accessToken = decryptCrmSecret(connection);
   if (!accessToken) {
-    throw new Error("Zoho token is unavailable.");
+    throw Object.assign(new Error("Zoho token is unavailable."), {
+      provider: "zoho" as const,
+      step: "token_load",
+      safeCategory: "AUTH_FAILED",
+    } satisfies Partial<CrmDiagnosticError>);
   }
 
   const apiDomain = getFirstString(connection.metadata_json.api_domain) || "https://www.zohoapis.com";
@@ -1646,7 +1709,12 @@ async function getZohoAccessToken({
   });
 
   if (!refreshToken) {
-    throw new Error("Zoho refresh token is missing. Reconnect Zoho CRM.");
+    throw Object.assign(new Error("Zoho refresh token is missing. Reconnect Zoho CRM."), {
+      provider: "zoho" as const,
+      step: "token_refresh",
+      safeCategory: "REFRESH_FAILED",
+      apiDomainHost: apiDomain.replace(/^https?:\/\//, "").replace(/\/.*$/, ""),
+    } satisfies Partial<CrmDiagnosticError>);
   }
 
   return refreshZohoToken({
@@ -1654,7 +1722,12 @@ async function getZohoAccessToken({
     connection,
     refreshToken,
   }).catch(() => {
-    throw new Error("Zoho token is invalid or expired. Reconnect Zoho CRM.");
+    throw Object.assign(new Error("Zoho token is invalid or expired. Reconnect Zoho CRM."), {
+      provider: "zoho" as const,
+      step: "token_refresh",
+      safeCategory: "REFRESH_FAILED",
+      apiDomainHost: apiDomain.replace(/^https?:\/\//, "").replace(/\/.*$/, ""),
+    } satisfies Partial<CrmDiagnosticError>);
   });
 }
 
@@ -2025,6 +2098,22 @@ export async function sendWorkspaceZohoTestLead({
     throw new Error("Zoho CRM is not connected for this workspace.");
   }
 
+  const requiredScopes = ["ZohoCRM.modules.Leads.CREATE"];
+  const missingScopes = requiredScopes.filter((scope) => !connection.scopes.includes(scope));
+  if (missingScopes.length) {
+    throw Object.assign(new Error("Zoho CRM connection is missing required lead scopes."), {
+      provider: "zoho" as const,
+      step: "scope_check",
+      safeCategory: "INVALID_SCOPE",
+      code: "MISSING_REQUIRED_SCOPE",
+      category: "scope",
+      apiDomainHost:
+        getFirstString(connection.metadata_json.api_domain, "https://www.zohoapis.com")
+          ?.replace(/^https?:\/\//, "")
+          .replace(/\/.*$/, "") || null,
+    } satisfies Partial<CrmDiagnosticError>);
+  }
+
   const { accessToken, apiDomain } = await getZohoAccessToken({
     admin,
     connection,
@@ -2040,6 +2129,21 @@ export async function sendWorkspaceZohoTestLead({
       leadSource: CRM_TEST_LEAD.source,
       company: "SideKick Studioss Test",
     },
+  }).catch((error) => {
+    const diagnostic = getZohoErrorDetails(error);
+    throw Object.assign(
+      new Error(error instanceof Error ? error.message : "Zoho lead creation failed."),
+      {
+        provider: "zoho" as const,
+        step: diagnostic.step || "create_lead",
+        status: diagnostic.status ?? undefined,
+        category: diagnostic.category,
+        code: diagnostic.code,
+        safeCategory: diagnostic.safeCategory,
+        apiDomainHost: diagnostic.apiDomainHost || apiDomain.replace(/^https?:\/\//, "").replace(/\/.*$/, ""),
+        detailApiName: diagnostic.detailApiName,
+      } satisfies Partial<CrmDiagnosticError>,
+    );
   });
 
   return {

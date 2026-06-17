@@ -39,6 +39,7 @@ export const env = {
   metaGraphApiVersion: readEnv("META_GRAPH_API_VERSION") || "v25.0",
   metaTokenEncryptionKey: readEnv("META_TOKEN_ENCRYPTION_KEY"),
   crmTokenEncryptionKey: readEnv("CRM_TOKEN_ENCRYPTION_KEY"),
+  crmProviderDebug: readEnv("CRM_PROVIDER_DEBUG"),
   crmOAuthRedirectUri: readEnv("CRM_OAUTH_REDIRECT_URI") || readEnv("GHL_REDIRECT_URI"),
   ghlClientId: readEnv("GHL_CLIENT_ID"),
   ghlClientSecret: readEnv("GHL_CLIENT_SECRET"),
@@ -170,6 +171,11 @@ export function isHubSpotConfigured() {
 
 export function isZohoConfigured() {
   return getZohoEnvStatus().configured;
+}
+
+export function isCrmProviderDebugEnabled() {
+  const value = env.crmProviderDebug?.toLowerCase();
+  return value === "1" || value === "true";
 }
 
 export function getSupabaseFallbackMessage() {

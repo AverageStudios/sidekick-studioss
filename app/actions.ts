@@ -57,6 +57,7 @@ import {
   connectWorkspaceCrmProvider,
   disconnectWorkspaceCrmProvider,
   getCrmProviderLabel,
+  getCrmTestDeliveryFailureMessage,
   isCrmTestDeliverySupported,
   logCrmTestDeliveryFailure,
   processLeadCrmDelivery,
@@ -3728,12 +3729,14 @@ export async function testCrmDeliveryAction(formData: FormData) {
       step: "server_action_dispatch",
       error,
     });
-    const providerLabel = getCrmProviderLabel(provider);
     redirect(
       appendQueryParam(
         redirectTo,
         "error",
-        `Test failed. Please reconnect ${providerLabel} or try again.`,
+        getCrmTestDeliveryFailureMessage({
+          provider,
+          error,
+        }),
       ),
     );
   }

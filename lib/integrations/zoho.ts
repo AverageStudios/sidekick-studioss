@@ -30,16 +30,71 @@ export type ZohoProviderError = Error & {
   code?: string | null;
   provider?: "zoho";
   step?: string;
+  safeCategory?: string | null;
+  apiDomainHost?: string | null;
+  detailApiName?: string | null;
 };
 
 function createZohoProviderError(
   message: string,
-  fields: Partial<Pick<ZohoProviderError, "status" | "category" | "code" | "step">>,
+  fields: Partial<
+    Pick<ZohoProviderError, "status" | "category" | "code" | "step" | "safeCategory" | "apiDomainHost" | "detailApiName">
+  >,
 ) {
   return Object.assign(new Error(message), {
     provider: "zoho" as const,
     ...fields,
   }) as ZohoProviderError;
+}
+
+function getApiDomainHost(value: string | null | undefined) {
+  try {
+    return new URL(getApiDomain(value)).host;
+  } catch {
+    return null;
+  }
+}
+
+function classifyZohoError({
+  status,
+  code,
+  category,
+  step,
+}: {
+  status?: number | null;
+  code?: string | null;
+  category?: string | null;
+  step?: string | null;
+}) {
+  const normalizedCode = typeof code === "string" ? code.trim().toUpperCase() : "";
+  const normalizedCategory = typeof category === "string" ? category.trim().toUpperCase() : "";
+  const normalizedStep = typeof step === "string" ? step.trim().toLowerCase() : "";
+
+  if (normalizedStep === "token_refresh" && (status === 400 || status === 401)) {
+    return "REFRESH_FAILED";
+  }
+
+  if (status === 401) return "AUTH_FAILED";
+  if (normalizedCode === "OAUTH_SCOPE_MISMATCH" || normalizedCode === "INVALID_OAUTHSCOPE") {
+    return "INVALID_SCOPE";
+  }
+  if (normalizedCode === "AUTHORIZATION_FAILED" || normalizedCategory === "NO_PERMISSION" || status === 403) {
+    return "PERMISSION_DENIED";
+  }
+  if (normalizedCode === "INVALID_URL_PATTERN") {
+    return "INVALID_DOMAIN";
+  }
+  if (normalizedCode === "REQUIRED_FIELD_MISSING") {
+    return "REQUIRED_FIELD_MISSING";
+  }
+  if (normalizedCode === "INVALID_MODULE" || normalizedCode === "MODULE_NOT_SUPPORTED") {
+    return "MODULE_NOT_AVAILABLE";
+  }
+  if (normalizedCode === "INVALID_DATA" || normalizedCategory === "ERROR") {
+    return "VALIDATION_FAILED";
+  }
+
+  return "UNKNOWN_PROVIDER_ERROR";
 }
 
 function getRequiredClientId() {
@@ -91,6 +146,39 @@ function getAccountsUrl(value: string | null | undefined) {
   return (base || getRequiredAccountsUrl()).replace(/\/+$/, "");
 }
 
+function extractZohoResponseError(payload: Record<string, unknown> & { data?: unknown[] }) {
+  const firstDataError = Array.isArray(payload.data)
+    ? ((payload.data?.[0] as Record<string, unknown> | undefined) ?? null)
+    : null;
+  const detailRecord =
+    firstDataError?.details && typeof firstDataError.details === "object"
+      ? (firstDataError.details as Record<string, unknown>)
+      : null;
+
+  return {
+    firstDataError,
+    code:
+      typeof payload.code === "string"
+        ? payload.code
+        : typeof firstDataError?.code === "string"
+          ? firstDataError.code
+          : null,
+    category:
+      typeof payload.error === "string"
+        ? payload.error
+        : typeof firstDataError?.status === "string"
+          ? firstDataError.status
+          : null,
+    message:
+      typeof payload.message === "string"
+        ? payload.message
+        : typeof firstDataError?.message === "string"
+          ? firstDataError.message
+          : null,
+    detailApiName: typeof detailRecord?.api_name === "string" ? detailRecord.api_name : null,
+  };
+}
+
 async function zohoRequest<T>({
   url,
   method = "GET",
@@ -125,24 +213,19 @@ async function zohoRequest<T>({
     : ({} as Record<string, unknown> & T);
 
   if (!response.ok) {
-    const firstDataError = Array.isArray((payload as { data?: unknown[] }).data)
-      ? ((payload as { data?: Array<Record<string, unknown>> }).data?.[0] ?? null)
-      : null;
+    const extracted = extractZohoResponseError(payload as Record<string, unknown> & { data?: unknown[] });
     throw createZohoProviderError(`${errorPrefix}: ${response.status} ${response.statusText}`, {
       status: response.status,
-      category:
-        typeof payload.error === "string"
-          ? payload.error
-          : typeof firstDataError?.status === "string"
-            ? firstDataError.status
-            : null,
-      code:
-        typeof payload.code === "string"
-          ? payload.code
-          : typeof firstDataError?.code === "string"
-            ? firstDataError.code
-            : null,
+      category: extracted.category,
+      code: extracted.code,
       step,
+      safeCategory: classifyZohoError({
+        status: response.status,
+        code: extracted.code,
+        category: extracted.category,
+        step,
+      }),
+      detailApiName: extracted.detailApiName,
     });
   }
 
@@ -243,6 +326,39 @@ export function getZohoTokenMetadata(token: ZohoOAuthTokenResponse) {
   };
 }
 
+export function getZohoErrorDetails(error: unknown) {
+  if (!(error instanceof Error)) {
+    return {
+      status: null,
+      category: null,
+      code: null,
+      step: null,
+      safeCategory: "UNKNOWN_PROVIDER_ERROR",
+      apiDomainHost: null,
+      detailApiName: null,
+    };
+  }
+
+  const providerError = error as ZohoProviderError;
+  return {
+    status: typeof providerError.status === "number" ? providerError.status : null,
+    category: typeof providerError.category === "string" ? providerError.category : null,
+    code: typeof providerError.code === "string" ? providerError.code : null,
+    step: typeof providerError.step === "string" ? providerError.step : null,
+    safeCategory:
+      typeof providerError.safeCategory === "string" && providerError.safeCategory.trim()
+        ? providerError.safeCategory
+        : classifyZohoError({
+            status: typeof providerError.status === "number" ? providerError.status : null,
+            code: typeof providerError.code === "string" ? providerError.code : null,
+            category: typeof providerError.category === "string" ? providerError.category : null,
+            step: typeof providerError.step === "string" ? providerError.step : null,
+          }),
+    apiDomainHost: typeof providerError.apiDomainHost === "string" ? providerError.apiDomainHost : null,
+    detailApiName: typeof providerError.detailApiName === "string" ? providerError.detailApiName : null,
+  };
+}
+
 export async function getZohoOrgInfo({
   accessToken,
   apiDomain,
@@ -284,6 +400,7 @@ export async function createZohoLead({
     company: string;
   };
 }) {
+  const apiDomainHost = getApiDomainHost(apiDomain);
   const payload = await zohoRequest<ZohoCreateLeadResponse>({
     url: `${getApiDomain(apiDomain)}/crm/v8/Leads`,
     method: "POST",
@@ -316,11 +433,27 @@ export async function createZohoLead({
       : null;
 
   if (firstResult?.status !== "success" || !leadId) {
-    throw createZohoProviderError("Zoho lead creation failed.", {
+    const detailRecord =
+      firstResult?.details && typeof firstResult.details === "object"
+        ? (firstResult.details as Record<string, unknown>)
+        : null;
+    throw createZohoProviderError(
+      typeof firstResult?.message === "string" && firstResult.message.trim()
+        ? `Zoho lead creation failed: ${firstResult.message.trim()}`
+        : "Zoho lead creation failed.",
+      {
       status: 400,
       category: typeof firstResult?.status === "string" ? firstResult.status : null,
       code: typeof firstResult?.code === "string" ? firstResult.code : null,
       step: "create_lead",
+      safeCategory: classifyZohoError({
+        status: 400,
+        code: typeof firstResult?.code === "string" ? firstResult.code : null,
+        category: typeof firstResult?.status === "string" ? firstResult.status : null,
+        step: "create_lead",
+      }),
+      apiDomainHost,
+      detailApiName: typeof detailRecord?.api_name === "string" ? detailRecord.api_name : null,
     });
   }
 
