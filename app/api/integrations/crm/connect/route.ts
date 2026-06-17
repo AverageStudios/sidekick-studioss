@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { createCrmOAuthState } from "@/lib/crm-oauth-state";
 import { env, isGhlConfigured } from "@/lib/env";
+import { buildFreshsalesAuthorizationUrl } from "@/lib/integrations/freshsales";
 import { buildHubSpotAuthorizationUrl } from "@/lib/integrations/hubspot";
 import { buildZohoAuthorizationUrl } from "@/lib/integrations/zoho";
 import { CrmProvider } from "@/types";
@@ -24,6 +25,7 @@ function resolveProvider(value: string | null): CrmProvider | null {
     case "pipedrive":
     case "salesforce":
     case "zoho":
+    case "freshsales":
       return value;
     default:
       return null;
@@ -44,6 +46,8 @@ function getProviderConnectUrl(provider: CrmProvider, state: string) {
       return buildHubSpotAuthorizationUrl(state);
     case "zoho":
       return buildZohoAuthorizationUrl(state);
+    case "freshsales":
+      return buildFreshsalesAuthorizationUrl(state);
     default:
       throw new Error(`${provider} connect flow is not implemented yet.`);
   }

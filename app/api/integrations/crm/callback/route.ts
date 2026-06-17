@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { parseCrmOAuthState } from "@/lib/crm-oauth-state";
 import {
+  connectWorkspaceFreshsalesOAuthProvider,
   connectWorkspaceGoHighLevelOAuthProvider,
   connectWorkspaceHubSpotOAuthProvider,
   connectWorkspaceZohoOAuthProvider,
@@ -158,6 +159,14 @@ export async function GET(request: NextRequest) {
           userId: user.id,
           code,
           accountsServer: request.nextUrl.searchParams.get("accounts-server"),
+        });
+        break;
+      case "freshsales":
+        await connectWorkspaceFreshsalesOAuthProvider({
+          admin,
+          workspaceId,
+          userId: user.id,
+          code,
         });
         break;
       default:

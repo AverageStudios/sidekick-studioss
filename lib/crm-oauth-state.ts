@@ -42,6 +42,7 @@ function normalizeProvider(provider: string | null | undefined): CrmProvider | n
     case "pipedrive":
     case "salesforce":
     case "zoho":
+    case "freshsales":
       return provider;
     default:
       return null;

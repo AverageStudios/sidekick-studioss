@@ -33,7 +33,14 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isMetaConfigured } from "@/lib/meta";
 import { getWorkspaceMetaIntegrationState } from "@/lib/meta-integration";
 import { getWorkspaceLeadSyncHealth } from "@/lib/meta-leads";
-import { getGhlEnvStatus, getHubSpotEnvStatus, getPipedriveEnvStatus, getZohoEnvStatus, isSupabaseServerConfigured } from "@/lib/env";
+import {
+  getFreshsalesEnvStatus,
+  getGhlEnvStatus,
+  getHubSpotEnvStatus,
+  getPipedriveEnvStatus,
+  getZohoEnvStatus,
+  isSupabaseServerConfigured,
+} from "@/lib/env";
 
 const workspaceSections = [
   { id: "general", label: "General", icon: Settings2 },
@@ -152,10 +159,12 @@ export default async function WorkspaceSettingsPage({
   const hubspotConnection = crmConnections.find((item) => item.provider === "hubspot") || null;
   const pipedriveConnection = crmConnections.find((item) => item.provider === "pipedrive") || null;
   const zohoConnection = crmConnections.find((item) => item.provider === "zoho") || null;
+  const freshsalesConnection = crmConnections.find((item) => item.provider === "freshsales") || null;
   const ghlEnvStatus = getGhlEnvStatus();
   const hubspotEnvStatus = getHubSpotEnvStatus();
   const pipedriveEnvStatus = getPipedriveEnvStatus();
   const zohoEnvStatus = getZohoEnvStatus();
+  const freshsalesEnvStatus = getFreshsalesEnvStatus();
   const providerDestinations = crmState.destinations.filter((destination) => destination.is_available);
   const canSendCrmTests =
     currentRole === "admin" || workspaceRole === "owner" || workspaceRole === "admin";
@@ -968,6 +977,63 @@ export default async function WorkspaceSettingsPage({
                             )
                           ) : (
                             <p className="mt-3 text-xs text-[var(--muted)]">Connect Zoho CRM to send a test lead.</p>
+                          )}
+                        </div>
+                      </details>
+
+                      <details open={Boolean(freshsalesConnection)} className="group rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)]">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <p className="text-base font-semibold text-[var(--ink)]">Freshsales / Freshworks CRM</p>
+                              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", formatStatusTone(Boolean(freshsalesConnection)))}>
+                                {freshsalesConnection ? "Connected" : "Not connected"}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm text-[var(--muted)]">
+                              Connect Freshsales to send new SideKick leads into Freshworks CRM.
+                            </p>
+                            {freshsalesConnection ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">
+                                {typeof freshsalesConnection.metadata_json.account_host === "string"
+                                  ? freshsalesConnection.metadata_json.account_host
+                                  : freshsalesConnection.provider_user_name || "Freshsales connected"}
+                              </p>
+                            ) : !freshsalesEnvStatus.configured ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">OAuth setup is not configured yet.</p>
+                            ) : null}
+                          </div>
+                          <ChevronDown className="h-4 w-4 shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180" />
+                        </summary>
+
+                        <div className="border-t border-[var(--line)] px-5 py-5">
+                          <div className="flex flex-wrap gap-2">
+                            <Button asChild disabled={!freshsalesEnvStatus.configured}>
+                              <Link href="/api/integrations/freshsales/connect?next=/workspace/settings?section=integrations">
+                                {freshsalesConnection ? "Reconnect" : "Connect Freshsales"}
+                              </Link>
+                            </Button>
+                            {freshsalesConnection && workspaceId && canSendCrmTests && isCrmTestDeliverySupported("freshsales") ? (
+                              <form action={testCrmDeliveryAction}>
+                                <input type="hidden" name="workspaceId" value={workspaceId} />
+                                <input type="hidden" name="provider" value="freshsales" />
+                                <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
+                                <Button type="submit" variant="secondary">Send Test Lead</Button>
+                              </form>
+                            ) : null}
+                            {freshsalesConnection ? (
+                              <form action={disconnectCrmConnectionAction}>
+                                <input type="hidden" name="provider" value="freshsales" />
+                                <Button type="submit" variant="outline">Disconnect</Button>
+                              </form>
+                            ) : null}
+                          </div>
+                          {freshsalesConnection ? (
+                            canSendCrmTests ? null : (
+                              <p className="mt-3 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
+                            )
+                          ) : (
+                            <p className="mt-3 text-xs text-[var(--muted)]">Connect Freshsales to send a test lead.</p>
                           )}
                         </div>
                       </details>

@@ -56,6 +56,12 @@ export const env = {
   zohoRedirectUri: readEnv("ZOHO_REDIRECT_URI"),
   zohoAccountsUrl: readEnv("ZOHO_ACCOUNTS_URL") || "https://accounts.zoho.com",
   zohoScopes: readEnv("ZOHO_SCOPES"),
+  freshsalesClientId: readEnv("FRESHSALES_CLIENT_ID"),
+  freshsalesClientSecret: readEnv("FRESHSALES_CLIENT_SECRET"),
+  freshsalesRedirectUri: readEnv("FRESHSALES_REDIRECT_URI"),
+  freshsalesScopes: readEnv("FRESHSALES_SCOPES"),
+  freshsalesAuthBaseUrl: readEnv("FRESHSALES_AUTH_BASE_URL"),
+  freshsalesApiBaseUrl: readEnv("FRESHSALES_API_BASE_URL"),
 } as const;
 
 export function getSupabasePublicEnvStatus() {
@@ -132,6 +138,21 @@ export function getZohoEnvStatus() {
   };
 }
 
+export function getFreshsalesEnvStatus() {
+  const missingKeys = missing([
+    "FRESHSALES_CLIENT_ID",
+    "FRESHSALES_CLIENT_SECRET",
+    "FRESHSALES_REDIRECT_URI",
+    "FRESHSALES_SCOPES",
+    "FRESHSALES_AUTH_BASE_URL",
+    "FRESHSALES_API_BASE_URL",
+  ]);
+  return {
+    configured: missingKeys.length === 0,
+    missingKeys,
+  };
+}
+
 export function isSupabasePublicConfigured() {
   return getSupabasePublicEnvStatus().configured;
 }
@@ -171,6 +192,10 @@ export function isHubSpotConfigured() {
 
 export function isZohoConfigured() {
   return getZohoEnvStatus().configured;
+}
+
+export function isFreshsalesConfigured() {
+  return getFreshsalesEnvStatus().configured;
 }
 
 export function isCrmProviderDebugEnabled() {

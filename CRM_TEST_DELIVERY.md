@@ -26,6 +26,7 @@ Current test-delivery support:
 - Pipedrive
 - HubSpot
 - Zoho CRM
+- Freshsales / Freshworks CRM
 
 Not available yet:
 
@@ -100,6 +101,27 @@ Required Zoho scopes:
 Success message:
 
 - `Test lead sent to Zoho CRM.`
+
+### Freshsales / Freshworks CRM
+
+Creates:
+
+- Contact
+
+Required Freshsales scopes:
+
+- `freshsales.contacts.create`
+- `freshsales.contacts.edit`
+- `freshsales.contacts.view`
+
+Success message:
+
+- `Test contact sent to Freshsales.`
+
+Connection requirement:
+
+- Freshsales must be connected through OAuth
+- SideKick currently sends the test record as a Contact because the current official Freshsales CRM API documents the Contacts flow clearly for OAuth-backed API access
 
 ## Security notes
 

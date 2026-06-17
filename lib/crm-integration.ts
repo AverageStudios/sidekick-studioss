@@ -1,6 +1,21 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { decryptCrmSecret, decryptEncryptedSecret, encryptCrmSecret } from "@/lib/crm-security";
-import { env, isCrmProviderDebugEnabled, isGhlConfigured, isHubSpotConfigured, isZohoConfigured } from "@/lib/env";
+import {
+  env,
+  isCrmProviderDebugEnabled,
+  isFreshsalesConfigured,
+  isGhlConfigured,
+  isHubSpotConfigured,
+  isZohoConfigured,
+} from "@/lib/env";
+import {
+  createOrUpdateFreshsalesTestLead,
+  exchangeFreshsalesCodeForTokens,
+  getFreshsalesAccountInfo,
+  getFreshsalesErrorDetails,
+  getFreshsalesTokenMetadata,
+  refreshFreshsalesAccessToken,
+} from "@/lib/integrations/freshsales";
 import {
   createOrUpdateHubSpotContact,
   exchangeHubSpotCodeForTokens,
@@ -222,13 +237,23 @@ type ZohoMetadata = {
   accountsServer?: string | null;
 };
 
-const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho"];
+type FreshsalesMetadata = {
+  tokenType?: string | null;
+  expiresIn?: number | string | null;
+  refreshToken?: string | null;
+  scope?: string | string[] | null;
+  apiBaseUrl?: string | null;
+  authBaseUrl?: string | null;
+};
+
+const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho", "freshsales"];
 const CRM_TEST_PROVIDER_LABELS: Record<CrmProvider, string> = {
   gohighlevel: "GoHighLevel",
   hubspot: "HubSpot",
   pipedrive: "Pipedrive",
   salesforce: "Salesforce",
   zoho: "Zoho CRM",
+  freshsales: "Freshsales",
 };
 
 const CRM_TEST_LEAD = {
@@ -250,7 +275,13 @@ export function getCrmProviderLabel(provider: CrmProvider) {
 }
 
 export function isCrmTestDeliverySupported(provider: CrmProvider) {
-  return provider === "gohighlevel" || provider === "pipedrive" || provider === "hubspot" || provider === "zoho";
+  return (
+    provider === "gohighlevel" ||
+    provider === "pipedrive" ||
+    provider === "hubspot" ||
+    provider === "zoho" ||
+    provider === "freshsales"
+  );
 }
 
 function getString(value: unknown) {
@@ -315,11 +346,11 @@ function normalizeCrmDatabaseError(error: { message?: string | null } | null | u
   const message = error?.message || "";
 
   if (message.includes("workspace_provider_connections_provider_check")) {
-    return "CRM providers are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/028_zoho_crm_provider_support.sql, then try connecting again.";
+    return "CRM providers are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/029_freshsales_crm_provider_support.sql, then try connecting again.";
   }
 
   if (message.includes("workspace_provider_assets_provider_check")) {
-    return "CRM provider assets are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/028_zoho_crm_provider_support.sql, then try again.";
+    return "CRM provider assets are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/029_freshsales_crm_provider_support.sql, then try again.";
   }
 
   if (message.includes("workspace_provider_assets_type_check")) {
@@ -405,7 +436,9 @@ export function logCrmTestDeliveryFailure({
     category: diagnostic.category,
     code: diagnostic.code,
     safeCategory: diagnostic.safeCategory,
-    ...(provider === "zoho" && diagnostic.apiDomainHost ? { apiDomainHost: diagnostic.apiDomainHost } : {}),
+    ...((provider === "zoho" || provider === "freshsales") && diagnostic.apiDomainHost
+      ? { apiDomainHost: diagnostic.apiDomainHost }
+      : {}),
     ...(provider === "zoho" && diagnostic.detailApiName ? { detailApiName: diagnostic.detailApiName } : {}),
     errorCategory:
       diagnostic.status === 401
@@ -416,7 +449,7 @@ export function logCrmTestDeliveryFailure({
             ? "provider"
             : "request",
   };
-  if (provider === "zoho" || isCrmProviderDebugEnabled()) {
+  if (provider === "zoho" || provider === "freshsales" || isCrmProviderDebugEnabled()) {
     console.error("[crm-test-delivery]", JSON.stringify(payload));
   } else {
     console.error("[crm-test-delivery]", JSON.stringify({
@@ -445,6 +478,16 @@ export function getCrmTestDeliveryFailureMessage({
       diagnostic.safeCategory === "VALIDATION_FAILED"
     ) {
       return "Zoho rejected the test lead because your Lead layout has required fields SideKick is not sending yet.";
+    }
+  }
+
+  if (provider === "freshsales") {
+    const diagnostic = getCrmDiagnostic(error);
+    if (
+      diagnostic.safeCategory === "REQUIRED_FIELD_MISSING" ||
+      diagnostic.safeCategory === "VALIDATION_FAILED"
+    ) {
+      return "Freshsales rejected the test lead because your CRM layout has required fields SideKick is not sending yet.";
     }
   }
 
@@ -683,6 +726,75 @@ async function validateZohoConnection({
   }
 }
 
+async function validateFreshsalesConnection({
+  accessToken,
+  metadata,
+}: {
+  accessToken: string;
+  metadata?: FreshsalesMetadata;
+}): Promise<ValidatedConnection> {
+  try {
+    const apiBaseUrl = getFirstString(metadata?.apiBaseUrl, env.freshsalesApiBaseUrl);
+    if (!apiBaseUrl) {
+      throw new Error("Freshsales API base URL is missing.");
+    }
+
+    const account = await getFreshsalesAccountInfo({
+      accessToken,
+      apiBaseUrl,
+    });
+    const accountLabel = account.apiHost || "Freshsales CRM";
+
+    return {
+      providerUserId: account.apiHost || accountLabel,
+      providerUserName: accountLabel,
+      tokenType: getFirstString(metadata?.tokenType) || "Token",
+      tokenExpiresAt: buildTokenExpiry(
+        typeof metadata?.expiresIn === "number"
+          ? metadata.expiresIn
+          : typeof metadata?.expiresIn === "string"
+            ? Number(metadata.expiresIn)
+            : undefined,
+      ),
+      refreshToken: getFirstString(metadata?.refreshToken),
+      scopes: getScopeList(metadata?.scope).length
+        ? getScopeList(metadata?.scope)
+        : ["freshsales.contacts.create", "freshsales.contacts.edit", "freshsales.contacts.view"],
+      metadata: {
+        validated_at: new Date().toISOString(),
+        auth_type: "oauth",
+        api_base_url: account.apiBaseUrl,
+        auth_base_url: getFirstString(metadata?.authBaseUrl, env.freshsalesAuthBaseUrl) || null,
+        account_host: account.apiHost,
+        contact_field_count: account.fieldCount,
+      },
+      destinations: [
+        {
+          assetId: "contacts",
+          name: "Freshsales contacts",
+          metadata: {
+            destinationType: "contacts",
+            objectType: "contacts",
+            apiBaseUrl: account.apiBaseUrl,
+          },
+          selected: true,
+        },
+      ],
+    };
+  } catch (error) {
+    const diagnostic = getCrmDiagnostic(error);
+    if (diagnostic.status === 401) {
+      throw new Error("Freshsales token is invalid or expired. Reconnect Freshsales.");
+    }
+
+    if (diagnostic.status === 403) {
+      throw new Error("Freshsales access is missing contact permissions. Reconnect Freshsales with contact scopes enabled.");
+    }
+
+    throw new Error(diagnostic.message || "Freshsales verification could not be completed.");
+  }
+}
+
 async function validateCrmConnection(input: {
   provider: CrmProvider;
   accessToken: string;
@@ -731,6 +843,11 @@ async function validateCrmConnection(input: {
       return validateZohoConnection({
         accessToken: input.accessToken,
         metadata: input.metadata as ZohoMetadata | undefined,
+      });
+    case "freshsales":
+      return validateFreshsalesConnection({
+        accessToken: input.accessToken,
+        metadata: input.metadata as FreshsalesMetadata | undefined,
       });
     default:
       throw new Error(`${input.provider} is not available in this first CRM pass yet.`);
@@ -1352,6 +1469,38 @@ export async function connectWorkspaceZohoOAuthProvider({
   });
 }
 
+export async function connectWorkspaceFreshsalesOAuthProvider({
+  admin,
+  workspaceId,
+  userId,
+  code,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+  userId: string;
+  code: string;
+}) {
+  const token = await exchangeFreshsalesCodeForTokens(code);
+  const tokenMetadata = getFreshsalesTokenMetadata(token);
+
+  return connectWorkspaceCrmProvider({
+    admin,
+    workspaceId,
+    userId,
+    provider: "freshsales",
+    accessToken: normalizeAccessToken(token.access_token || ""),
+    metadata: {
+      authType: "oauth",
+      scope: token.scope || tokenMetadata.scopes,
+      refreshToken: tokenMetadata.refreshToken,
+      expiresIn: tokenMetadata.expiresIn,
+      tokenType: tokenMetadata.tokenType,
+      apiBaseUrl: env.freshsalesApiBaseUrl || null,
+      authBaseUrl: env.freshsalesAuthBaseUrl || null,
+    },
+  });
+}
+
 export async function disconnectWorkspaceCrmProvider({
   admin,
   workspaceId,
@@ -1730,6 +1879,133 @@ async function getZohoAccessToken({
       step: "token_refresh",
       safeCategory: "REFRESH_FAILED",
       apiDomainHost: apiDomain.replace(/^https?:\/\//, "").replace(/\/.*$/, ""),
+    } satisfies Partial<CrmDiagnosticError>);
+  });
+}
+
+async function refreshFreshsalesToken({
+  admin,
+  connection,
+  refreshToken,
+}: {
+  admin: SupabaseAdmin;
+  connection: WorkspaceCrmConnectionRow;
+  refreshToken: string;
+}) {
+  if (!isFreshsalesConfigured()) {
+    throw new Error("Freshsales OAuth env vars are missing.");
+  }
+
+  const refreshed = await refreshFreshsalesAccessToken(refreshToken).catch((error) => {
+    const diagnostic = getFreshsalesErrorDetails(error);
+    throw Object.assign(
+      new Error("Freshsales token refresh failed."),
+      {
+        provider: "freshsales" as const,
+        step: "token_refresh",
+        status: diagnostic.status ?? undefined,
+        category: diagnostic.category,
+        code: diagnostic.code,
+        safeCategory: diagnostic.safeCategory || "REFRESH_FAILED",
+        apiDomainHost:
+          diagnostic.apiDomainHost ||
+          getFirstString(connection.metadata_json.api_base_url)?.replace(/^https?:\/\//, "").replace(/\/.*$/, "") ||
+          null,
+      } satisfies Partial<CrmDiagnosticError>,
+    );
+  });
+
+  const metadata = getFreshsalesTokenMetadata(refreshed);
+  const accessPayload = encryptCrmSecret(refreshed.access_token || "");
+  const nextRefreshToken = metadata.refreshToken || refreshToken;
+  const refreshPayload = nextRefreshToken ? encryptCrmSecret(nextRefreshToken) : null;
+
+  const { error } = await admin
+    .from("workspace_provider_connections")
+    .update({
+      token_ciphertext: accessPayload.ciphertext,
+      token_iv: accessPayload.iv,
+      token_tag: accessPayload.tag,
+      refresh_token_ciphertext: refreshPayload?.ciphertext || null,
+      refresh_token_iv: refreshPayload?.iv || null,
+      refresh_token_tag: refreshPayload?.tag || null,
+      token_type: metadata.tokenType || connection.token_type || "Token",
+      token_expires_at: buildTokenExpiry(
+        typeof metadata.expiresIn === "number" ? metadata.expiresIn : undefined,
+      ),
+      scopes: metadata.scopes.length ? metadata.scopes : connection.scopes,
+      metadata_json: {
+        ...connection.metadata_json,
+        auth_type: "oauth",
+      },
+      last_synced_at: new Date().toISOString(),
+      status: "connected",
+      disconnected_at: null,
+      is_active: true,
+    })
+    .eq("id", connection.id);
+
+  if (error) throw new Error(error.message);
+
+  return {
+    accessToken: refreshed.access_token || "",
+    apiBaseUrl: getFirstString(connection.metadata_json.api_base_url, env.freshsalesApiBaseUrl) || "",
+  };
+}
+
+async function getFreshsalesAccessToken({
+  admin,
+  connection,
+}: {
+  admin: SupabaseAdmin;
+  connection: WorkspaceCrmConnectionRow;
+}) {
+  const accessToken = decryptCrmSecret(connection);
+  if (!accessToken) {
+    throw Object.assign(new Error("Freshsales token is unavailable."), {
+      provider: "freshsales" as const,
+      step: "token_load",
+      safeCategory: "AUTH_FAILED",
+    } satisfies Partial<CrmDiagnosticError>);
+  }
+
+  const apiBaseUrl = getFirstString(connection.metadata_json.api_base_url, env.freshsalesApiBaseUrl);
+  if (!apiBaseUrl) {
+    throw new Error("Freshsales API base URL is missing.");
+  }
+
+  const expiresAt = connection.token_expires_at ? new Date(connection.token_expires_at).getTime() : null;
+  const expiresSoon = typeof expiresAt === "number" && Number.isFinite(expiresAt) && expiresAt <= Date.now() + 60_000;
+
+  if (!expiresSoon) {
+    return { accessToken, apiBaseUrl };
+  }
+
+  const refreshToken = decryptEncryptedSecret({
+    ciphertext: connection.refresh_token_ciphertext,
+    iv: connection.refresh_token_iv,
+    tag: connection.refresh_token_tag,
+  });
+
+  if (!refreshToken) {
+    throw Object.assign(new Error("Freshsales refresh token is missing. Reconnect Freshsales."), {
+      provider: "freshsales" as const,
+      step: "token_refresh",
+      safeCategory: "REFRESH_FAILED",
+      apiDomainHost: apiBaseUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, ""),
+    } satisfies Partial<CrmDiagnosticError>);
+  }
+
+  return refreshFreshsalesToken({
+    admin,
+    connection,
+    refreshToken,
+  }).catch(() => {
+    throw Object.assign(new Error("Freshsales token is invalid or expired. Reconnect Freshsales."), {
+      provider: "freshsales" as const,
+      step: "token_refresh",
+      safeCategory: "REFRESH_FAILED",
+      apiDomainHost: apiBaseUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, ""),
     } satisfies Partial<CrmDiagnosticError>);
   });
 }
@@ -2167,6 +2443,82 @@ export async function sendWorkspaceZohoTestLead({
   } satisfies CrmTestDeliveryResult;
 }
 
+export async function sendWorkspaceFreshsalesTestLead({
+  admin,
+  workspaceId,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+}) {
+  const connections = await listCrmConnections(admin, workspaceId);
+  const connection =
+    connections.find((entry) => entry.provider === "freshsales" && entry.is_active && entry.status === "connected") ||
+    null;
+
+  if (!connection) {
+    throw new Error("Freshsales is not connected for this workspace.");
+  }
+
+  const requiredScopes = ["freshsales.contacts.create"];
+  const missingScopes = requiredScopes.filter((scope) => !connection.scopes.includes(scope));
+  if (missingScopes.length) {
+    throw Object.assign(new Error("Freshsales connection is missing required contact scopes."), {
+      provider: "freshsales" as const,
+      step: "scope_check",
+      safeCategory: "INVALID_SCOPE",
+      code: "MISSING_REQUIRED_SCOPE",
+      category: "scope",
+      apiDomainHost:
+        getFirstString(connection.metadata_json.api_base_url, env.freshsalesApiBaseUrl)
+          ?.replace(/^https?:\/\//, "")
+          .replace(/\/.*$/, "") || null,
+    } satisfies Partial<CrmDiagnosticError>);
+  }
+
+  const { accessToken, apiBaseUrl } = await getFreshsalesAccessToken({
+    admin,
+    connection,
+  });
+  const result = await createOrUpdateFreshsalesTestLead({
+    accessToken,
+    apiBaseUrl,
+    contact: {
+      firstName: CRM_TEST_LEAD.firstName,
+      lastName: CRM_TEST_LEAD.lastName,
+      email: CRM_TEST_LEAD.email,
+      phone: CRM_TEST_LEAD.phone,
+    },
+  }).catch((error) => {
+    const diagnostic = getFreshsalesErrorDetails(error);
+    throw Object.assign(
+      new Error(error instanceof Error ? error.message : "Freshsales contact creation failed."),
+      {
+        provider: "freshsales" as const,
+        step: diagnostic.step || "create_contact",
+        status: diagnostic.status ?? undefined,
+        category: diagnostic.category,
+        code: diagnostic.code,
+        safeCategory: diagnostic.safeCategory,
+        apiDomainHost:
+          diagnostic.apiDomainHost || apiBaseUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, ""),
+      } satisfies Partial<CrmDiagnosticError>,
+    );
+  });
+
+  return {
+    success: true,
+    provider: "freshsales",
+    providerName: "Freshsales",
+    message: "Test contact sent to Freshsales.",
+    messageKey: "crm_test_delivery_freshsales_success",
+    safeMessage: "Test contact sent to Freshsales.",
+    createdObjectType: "contact",
+    providerRecordIds: {
+      contactId: result.contactId,
+    },
+  } satisfies CrmTestDeliveryResult;
+}
+
 export async function sendWorkspaceCrmTestLead({
   admin,
   workspaceId,
@@ -2185,6 +2537,8 @@ export async function sendWorkspaceCrmTestLead({
       return sendWorkspaceHubSpotTestLead({ admin, workspaceId });
     case "zoho":
       return sendWorkspaceZohoTestLead({ admin, workspaceId });
+    case "freshsales":
+      return sendWorkspaceFreshsalesTestLead({ admin, workspaceId });
     default:
       throw new Error(`${getCrmProviderLabel(provider)} test delivery is not available yet.`);
   }
