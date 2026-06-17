@@ -2,6 +2,7 @@
 
 import { randomUUID } from "crypto";
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { z } from "zod";
@@ -3720,9 +3721,24 @@ export async function testCrmDeliveryAction(formData: FormData) {
       workspaceId,
       provider,
     });
+    console.info(
+      "[crm-test-delivery-result]",
+      JSON.stringify({
+        provider,
+        workspaceId,
+        userId: user.id,
+        actionStep: "provider_dispatch_complete",
+        helperSuccess: result.success,
+        messageKey: result.messageKey || null,
+        finalUiStatus: result.success ? "success" : "error",
+      }),
+    );
     revalidatePath("/workspace/settings");
     redirect(appendQueryParam(redirectTo, "saved", result.safeMessage));
   } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
     logCrmTestDeliveryFailure({
       provider,
       workspaceId,

@@ -131,9 +131,12 @@ export type CrmTestDeliveryResult = {
   success: boolean;
   provider: CrmProvider;
   providerName: string;
+  message: string;
+  messageKey?: string;
   safeMessage: string;
   createdObjectType: "contact" | "lead" | "person" | "deal";
   providerRecordIds?: Record<string, string | null>;
+  safeErrorCategory?: string;
 };
 
 type CrmDestinationSeed = {
@@ -2032,6 +2035,8 @@ export async function sendWorkspaceGoHighLevelTestLead({
     success: true,
     provider: "gohighlevel",
     providerName: "GoHighLevel",
+    message: "Test contact sent to GoHighLevel.",
+    messageKey: "crm_test_delivery_gohighlevel_success",
     safeMessage: "Test contact sent to GoHighLevel.",
     createdObjectType: "contact",
     providerRecordIds: {
@@ -2074,6 +2079,8 @@ export async function sendWorkspaceHubSpotTestLead({
     success: true,
     provider: "hubspot",
     providerName: "HubSpot",
+    message: "Test contact sent to HubSpot.",
+    messageKey: "crm_test_delivery_hubspot_success",
     safeMessage: "Test contact sent to HubSpot.",
     createdObjectType: "contact",
     providerRecordIds: {
@@ -2150,6 +2157,8 @@ export async function sendWorkspaceZohoTestLead({
     success: true,
     provider: "zoho",
     providerName: "Zoho CRM",
+    message: "Test lead sent to Zoho CRM.",
+    messageKey: "crm_test_delivery_zoho_success",
     safeMessage: "Test lead sent to Zoho CRM.",
     createdObjectType: "lead",
     providerRecordIds: {

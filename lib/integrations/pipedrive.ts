@@ -375,6 +375,8 @@ export async function sendTestLead({
     success: true as const,
     provider: "pipedrive" as const,
     providerName: "Pipedrive",
+    message: "Test lead sent to Pipedrive Leads Inbox.",
+    messageKey: "crm_test_delivery_pipedrive_success",
     personId: person.personId,
     leadId: lead.leadId,
     createdObjectType: "lead" as const,

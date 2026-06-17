@@ -486,6 +486,8 @@ export async function sendZohoTestLead({
     success: true as const,
     provider: "zoho" as const,
     providerName: "Zoho CRM",
+    message: "Test lead sent to Zoho CRM.",
+    messageKey: "crm_test_delivery_zoho_success",
     createdObjectType: "lead" as const,
     providerRecordIds: {
       leadId: result.leadId,
