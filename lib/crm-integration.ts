@@ -18,6 +18,13 @@ import {
   refreshFreshsalesAccessToken,
 } from "@/lib/integrations/freshsales";
 import {
+  createMondayTestLeadItem,
+  exchangeMondayCodeForTokens,
+  getMondayBoard,
+  getMondayMe,
+  getMondayTokenMetadata,
+} from "@/lib/integrations/monday";
+import {
   createOrUpdateHubSpotContact,
   exchangeHubSpotCodeForTokens,
   getHubSpotAccountDetails,
@@ -247,7 +254,15 @@ type FreshsalesMetadata = {
   authBaseUrl?: string | null;
 };
 
-const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho", "freshsales"];
+type MondayMetadata = {
+  tokenType?: string | null;
+  scope?: string | string[] | null;
+  redirectUri?: string | null;
+  boardId?: string | null;
+  boardName?: string | null;
+};
+
+const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho", "freshsales", "monday"];
 const CRM_TEST_PROVIDER_LABELS: Record<CrmProvider, string> = {
   gohighlevel: "GoHighLevel",
   hubspot: "HubSpot",
@@ -255,6 +270,7 @@ const CRM_TEST_PROVIDER_LABELS: Record<CrmProvider, string> = {
   salesforce: "Salesforce",
   zoho: "Zoho CRM",
   freshsales: "Freshsales",
+  monday: "Monday CRM",
 };
 
 const CRM_TEST_LEAD = {
@@ -281,7 +297,8 @@ export function isCrmTestDeliverySupported(provider: CrmProvider) {
     provider === "pipedrive" ||
     provider === "hubspot" ||
     provider === "zoho" ||
-    provider === "freshsales"
+    provider === "freshsales" ||
+    provider === "monday"
   );
 }
 
@@ -347,11 +364,11 @@ function normalizeCrmDatabaseError(error: { message?: string | null } | null | u
   const message = error?.message || "";
 
   if (message.includes("workspace_provider_connections_provider_check")) {
-    return "CRM providers are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/029_freshsales_crm_provider_support.sql, then try connecting again.";
+    return "CRM providers are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/030_monday_crm_provider_support.sql, then try connecting again.";
   }
 
   if (message.includes("workspace_provider_assets_provider_check")) {
-    return "CRM provider assets are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/029_freshsales_crm_provider_support.sql, then try again.";
+    return "CRM provider assets are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/030_monday_crm_provider_support.sql, then try again.";
   }
 
   if (message.includes("workspace_provider_assets_type_check")) {
@@ -489,6 +506,17 @@ export function getCrmTestDeliveryFailureMessage({
       diagnostic.safeCategory === "VALIDATION_FAILED"
     ) {
       return "Freshsales rejected the test lead because your CRM layout has required fields SideKick is not sending yet.";
+    }
+  }
+
+  if (provider === "monday") {
+    const diagnostic = getCrmDiagnostic(error);
+    if (diagnostic.code === "BOARD_ID_REQUIRED") {
+      return "Add a monday board ID before sending a test lead.";
+    }
+
+    if (diagnostic.safeCategory === "INVALID_BOARD") {
+      return "SideKick could not access that monday board. Check the board ID and permissions.";
     }
   }
 
@@ -796,6 +824,52 @@ async function validateFreshsalesConnection({
   }
 }
 
+async function validateMondayConnection({
+  accessToken,
+  metadata,
+}: {
+  accessToken: string;
+  metadata?: MondayMetadata;
+}): Promise<ValidatedConnection> {
+  try {
+    const me = await getMondayMe(accessToken);
+    const scopes = getScopeList(metadata?.scope).length
+      ? getScopeList(metadata?.scope)
+      : getScopeList(env.mondayScopes || "me:read boards:read boards:write workspaces:read");
+
+    return {
+      providerUserId: me.id,
+      providerUserName: getFirstString(me.name, me.email, "Monday CRM"),
+      tokenType: getFirstString(metadata?.tokenType) || "Bearer",
+      tokenExpiresAt: null,
+      refreshToken: null,
+      scopes,
+      metadata: {
+        validated_at: new Date().toISOString(),
+        auth_type: "oauth",
+        monday_user_id: me.id,
+        monday_user_name: me.name,
+        monday_user_email: me.email,
+        ...(getFirstString(metadata?.redirectUri) ? { redirect_uri: getFirstString(metadata?.redirectUri) } : {}),
+        ...(getFirstString(metadata?.boardId) ? { board_id: getFirstString(metadata?.boardId) } : {}),
+        ...(getFirstString(metadata?.boardName) ? { board_name: getFirstString(metadata?.boardName) } : {}),
+      },
+      destinations: [],
+    };
+  } catch (error) {
+    const diagnostic = getCrmDiagnostic(error);
+    if (diagnostic.status === 401) {
+      throw new Error("Monday token is invalid or expired. Reconnect Monday CRM.");
+    }
+
+    if (diagnostic.status === 403) {
+      throw new Error("Monday CRM access is missing board permissions. Reconnect Monday with the requested scopes.");
+    }
+
+    throw new Error(diagnostic.message || "Monday verification could not be completed.");
+  }
+}
+
 async function validateCrmConnection(input: {
   provider: CrmProvider;
   accessToken: string;
@@ -849,6 +923,11 @@ async function validateCrmConnection(input: {
       return validateFreshsalesConnection({
         accessToken: input.accessToken,
         metadata: input.metadata as FreshsalesMetadata | undefined,
+      });
+    case "monday":
+      return validateMondayConnection({
+        accessToken: input.accessToken,
+        metadata: input.metadata as MondayMetadata | undefined,
       });
     default:
       throw new Error(`${input.provider} is not available in this first CRM pass yet.`);
@@ -1558,6 +1637,43 @@ export async function connectWorkspaceFreshsalesOAuthProvider({
   }
 }
 
+export async function connectWorkspaceMondayOAuthProvider({
+  admin,
+  workspaceId,
+  userId,
+  code,
+  redirectUri,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+  userId: string;
+  code: string;
+  redirectUri?: string | null;
+}) {
+  const existingConnections = await listCrmConnections(admin, workspaceId);
+  const existingMondayConnection =
+    existingConnections.find((entry) => entry.provider === "monday" && entry.is_active) || null;
+  const existingMetadata = existingMondayConnection?.metadata_json || {};
+  const token = await exchangeMondayCodeForTokens(code, redirectUri);
+  const tokenMetadata = getMondayTokenMetadata(token);
+
+  return connectWorkspaceCrmProvider({
+    admin,
+    workspaceId,
+    userId,
+    provider: "monday",
+    accessToken: normalizeAccessToken(token.access_token || ""),
+    metadata: {
+      authType: "oauth",
+      scope: token.scope || tokenMetadata.scopes,
+      tokenType: tokenMetadata.tokenType,
+      redirectUri: redirectUri || env.mondayRedirectUri || null,
+      boardId: getFirstString(existingMetadata.board_id, existingMetadata.boardId),
+      boardName: getFirstString(existingMetadata.board_name, existingMetadata.boardName),
+    },
+  });
+}
+
 export async function disconnectWorkspaceCrmProvider({
   admin,
   workspaceId,
@@ -2069,6 +2185,23 @@ async function getFreshsalesAccessToken({
   });
 }
 
+async function getMondayAccessToken({
+  connection,
+}: {
+  connection: WorkspaceCrmConnectionRow;
+}) {
+  const accessToken = decryptCrmSecret(connection);
+  if (!accessToken) {
+    throw Object.assign(new Error("Monday token is unavailable."), {
+      provider: "monday" as const,
+      step: "token_load",
+      safeCategory: "AUTH_FAILED",
+    } satisfies Partial<CrmDiagnosticError>);
+  }
+
+  return accessToken;
+}
+
 async function refreshPipedriveToken({
   admin,
   connection,
@@ -2578,6 +2711,146 @@ export async function sendWorkspaceFreshsalesTestLead({
   } satisfies CrmTestDeliveryResult;
 }
 
+export async function saveWorkspaceMondayBoardId({
+  admin,
+  workspaceId,
+  boardId,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+  boardId: string;
+}) {
+  const normalizedBoardId = boardId.trim();
+  if (!normalizedBoardId) {
+    throw Object.assign(new Error("Add a monday board ID before sending a test lead."), {
+      provider: "monday" as const,
+      step: "board_id_save",
+      code: "BOARD_ID_REQUIRED",
+      category: "validation",
+      safeCategory: "INVALID_BOARD",
+    } satisfies Partial<CrmDiagnosticError>);
+  }
+
+  const connections = await listCrmConnections(admin, workspaceId);
+  const connection =
+    connections.find((entry) => entry.provider === "monday" && entry.is_active && entry.status === "connected") ||
+    null;
+
+  if (!connection) {
+    throw new Error("Monday CRM is not connected for this workspace.");
+  }
+
+  const accessToken = await getMondayAccessToken({ connection });
+  const board = await getMondayBoard({
+    accessToken,
+    boardId: normalizedBoardId,
+  }).catch((error) => {
+    const diagnostic = getCrmDiagnostic(error);
+    throw Object.assign(new Error(error instanceof Error ? error.message : "Monday board lookup failed."), {
+      provider: "monday" as const,
+      step: diagnostic.step || "board_lookup",
+      status: diagnostic.status ?? undefined,
+      category: diagnostic.category,
+      code: diagnostic.code,
+      safeCategory: diagnostic.safeCategory || "INVALID_BOARD",
+    } satisfies Partial<CrmDiagnosticError>);
+  });
+
+  const { error } = await admin
+    .from("workspace_provider_connections")
+    .update({
+      metadata_json: {
+        ...connection.metadata_json,
+        board_id: board.id,
+        board_name: board.name,
+      },
+      last_synced_at: new Date().toISOString(),
+      status: "connected",
+      disconnected_at: null,
+      is_active: true,
+    })
+    .eq("id", connection.id);
+
+  if (error) {
+    throw new Error(normalizeCrmDatabaseError(error));
+  }
+
+  return board;
+}
+
+export async function sendWorkspaceMondayTestLead({
+  admin,
+  workspaceId,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+}) {
+  const connections = await listCrmConnections(admin, workspaceId);
+  const connection =
+    connections.find((entry) => entry.provider === "monday" && entry.is_active && entry.status === "connected") ||
+    null;
+
+  if (!connection) {
+    throw new Error("Monday CRM is not connected for this workspace.");
+  }
+
+  const boardId = getFirstString(connection.metadata_json.board_id, connection.metadata_json.boardId);
+  if (!boardId) {
+    throw Object.assign(new Error("Add a monday board ID before sending a test lead."), {
+      provider: "monday" as const,
+      step: "board_id_check",
+      code: "BOARD_ID_REQUIRED",
+      category: "validation",
+      safeCategory: "INVALID_BOARD",
+    } satisfies Partial<CrmDiagnosticError>);
+  }
+
+  const accessToken = await getMondayAccessToken({ connection });
+  const board = await getMondayBoard({
+    accessToken,
+    boardId,
+  }).catch((error) => {
+    const diagnostic = getCrmDiagnostic(error);
+    throw Object.assign(new Error(error instanceof Error ? error.message : "Monday board lookup failed."), {
+      provider: "monday" as const,
+      step: diagnostic.step || "board_lookup",
+      status: diagnostic.status ?? undefined,
+      category: diagnostic.category,
+      code: diagnostic.code,
+      safeCategory: diagnostic.safeCategory || "INVALID_BOARD",
+    } satisfies Partial<CrmDiagnosticError>);
+  });
+
+  const result = await createMondayTestLeadItem({
+    accessToken,
+    boardId: board.id,
+  }).catch((error) => {
+    const diagnostic = getCrmDiagnostic(error);
+    throw Object.assign(new Error(error instanceof Error ? error.message : "Monday item creation failed."), {
+      provider: "monday" as const,
+      step: diagnostic.step || "create_item",
+      status: diagnostic.status ?? undefined,
+      category: diagnostic.category,
+      code: diagnostic.code,
+      safeCategory: diagnostic.safeCategory || "UNKNOWN_PROVIDER_ERROR",
+    } satisfies Partial<CrmDiagnosticError>);
+  });
+
+  return {
+    success: true,
+    provider: "monday",
+    providerName: "Monday CRM",
+    message: "Test lead sent to Monday CRM.",
+    messageKey: "crm_test_delivery_monday_success",
+    safeMessage: "Test lead sent to Monday CRM.",
+    createdObjectType: "lead",
+    providerRecordIds: {
+      boardId: result.boardId || board.id,
+      itemId: result.itemId,
+    },
+  } satisfies CrmTestDeliveryResult;
+}
+
 export async function sendWorkspaceCrmTestLead({
   admin,
   workspaceId,
@@ -2598,6 +2871,8 @@ export async function sendWorkspaceCrmTestLead({
       return sendWorkspaceZohoTestLead({ admin, workspaceId });
     case "freshsales":
       return sendWorkspaceFreshsalesTestLead({ admin, workspaceId });
+    case "monday":
+      return sendWorkspaceMondayTestLead({ admin, workspaceId });
     default:
       throw new Error(`${getCrmProviderLabel(provider)} test delivery is not available yet.`);
   }

@@ -27,6 +27,7 @@ Current test-delivery support:
 - HubSpot
 - Zoho CRM
 - Freshsales / Freshworks CRM
+- Monday CRM
 
 Not available yet:
 
@@ -122,6 +123,27 @@ Connection requirement:
 
 - Freshsales must be connected through OAuth
 - SideKick currently sends the test record as a Contact because the current official Freshsales CRM API documents the Contacts flow clearly for OAuth-backed API access
+
+### Monday CRM
+
+Creates:
+
+- Board item on the configured monday board
+
+Required monday scopes:
+
+- `me:read`
+- `boards:read`
+- `boards:write`
+- `workspaces:read`
+
+Additional requirement:
+
+- a monday board ID must be saved in `Workspace Settings -> Integrations`
+
+Success message:
+
+- `Test lead sent to Monday CRM.`
 
 ## Security notes
 

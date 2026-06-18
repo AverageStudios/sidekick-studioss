@@ -64,6 +64,7 @@ import {
   processLeadCrmDelivery,
   queueLeadForCrmDelivery,
   retryFailedCrmDeliveriesForWorkspace,
+  saveWorkspaceMondayBoardId,
   saveWorkspaceCrmRoutingRule,
   sendWorkspaceCrmTestLead,
 } from "@/lib/crm-integration";
@@ -3599,6 +3600,10 @@ export async function saveCrmConnectionAction(formData: FormData) {
     redirect("/workspace/settings?section=integrations&error=Connect%20Freshsales%20through%20the%20OAuth%20flow.");
   }
 
+  if (provider === "monday") {
+    redirect("/workspace/settings?section=integrations&error=Connect%20Monday%20CRM%20through%20the%20OAuth%20flow.");
+  }
+
   if (!provider || !accessToken) {
     redirect("/workspace/settings?section=integrations&error=Provider%20and%20access%20token%20are%20required.");
   }
@@ -3608,7 +3613,7 @@ export async function saveCrmConnectionAction(formData: FormData) {
       admin,
       workspaceId,
       userId: user.id,
-      provider: provider as "gohighlevel" | "hubspot" | "pipedrive" | "zoho" | "freshsales",
+      provider: provider as "gohighlevel" | "hubspot" | "pipedrive" | "zoho" | "freshsales" | "monday",
       accessToken,
       metadata: locationId ? { locationId } : {},
     });
@@ -3656,7 +3661,7 @@ export async function disconnectCrmConnectionAction(formData: FormData) {
     await disconnectWorkspaceCrmProvider({
       admin,
       workspaceId,
-      provider: provider as "gohighlevel" | "hubspot" | "pipedrive" | "zoho" | "freshsales",
+      provider: provider as "gohighlevel" | "hubspot" | "pipedrive" | "zoho" | "freshsales" | "monday",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not disconnect CRM.";
@@ -3675,13 +3680,13 @@ export async function testCrmDeliveryAction(formData: FormData) {
 
   const workspaceId = String(formData.get("workspaceId") || "").trim();
   const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=integrations");
-  const provider = String(formData.get("provider") || "").trim() as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce" | "zoho" | "freshsales";
+  const provider = String(formData.get("provider") || "").trim() as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce" | "zoho" | "freshsales" | "monday";
 
   if (!workspaceId) {
     redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect your CRM or try again."));
   }
 
-  if (!provider || !["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho", "freshsales"].includes(provider)) {
+  if (!provider || !["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho", "freshsales", "monday"].includes(provider)) {
     redirect(appendQueryParam(redirectTo, "error", "Test not available yet."));
   }
 
@@ -3760,6 +3765,91 @@ export async function testCrmDeliveryAction(formData: FormData) {
       ),
     );
   }
+}
+
+export async function saveMondayBoardIdAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=integrations");
+  const boardId = String(formData.get("boardId") || "").trim();
+
+  await enforceActionRateLimit({
+    key: "crm:monday:save-board",
+    limit: 20,
+    windowMs: 60 * 60 * 1000,
+    redirectTo,
+    userId: user.id,
+  });
+
+  if (!isSupabaseServerConfigured()) {
+    redirect(appendQueryParam(redirectTo, "error", "Monday CRM could not be configured right now."));
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect(appendQueryParam(redirectTo, "error", "Monday CRM could not be configured right now."));
+  }
+
+  let workspaceContext;
+  try {
+    workspaceContext = await ensureWorkspaceContextForUser(user);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Workspace could not be loaded.";
+    redirect(appendQueryParam(redirectTo, "error", msg));
+  }
+
+  const workspaceId = workspaceContext?.activeWorkspace.id;
+  if (!workspaceId) {
+    redirect(appendQueryParam(redirectTo, "error", "No active workspace found."));
+  }
+
+  const globalRole = await getCurrentRole();
+  const membershipRole = await getWorkspaceMembershipRole({
+    admin,
+    workspaceId,
+    userId: user.id,
+  });
+  const canConfigureMonday =
+    globalRole === "admin" || membershipRole === "owner" || membershipRole === "admin";
+
+  if (!canConfigureMonday) {
+    redirect(appendQueryParam(redirectTo, "error", "Only workspace owners or admins can configure Monday CRM."));
+  }
+
+  if (!boardId) {
+    redirect(appendQueryParam(redirectTo, "error", "Add a monday board ID before sending a test lead."));
+  }
+
+  try {
+    await saveWorkspaceMondayBoardId({
+      admin,
+      workspaceId,
+      boardId,
+    });
+  } catch (error) {
+    logCrmTestDeliveryFailure({
+      provider: "monday",
+      workspaceId,
+      step: "save_board_id_action",
+      error,
+    });
+    redirect(
+      appendQueryParam(
+        redirectTo,
+        "error",
+        getCrmTestDeliveryFailureMessage({
+          provider: "monday",
+          error,
+        }),
+      ),
+    );
+  }
+
+  revalidatePath("/workspace/settings");
+  redirect(appendQueryParam(redirectTo, "saved", "Monday board saved."));
 }
 
 export async function saveCrmRoutingAction(formData: FormData) {

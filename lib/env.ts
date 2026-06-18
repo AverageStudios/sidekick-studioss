@@ -62,6 +62,10 @@ export const env = {
   freshsalesScopes: readEnv("FRESHSALES_SCOPES"),
   freshsalesAuthBaseUrl: readEnv("FRESHSALES_AUTH_BASE_URL"),
   freshsalesApiBaseUrl: readEnv("FRESHSALES_API_BASE_URL"),
+  mondayClientId: readEnv("MONDAY_CLIENT_ID"),
+  mondayClientSecret: readEnv("MONDAY_CLIENT_SECRET"),
+  mondayRedirectUri: readEnv("MONDAY_REDIRECT_URI"),
+  mondayScopes: readEnv("MONDAY_SCOPES"),
 } as const;
 
 export function getSupabasePublicEnvStatus() {
@@ -153,6 +157,19 @@ export function getFreshsalesEnvStatus() {
   };
 }
 
+export function getMondayEnvStatus() {
+  const missingKeys = missing([
+    "MONDAY_CLIENT_ID",
+    "MONDAY_CLIENT_SECRET",
+    "MONDAY_REDIRECT_URI",
+    "MONDAY_SCOPES",
+  ]);
+  return {
+    configured: missingKeys.length === 0,
+    missingKeys,
+  };
+}
+
 export function isSupabasePublicConfigured() {
   return getSupabasePublicEnvStatus().configured;
 }
@@ -196,6 +213,10 @@ export function isZohoConfigured() {
 
 export function isFreshsalesConfigured() {
   return getFreshsalesEnvStatus().configured;
+}
+
+export function isMondayConfigured() {
+  return getMondayEnvStatus().configured;
 }
 
 export function isCrmProviderDebugEnabled() {

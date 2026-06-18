@@ -5,6 +5,7 @@ import {
   connectWorkspaceFreshsalesOAuthProvider,
   connectWorkspaceGoHighLevelOAuthProvider,
   connectWorkspaceHubSpotOAuthProvider,
+  connectWorkspaceMondayOAuthProvider,
   connectWorkspaceZohoOAuthProvider,
 } from "@/lib/crm-integration";
 import { env } from "@/lib/env";
@@ -202,6 +203,15 @@ export async function GET(request: NextRequest) {
           userId: user.id,
           code,
           redirectUri: getFreshsalesCallbackUrl(request),
+        });
+        break;
+      case "monday":
+        await connectWorkspaceMondayOAuthProvider({
+          admin,
+          workspaceId,
+          userId: user.id,
+          code,
+          redirectUri: new URL("/api/integrations/monday/callback", getAppOrigin(request)).toString(),
         });
         break;
       default:

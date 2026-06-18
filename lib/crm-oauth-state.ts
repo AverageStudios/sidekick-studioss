@@ -43,6 +43,7 @@ function normalizeProvider(provider: string | null | undefined): CrmProvider | n
     case "salesforce":
     case "zoho":
     case "freshsales":
+    case "monday":
       return provider;
     default:
       return null;

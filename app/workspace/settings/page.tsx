@@ -15,6 +15,7 @@ import {
   refreshMetaIntegrationAssetsAction,
   retryCrmDeliveryAction,
   retryFailedCrmDeliveriesAction,
+  saveMondayBoardIdAction,
   saveMetaIntegrationSelectionsAction,
   testCrmDeliveryAction,
   syncMetaLeadsAction,
@@ -37,6 +38,7 @@ import {
   getFreshsalesEnvStatus,
   getGhlEnvStatus,
   getHubSpotEnvStatus,
+  getMondayEnvStatus,
   getPipedriveEnvStatus,
   getZohoEnvStatus,
   isSupabaseServerConfigured,
@@ -160,14 +162,24 @@ export default async function WorkspaceSettingsPage({
   const pipedriveConnection = crmConnections.find((item) => item.provider === "pipedrive") || null;
   const zohoConnection = crmConnections.find((item) => item.provider === "zoho") || null;
   const freshsalesConnection = crmConnections.find((item) => item.provider === "freshsales") || null;
+  const mondayConnection = crmConnections.find((item) => item.provider === "monday") || null;
   const ghlEnvStatus = getGhlEnvStatus();
   const hubspotEnvStatus = getHubSpotEnvStatus();
   const pipedriveEnvStatus = getPipedriveEnvStatus();
   const zohoEnvStatus = getZohoEnvStatus();
   const freshsalesEnvStatus = getFreshsalesEnvStatus();
+  const mondayEnvStatus = getMondayEnvStatus();
   const providerDestinations = crmState.destinations.filter((destination) => destination.is_available);
   const canSendCrmTests =
     currentRole === "admin" || workspaceRole === "owner" || workspaceRole === "admin";
+  const mondayBoardId =
+    (typeof mondayConnection?.metadata_json.board_id === "string" && mondayConnection.metadata_json.board_id) ||
+    (typeof mondayConnection?.metadata_json.boardId === "string" && mondayConnection.metadata_json.boardId) ||
+    "";
+  const mondayBoardName =
+    (typeof mondayConnection?.metadata_json.board_name === "string" && mondayConnection.metadata_json.board_name) ||
+    (typeof mondayConnection?.metadata_json.boardName === "string" && mondayConnection.metadata_json.boardName) ||
+    "";
   const hubspotOauthConnected = hubspotConnection?.metadata_json?.auth_type === "oauth";
   const hubspotNeedsReconnect = Boolean(hubspotConnection && !hubspotOauthConnected);
   const metaConnectNext = encodeURIComponent("/workspace/settings?section=integrations");
@@ -1035,6 +1047,90 @@ export default async function WorkspaceSettingsPage({
                           ) : (
                             <p className="mt-3 text-xs text-[var(--muted)]">Connect Freshsales to send a test lead.</p>
                           )}
+                        </div>
+                      </details>
+
+                      <details open={Boolean(mondayConnection)} className="group rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)]">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <p className="text-base font-semibold text-[var(--ink)]">Monday CRM</p>
+                              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", formatStatusTone(Boolean(mondayConnection)))}>
+                                {mondayConnection ? "Connected" : "Not connected"}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm text-[var(--muted)]">
+                              Connect Monday CRM and choose the board SideKick should use for CRM delivery checks.
+                            </p>
+                            {mondayConnection ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">
+                                {mondayBoardName
+                                  ? `${mondayBoardName}${mondayBoardId ? ` • Board ${mondayBoardId}` : ""}`
+                                  : mondayConnection.provider_user_name || "Monday CRM connected"}
+                              </p>
+                            ) : !mondayEnvStatus.configured ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">OAuth setup is not configured yet.</p>
+                            ) : null}
+                          </div>
+                          <ChevronDown className="h-4 w-4 shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180" />
+                        </summary>
+
+                        <div className="border-t border-[var(--line)] px-5 py-5">
+                          <div className="flex flex-wrap gap-2">
+                            <Button asChild disabled={!mondayEnvStatus.configured}>
+                              <Link href="/api/integrations/monday/connect?next=/workspace/settings?section=integrations">
+                                {mondayConnection ? "Reconnect" : "Connect Monday"}
+                              </Link>
+                            </Button>
+                            {mondayConnection && workspaceId && canSendCrmTests && isCrmTestDeliverySupported("monday") ? (
+                              <form action={testCrmDeliveryAction}>
+                                <input type="hidden" name="workspaceId" value={workspaceId} />
+                                <input type="hidden" name="provider" value="monday" />
+                                <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
+                                <Button type="submit" variant="secondary">Send Test Lead</Button>
+                              </form>
+                            ) : null}
+                            {mondayConnection ? (
+                              <form action={disconnectCrmConnectionAction}>
+                                <input type="hidden" name="provider" value="monday" />
+                                <Button type="submit" variant="outline">Disconnect</Button>
+                              </form>
+                            ) : null}
+                          </div>
+
+                          {mondayConnection ? (
+                            <form action={saveMondayBoardIdAction} className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,18rem)_auto] sm:items-end">
+                              <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
+                              <div className="space-y-2">
+                                <label className="block text-sm font-medium text-[var(--ink)]" htmlFor="mondayBoardId">
+                                  Monday board ID
+                                </label>
+                                <Input
+                                  id="mondayBoardId"
+                                  name="boardId"
+                                  defaultValue={mondayBoardId}
+                                  placeholder="Enter your monday board ID"
+                                  inputMode="numeric"
+                                />
+                              </div>
+                              <Button type="submit" variant="outline" className="sm:self-end">
+                                Save Board ID
+                              </Button>
+                            </form>
+                          ) : null}
+
+                          {mondayConnection ? (
+                            <p className="mt-3 text-xs text-[var(--muted)]">
+                              {mondayBoardId
+                                ? "Send a test lead after saving the board you want SideKick to use."
+                                : "Add a monday board ID before sending a test lead."}
+                            </p>
+                          ) : (
+                            <p className="mt-3 text-xs text-[var(--muted)]">Connect Monday CRM to send a test lead.</p>
+                          )}
+                          {mondayConnection && !canSendCrmTests ? (
+                            <p className="mt-2 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
+                          ) : null}
                         </div>
                       </details>
                     </div>
