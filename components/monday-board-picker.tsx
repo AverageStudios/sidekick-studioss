@@ -9,6 +9,7 @@ type MondayBoardOption = {
   id: string;
   name: string;
   workspaceName?: string | null;
+  kind?: string | null;
 };
 
 type MondayBoardPickerProps = {
@@ -19,8 +20,32 @@ type MondayBoardPickerProps = {
   canManage: boolean;
 };
 
+function normalizeBoardName(name: string) {
+  return name.trim().toLowerCase();
+}
+
+function isSubitemBoard(board: MondayBoardOption) {
+  const name = normalizeBoardName(board.name);
+  const kind = (board.kind || "").trim().toLowerCase();
+  return name.startsWith("subitems of") || kind.includes("subitem") || kind.includes("internal");
+}
+
+function getBoardPriority(board: MondayBoardOption) {
+  const name = normalizeBoardName(board.name);
+  if (name === "leads" || name.startsWith("leads ")) return 0;
+  if (name === "deals" || name.startsWith("deals ")) return 1;
+  if (name === "contacts" || name.startsWith("contacts ")) return 2;
+  if (name === "accounts" || name.startsWith("accounts ")) return 3;
+  return 10;
+}
+
 function formatBoardLabel(board: MondayBoardOption) {
-  return board.workspaceName ? `${board.name} • ${board.workspaceName} • ${board.id}` : `${board.name} • ${board.id}`;
+  return board.workspaceName ? `${board.name} - ${board.workspaceName}` : board.name;
+}
+
+function getRecommendedBoardId(boards: MondayBoardOption[]) {
+  const leadsBoard = boards.find((board) => getBoardPriority(board) === 0);
+  return leadsBoard?.id || boards[0]?.id || "";
 }
 
 export function MondayBoardPicker({
@@ -50,12 +75,26 @@ export function MondayBoardPicker({
 
   const normalizedBoards = useMemo(() => {
     const seen = new Set<string>();
-    return boards.filter((board) => {
-      if (!board.id || seen.has(board.id)) return false;
-      seen.add(board.id);
-      return true;
-    });
+    return boards
+      .filter((board) => {
+        if (!board.id || seen.has(board.id)) return false;
+        if (isSubitemBoard(board)) return false;
+        seen.add(board.id);
+        return true;
+      })
+      .sort((left, right) => {
+        const priorityDiff = getBoardPriority(left) - getBoardPriority(right);
+        if (priorityDiff !== 0) return priorityDiff;
+        return left.name.localeCompare(right.name);
+      });
   }, [boards]);
+
+  const recommendedBoardId = useMemo(
+    () => (selectedBoardId ? selectedBoardId : getRecommendedBoardId(normalizedBoards)),
+    [normalizedBoards, selectedBoardId],
+  );
+
+  const selectedBoardRecord = normalizedBoards.find((board) => board.id === selectedPickerBoardId) || null;
 
   const effectiveBoardId = manualOverride ? manualBoardId : selectedPickerBoardId || manualBoardId;
 
@@ -73,8 +112,19 @@ export function MondayBoardPicker({
                 setBoards(result.boards);
                 setLoadError(null);
                 setLoaded(true);
-                if (!selectedPickerBoardId && result.boards[0]?.id) {
-                  setSelectedPickerBoardId(result.boards[0].id);
+                if (!selectedBoardId) {
+                  const recommendedId = getRecommendedBoardId(
+                    result.boards.filter((board) => !isSubitemBoard(board)).sort((left, right) => {
+                      const priorityDiff = getBoardPriority(left) - getBoardPriority(right);
+                      if (priorityDiff !== 0) return priorityDiff;
+                      return left.name.localeCompare(right.name);
+                    }),
+                  );
+                  if (recommendedId) {
+                    setSelectedPickerBoardId(recommendedId);
+                  }
+                } else if (!selectedPickerBoardId) {
+                  setSelectedPickerBoardId(selectedBoardId);
                 }
               } else {
                 setLoadError(result.error || "Could not load monday boards. Paste a board ID manually.");
@@ -89,12 +139,15 @@ export function MondayBoardPicker({
 
       {normalizedBoards.length ? (
         <div className="space-y-2">
+          <p className="text-xs text-[var(--muted)]">
+            Choose the monday board where new SideKick leads should be created. We recommend the Leads board.
+          </p>
           <label className="block text-sm font-medium text-[var(--ink)]" htmlFor="mondayBoardPicker">
             Monday board
           </label>
           <select
             id="mondayBoardPicker"
-            value={selectedPickerBoardId}
+            value={selectedPickerBoardId || recommendedBoardId}
             onChange={(event) => {
               setSelectedPickerBoardId(event.target.value);
               setManualOverride(false);
@@ -108,6 +161,11 @@ export function MondayBoardPicker({
               </option>
             ))}
           </select>
+          {selectedBoardRecord ? (
+            <p className="text-xs text-[var(--muted)]">Board ID: {selectedBoardRecord.id}</p>
+          ) : recommendedBoardId ? (
+            <p className="text-xs text-[var(--muted)]">Board ID: {recommendedBoardId}</p>
+          ) : null}
         </div>
       ) : null}
 
@@ -117,33 +175,40 @@ export function MondayBoardPicker({
         <p className="text-xs text-[var(--muted)]">Could not load monday boards. You can paste a board ID manually.</p>
       ) : null}
 
-      <form action={saveMondayBoardIdAction} className="grid gap-3 sm:grid-cols-[minmax(0,18rem)_auto] sm:items-end">
+      <form action={saveMondayBoardIdAction} className="space-y-4">
         <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
         <input type="hidden" name="boardId" value={effectiveBoardId} />
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-[var(--ink)]" htmlFor="mondayBoardIdManual">
-            Paste board ID manually
-          </label>
-          <Input
-            id="mondayBoardIdManual"
-            value={manualBoardId}
-            onChange={(event) => {
-              setManualBoardId(event.target.value);
-              setManualOverride(true);
-            }}
-            placeholder="Paste a monday board ID manually"
-            inputMode="numeric"
-          />
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" variant="outline" disabled={!canManage || !effectiveBoardId}>
+            Save Board
+          </Button>
         </div>
-        <Button type="submit" variant="outline" className="sm:self-end" disabled={!canManage || !effectiveBoardId}>
-          Save Board
-        </Button>
+
+        <details className="rounded-2xl border border-[var(--line)] bg-white/70 p-4">
+          <summary className="cursor-pointer text-sm font-medium text-[var(--ink)]">
+            Advanced
+          </summary>
+          <div className="mt-3 space-y-2">
+            <label className="block text-sm font-medium text-[var(--ink)]" htmlFor="mondayBoardIdManual">
+              Paste board ID manually
+            </label>
+            <Input
+              id="mondayBoardIdManual"
+              value={manualBoardId}
+              onChange={(event) => {
+                setManualBoardId(event.target.value);
+                setManualOverride(true);
+              }}
+              placeholder="Paste a monday board ID manually"
+              inputMode="numeric"
+            />
+          </div>
+        </details>
       </form>
 
       {selectedBoardName ? (
         <p className="text-xs text-[var(--muted)]">
           Selected board: {selectedBoardName}
-          {selectedBoardId ? ` • ${selectedBoardId}` : ""}
         </p>
       ) : effectiveBoardId ? (
         <p className="text-xs text-[var(--muted)]">Choose a monday board before sending a test lead.</p>

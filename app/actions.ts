@@ -3858,7 +3858,7 @@ export async function listMondayBoardsAction(workspaceId: string) {
   if (!user) {
     return {
       ok: false,
-      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null }>,
+      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null; kind?: string | null }>,
       error: "Could not load monday boards. Paste a board ID manually.",
     };
   }
@@ -3868,7 +3868,7 @@ export async function listMondayBoardsAction(workspaceId: string) {
   if (!normalizedWorkspaceId) {
     return {
       ok: false,
-      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null }>,
+      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null; kind?: string | null }>,
       error: "Could not load monday boards. Paste a board ID manually.",
     };
   }
@@ -3895,7 +3895,7 @@ export async function listMondayBoardsAction(workspaceId: string) {
     });
     return {
       ok: false,
-      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null }>,
+      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null; kind?: string | null }>,
       error: "Could not load monday boards. Paste a board ID manually.",
     };
   }
@@ -3903,7 +3903,7 @@ export async function listMondayBoardsAction(workspaceId: string) {
   if (!isSupabaseServerConfigured()) {
     return {
       ok: false,
-      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null }>,
+      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null; kind?: string | null }>,
       error: "Could not load monday boards. Paste a board ID manually.",
     };
   }
@@ -3912,7 +3912,7 @@ export async function listMondayBoardsAction(workspaceId: string) {
   if (!admin) {
     return {
       ok: false,
-      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null }>,
+      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null; kind?: string | null }>,
       error: "Could not load monday boards. Paste a board ID manually.",
     };
   }
@@ -3945,6 +3945,7 @@ export async function listMondayBoardsAction(workspaceId: string) {
         id: board.id,
         name: board.name,
         workspaceName: board.workspaceName || null,
+        kind: board.kind || null,
       })),
       error: null,
     };
@@ -3957,7 +3958,7 @@ export async function listMondayBoardsAction(workspaceId: string) {
     });
     return {
       ok: false,
-      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null }>,
+      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null; kind?: string | null }>,
       error: "Could not load monday boards. Paste a board ID manually.",
     };
   }
