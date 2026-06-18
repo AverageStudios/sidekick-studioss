@@ -139,7 +139,8 @@ Required monday scopes:
 
 Additional requirement:
 
-- a monday board ID must be saved in `Workspace Settings -> Integrations`
+- a monday board must be selected and saved in `Workspace Settings -> Integrations`
+- manual board ID paste is still available as a fallback if the picker cannot load boards
 
 Success message:
 

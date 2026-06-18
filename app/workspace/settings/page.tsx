@@ -8,6 +8,7 @@ import {
   Settings2,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { MondayBoardPicker } from "@/components/monday-board-picker";
 import { WorkspaceLogoField } from "@/components/workspace-logo-field";
 import {
   disconnectCrmConnectionAction,
@@ -15,7 +16,6 @@ import {
   refreshMetaIntegrationAssetsAction,
   retryCrmDeliveryAction,
   retryFailedCrmDeliveriesAction,
-  saveMondayBoardIdAction,
   saveMetaIntegrationSelectionsAction,
   testCrmDeliveryAction,
   syncMetaLeadsAction,
@@ -179,6 +179,12 @@ export default async function WorkspaceSettingsPage({
   const mondayBoardName =
     (typeof mondayConnection?.metadata_json.board_name === "string" && mondayConnection.metadata_json.board_name) ||
     (typeof mondayConnection?.metadata_json.boardName === "string" && mondayConnection.metadata_json.boardName) ||
+    "";
+  const mondayBoardWorkspaceName =
+    (typeof mondayConnection?.metadata_json.board_workspace_name === "string" &&
+      mondayConnection.metadata_json.board_workspace_name) ||
+    (typeof mondayConnection?.metadata_json.boardWorkspaceName === "string" &&
+      mondayConnection.metadata_json.boardWorkspaceName) ||
     "";
   const hubspotOauthConnected = hubspotConnection?.metadata_json?.auth_type === "oauth";
   const hubspotNeedsReconnect = Boolean(hubspotConnection && !hubspotOauthConnected);
@@ -1087,7 +1093,9 @@ export default async function WorkspaceSettingsPage({
                                 <input type="hidden" name="workspaceId" value={workspaceId} />
                                 <input type="hidden" name="provider" value="monday" />
                                 <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
-                                <Button type="submit" variant="secondary">Send Test Lead</Button>
+                                <Button type="submit" variant="secondary" disabled={!mondayBoardId}>
+                                  Send Test Lead
+                                </Button>
                               </form>
                             ) : null}
                             {mondayConnection ? (
@@ -1098,36 +1106,19 @@ export default async function WorkspaceSettingsPage({
                             ) : null}
                           </div>
 
-                          {mondayConnection ? (
-                            <form action={saveMondayBoardIdAction} className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,18rem)_auto] sm:items-end">
-                              <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
-                              <div className="space-y-2">
-                                <label className="block text-sm font-medium text-[var(--ink)]" htmlFor="mondayBoardId">
-                                  Monday board ID
-                                </label>
-                                <Input
-                                  id="mondayBoardId"
-                                  name="boardId"
-                                  defaultValue={mondayBoardId}
-                                  placeholder="Enter your monday board ID"
-                                  inputMode="numeric"
-                                />
-                              </div>
-                              <Button type="submit" variant="outline" className="sm:self-end">
-                                Save Board ID
-                              </Button>
-                            </form>
+                          {mondayConnection && workspaceId ? (
+                            <MondayBoardPicker
+                              workspaceId={workspaceId}
+                              selectedBoardId={mondayBoardId}
+                              selectedBoardName={mondayBoardName}
+                              selectedBoardWorkspaceName={mondayBoardWorkspaceName}
+                              canManage={canSendCrmTests}
+                            />
                           ) : null}
 
-                          {mondayConnection ? (
-                            <p className="mt-3 text-xs text-[var(--muted)]">
-                              {mondayBoardId
-                                ? "Send a test lead after saving the board you want SideKick to use."
-                                : "Add a monday board ID before sending a test lead."}
-                            </p>
-                          ) : (
+                          {!mondayConnection ? (
                             <p className="mt-3 text-xs text-[var(--muted)]">Connect Monday CRM to send a test lead.</p>
-                          )}
+                          ) : null}
                           {mondayConnection && !canSendCrmTests ? (
                             <p className="mt-2 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
                           ) : null}

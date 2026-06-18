@@ -60,6 +60,7 @@ import {
   getCrmProviderLabel,
   getCrmTestDeliveryFailureMessage,
   isCrmTestDeliverySupported,
+  listWorkspaceMondayBoards,
   logCrmTestDeliveryFailure,
   processLeadCrmDelivery,
   queueLeadForCrmDelivery,
@@ -3850,6 +3851,116 @@ export async function saveMondayBoardIdAction(formData: FormData) {
 
   revalidatePath("/workspace/settings");
   redirect(appendQueryParam(redirectTo, "saved", "Monday board saved."));
+}
+
+export async function listMondayBoardsAction(workspaceId: string) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return {
+      ok: false,
+      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null }>,
+      error: "Could not load monday boards. Paste a board ID manually.",
+    };
+  }
+
+  const normalizedWorkspaceId = workspaceId.trim();
+
+  if (!normalizedWorkspaceId) {
+    return {
+      ok: false,
+      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null }>,
+      error: "Could not load monday boards. Paste a board ID manually.",
+    };
+  }
+
+  const headerStore = await headers();
+  const ip = getIpFromHeaders(headerStore);
+  const rateLimit = await checkRateLimit({
+    key: `crm:monday:list-boards:${normalizedWorkspaceId}`,
+    limit: 20,
+    windowMs: 60 * 1000,
+    identifiers: {
+      ip,
+      userId: user.id,
+    },
+  });
+
+  if (!rateLimit.allowed) {
+    logRateLimitHit({
+      key: `crm:monday:list-boards:${normalizedWorkspaceId}`,
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+      matchedOn: rateLimit.matchedOn,
+      ip,
+      userId: user.id,
+    });
+    return {
+      ok: false,
+      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null }>,
+      error: "Could not load monday boards. Paste a board ID manually.",
+    };
+  }
+
+  if (!isSupabaseServerConfigured()) {
+    return {
+      ok: false,
+      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null }>,
+      error: "Could not load monday boards. Paste a board ID manually.",
+    };
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return {
+      ok: false,
+      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null }>,
+      error: "Could not load monday boards. Paste a board ID manually.",
+    };
+  }
+
+  const globalRole = await getCurrentRole();
+  const membershipRole = await getWorkspaceMembershipRole({
+    admin,
+    workspaceId: normalizedWorkspaceId,
+    userId: user.id,
+  });
+  const canConfigureMonday =
+    globalRole === "admin" || membershipRole === "owner" || membershipRole === "admin";
+
+  if (!canConfigureMonday) {
+    return {
+      ok: false,
+      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null }>,
+      error: "Could not load monday boards. Paste a board ID manually.",
+    };
+  }
+
+  try {
+    const boards = await listWorkspaceMondayBoards({
+      admin,
+      workspaceId: normalizedWorkspaceId,
+    });
+    return {
+      ok: true,
+      boards: boards.map((board) => ({
+        id: board.id,
+        name: board.name,
+        workspaceName: board.workspaceName || null,
+      })),
+      error: null,
+    };
+  } catch (error) {
+    logCrmTestDeliveryFailure({
+      provider: "monday",
+      workspaceId: normalizedWorkspaceId,
+      step: "list_boards_action",
+      error,
+    });
+    return {
+      ok: false,
+      boards: [] as Array<{ id: string; name: string; workspaceName?: string | null }>,
+      error: "Could not load monday boards. Paste a board ID manually.",
+    };
+  }
 }
 
 export async function saveCrmRoutingAction(formData: FormData) {

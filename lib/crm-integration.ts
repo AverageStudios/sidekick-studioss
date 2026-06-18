@@ -22,6 +22,8 @@ import {
   exchangeMondayCodeForTokens,
   getMondayBoard,
   getMondayMe,
+  listMondayBoards,
+  type MondayBoardOption,
   getMondayTokenMetadata,
 } from "@/lib/integrations/monday";
 import {
@@ -160,6 +162,13 @@ export type CrmTestDeliveryResult = {
   createdObjectType: "contact" | "lead" | "person" | "deal";
   providerRecordIds?: Record<string, string | null>;
   safeErrorCategory?: string;
+};
+
+export type WorkspaceMondayBoardOption = {
+  id: string;
+  name: string;
+  workspaceName?: string | null;
+  kind?: string | null;
 };
 
 type CrmDestinationSeed = {
@@ -2763,6 +2772,9 @@ export async function saveWorkspaceMondayBoardId({
         ...connection.metadata_json,
         board_id: board.id,
         board_name: board.name,
+        board_workspace_id: board.workspaceId,
+        board_workspace_name: board.workspaceName,
+        board_kind: board.kind,
       },
       last_synced_at: new Date().toISOString(),
       status: "connected",
@@ -2776,6 +2788,48 @@ export async function saveWorkspaceMondayBoardId({
   }
 
   return board;
+}
+
+export async function listWorkspaceMondayBoards({
+  admin,
+  workspaceId,
+  limit = 50,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+  limit?: number;
+}): Promise<WorkspaceMondayBoardOption[]> {
+  const connections = await listCrmConnections(admin, workspaceId);
+  const connection =
+    connections.find((entry) => entry.provider === "monday" && entry.is_active && entry.status === "connected") ||
+    null;
+
+  if (!connection) {
+    throw new Error("Monday CRM is not connected for this workspace.");
+  }
+
+  const accessToken = await getMondayAccessToken({ connection });
+  const boards = await listMondayBoards({
+    accessToken,
+    limit,
+  }).catch((error) => {
+    const diagnostic = getCrmDiagnostic(error);
+    throw Object.assign(new Error(error instanceof Error ? error.message : "Monday board list failed."), {
+      provider: "monday" as const,
+      step: diagnostic.step || "boards_query",
+      status: diagnostic.status ?? undefined,
+      category: diagnostic.category,
+      code: diagnostic.code,
+      safeCategory: diagnostic.safeCategory || "UNKNOWN_PROVIDER_ERROR",
+    } satisfies Partial<CrmDiagnosticError>);
+  });
+
+  return boards.map((board: MondayBoardOption) => ({
+    id: board.id,
+    name: board.name,
+    workspaceName: board.workspaceName || null,
+    kind: board.kind || null,
+  }));
 }
 
 export async function sendWorkspaceMondayTestLead({

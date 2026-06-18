@@ -31,6 +31,11 @@ type MondayBoardsResponse = {
   boards?: Array<{
     id?: string | number;
     name?: string;
+    board_kind?: string;
+    workspace?: {
+      id?: string | number;
+      name?: string;
+    } | null;
   }>;
 };
 
@@ -62,6 +67,14 @@ function createMondayProviderError(
     ...fields,
   }) as MondayProviderError;
 }
+
+export type MondayBoardOption = {
+  id: string;
+  name: string;
+  workspaceId?: string | null;
+  workspaceName?: string | null;
+  kind?: string | null;
+};
 
 function getRequiredClientId() {
   if (!isMondayConfigured() || !env.mondayClientId) {
@@ -270,7 +283,7 @@ export async function listMondayBoards({
 }: {
   accessToken: string;
   limit?: number;
-}) {
+}): Promise<MondayBoardOption[]> {
   const data = await mondayGraphqlRequest<MondayBoardsResponse>({
     accessToken,
     step: "boards_query",
@@ -279,6 +292,11 @@ export async function listMondayBoards({
         boards(limit: $limit) {
           id
           name
+          board_kind
+          workspace {
+            id
+            name
+          }
         }
       }
     `,
@@ -287,9 +305,12 @@ export async function listMondayBoards({
 
   return Array.isArray(data.boards)
     ? data.boards.map((board) => ({
-        id: board.id != null ? String(board.id) : null,
-        name: typeof board.name === "string" ? board.name : null,
-      }))
+        id: board.id != null ? String(board.id) : "",
+        name: typeof board.name === "string" ? board.name : "Untitled board",
+        workspaceId: board.workspace?.id != null ? String(board.workspace.id) : null,
+        workspaceName: typeof board.workspace?.name === "string" ? board.workspace.name : null,
+        kind: typeof board.board_kind === "string" ? board.board_kind : null,
+      })).filter((board) => Boolean(board.id))
     : [];
 }
 
@@ -308,6 +329,11 @@ export async function getMondayBoard({
         boards(ids: $boardId) {
           id
           name
+          board_kind
+          workspace {
+            id
+            name
+          }
         }
       }
     `,
@@ -328,6 +354,9 @@ export async function getMondayBoard({
   return {
     id: String(board.id),
     name: typeof board.name === "string" ? board.name : null,
+    workspaceId: board.workspace?.id != null ? String(board.workspace.id) : null,
+    workspaceName: typeof board.workspace?.name === "string" ? board.workspace.name : null,
+    kind: typeof board.board_kind === "string" ? board.board_kind : null,
   };
 }
 
