@@ -45,6 +45,7 @@ type FreshsalesOAuthDebugInfo = {
   authBaseUrlHost: string | null;
   apiBaseUrlHost: string | null;
   redirectUri: string | null;
+  scopeString: string;
   scopes: string[];
 };
 
@@ -254,7 +255,7 @@ async function freshsalesRequest<T>({
 
 function buildTokenCandidates() {
   const authBase = getRequiredAuthBaseUrl();
-  return [`${authBase}/oauth/v2/token`, `${authBase}/org/oauth/v2/token`];
+  return [`${authBase}/org/oauth/v2/token`];
 }
 
 async function requestFreshsalesToken(params: URLSearchParams, step: "token_exchange" | "token_refresh") {
@@ -321,11 +322,13 @@ export function buildFreshsalesAuthorizationUrl(state: string, redirectUriOverri
 }
 
 export function getFreshsalesOAuthDebugInfo(redirectUriOverride?: string | null): FreshsalesOAuthDebugInfo {
-  const scopes = getScopeList(env.freshsalesScopes);
+  const scopeString = getRequiredScopes();
+  const scopes = getScopeList(scopeString);
   return {
     authBaseUrlHost: getHost(env.freshsalesAuthBaseUrl || null),
     apiBaseUrlHost: getHost(env.freshsalesApiBaseUrl || null),
     redirectUri: resolveRedirectUri(redirectUriOverride),
+    scopeString,
     scopes,
   };
 }

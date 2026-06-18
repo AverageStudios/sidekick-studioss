@@ -140,6 +140,7 @@ export async function GET(request: NextRequest) {
           requestOrigin: getAppOrigin(request),
           authBaseUrlHost: debug.authBaseUrlHost,
           redirectUri: debug.redirectUri,
+          scopeString: debug.scopeString,
           scopeCount: debug.scopes.length,
           scopes: debug.scopes,
           authUrlHost: oauthUrl.host,
@@ -194,6 +195,7 @@ export async function GET(request: NextRequest) {
           userId: user.id,
           authBaseUrlHost: debug.authBaseUrlHost,
           redirectUri: debug.redirectUri,
+          scopeString: debug.scopeString,
           scopeCount: debug.scopes.length,
         }),
       );

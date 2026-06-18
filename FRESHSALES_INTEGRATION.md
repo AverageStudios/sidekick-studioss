@@ -37,7 +37,9 @@ Add these server-side environment variables:
 Recommended starting values:
 
 - `FRESHSALES_REDIRECT_URI=https://sidekickstudioss.com/api/integrations/freshsales/callback`
-- `FRESHSALES_SCOPES=freshsales.contacts.create freshsales.contacts.edit freshsales.contacts.view`
+- `FRESHSALES_SCOPES=freshsales.contacts.view freshsales.contacts.create freshsales.contacts.edit`
+- `FRESHSALES_AUTH_BASE_URL=https://YOUR_ORG.myfreshworks.com`
+- `FRESHSALES_API_BASE_URL=https://YOUR_ORG.myfreshworks.com`
 
 ## Base URL notes
 
@@ -46,7 +48,7 @@ Freshsales uses two important base URLs:
 - `FRESHSALES_AUTH_BASE_URL`
   - your Freshworks org base URL
   - SideKick builds the authorize URL from this as `/org/oauth/v2/authorize`
-  - SideKick exchanges tokens against the documented OAuth token path and safely falls back between the two documented token path variants if needed
+  - SideKick exchanges tokens against `/org/oauth/v2/token`
 
 - `FRESHSALES_API_BASE_URL`
   - your Freshsales CRM API base URL
@@ -128,6 +130,7 @@ If connect fails:
 1. Confirm `FRESHSALES_AUTH_BASE_URL` matches the Freshworks org URL used for the OAuth app
 2. Confirm `FRESHSALES_REDIRECT_URI` exactly matches the callback URL configured in Freshworks
 3. Confirm the app credentials include the requested scopes
+4. If Freshworks says the scope is invalid or not applicable, confirm that the selected Freshworks org actually has Freshsales / Freshsales Suite enabled
 
 If test delivery fails:
 

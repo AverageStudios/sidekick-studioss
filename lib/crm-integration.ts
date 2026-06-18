@@ -1493,6 +1493,7 @@ export async function connectWorkspaceFreshsalesOAuthProvider({
       userId,
       authBaseUrlHost: oauthDebug.authBaseUrlHost,
       redirectUri: oauthDebug.redirectUri,
+      scopeString: oauthDebug.scopeString,
       scopeCount: oauthDebug.scopes.length,
       scopes: oauthDebug.scopes,
     }),

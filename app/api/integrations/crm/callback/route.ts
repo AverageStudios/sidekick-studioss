@@ -76,6 +76,7 @@ export async function GET(request: NextRequest) {
         workspaceId: statePayload?.workspaceId || workspaceCookie || null,
         authBaseUrlHost: debug.authBaseUrlHost,
         redirectUri: debug.redirectUri,
+        scopeString: debug.scopeString,
         scopes: debug.scopes,
         callbackHasCode: Boolean(code),
         callbackStateValid: stateValid,
