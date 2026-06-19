@@ -86,6 +86,7 @@ export const crmProviderMetadataList: CrmProviderMetadata[] = [
     shortDescription: "Send new leads into Keap contacts.",
     shortCode: "K",
     logoPath: "/crm-logos/keap.png",
+    visibleInSelection: true,
     accentClassName: "text-lime-700",
     surfaceClassName: "bg-lime-100",
     connectPath: "/api/integrations/keap/connect",
