@@ -3853,6 +3853,121 @@ export async function saveMondayBoardIdAction(formData: FormData) {
   redirect(appendQueryParam(redirectTo, "saved", "Monday board saved."));
 }
 
+export async function updateMondayBoardSelectionAction({
+  workspaceId,
+  boardId,
+}: {
+  workspaceId: string;
+  boardId: string;
+}) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return {
+      ok: false,
+      error: "Monday board could not be saved right now.",
+    };
+  }
+
+  const normalizedWorkspaceId = workspaceId.trim();
+  const normalizedBoardId = boardId.trim();
+
+  if (!normalizedWorkspaceId || !normalizedBoardId) {
+    return {
+      ok: false,
+      error: "Choose a monday board before sending a test lead.",
+    };
+  }
+
+  const headerStore = await headers();
+  const ip = getIpFromHeaders(headerStore);
+  const rateLimit = await checkRateLimit({
+    key: `crm:monday:update-board:${normalizedWorkspaceId}`,
+    limit: 20,
+    windowMs: 60 * 60 * 1000,
+    identifiers: {
+      ip,
+      userId: user.id,
+    },
+  });
+
+  if (!rateLimit.allowed) {
+    logRateLimitHit({
+      key: `crm:monday:update-board:${normalizedWorkspaceId}`,
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+      matchedOn: rateLimit.matchedOn,
+      ip,
+      userId: user.id,
+    });
+    return {
+      ok: false,
+      error: "Monday board could not be saved right now.",
+    };
+  }
+
+  if (!isSupabaseServerConfigured()) {
+    return {
+      ok: false,
+      error: "Monday board could not be saved right now.",
+    };
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return {
+      ok: false,
+      error: "Monday board could not be saved right now.",
+    };
+  }
+
+  const globalRole = await getCurrentRole();
+  const membershipRole = await getWorkspaceMembershipRole({
+    admin,
+    workspaceId: normalizedWorkspaceId,
+    userId: user.id,
+  });
+  const canConfigureMonday =
+    globalRole === "admin" || membershipRole === "owner" || membershipRole === "admin";
+
+  if (!canConfigureMonday) {
+    return {
+      ok: false,
+      error: "Only workspace owners or admins can configure Monday CRM.",
+    };
+  }
+
+  try {
+    const board = await saveWorkspaceMondayBoardId({
+      admin,
+      workspaceId: normalizedWorkspaceId,
+      boardId: normalizedBoardId,
+    });
+    revalidatePath("/workspace/settings");
+    return {
+      ok: true,
+      board: {
+        id: board.id,
+        name: board.name || "Monday board",
+        workspaceName: board.workspaceName || null,
+      },
+      message: "Monday board saved.",
+    };
+  } catch (error) {
+    logCrmTestDeliveryFailure({
+      provider: "monday",
+      workspaceId: normalizedWorkspaceId,
+      step: "update_board_selection_action",
+      error,
+    });
+    return {
+      ok: false,
+      error: getCrmTestDeliveryFailureMessage({
+        provider: "monday",
+        error,
+      }),
+    };
+  }
+}
+
 export async function listMondayBoardsAction(workspaceId: string) {
   const user = await getCurrentUser();
   if (!user) {

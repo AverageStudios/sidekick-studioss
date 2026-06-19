@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { listMondayBoardsAction, saveMondayBoardIdAction } from "@/app/actions";
-import { Button } from "@/components/ui/button";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { listMondayBoardsAction, updateMondayBoardSelectionAction } from "@/app/actions";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 type MondayBoardOption = {
   id: string;
@@ -55,6 +55,9 @@ export function MondayBoardPicker({
   selectedBoardWorkspaceName,
   canManage,
 }: MondayBoardPickerProps) {
+  const [savedBoardId, setSavedBoardId] = useState(selectedBoardId);
+  const [savedBoardName, setSavedBoardName] = useState(selectedBoardName || "");
+  const [savedBoardWorkspaceName, setSavedBoardWorkspaceName] = useState(selectedBoardWorkspaceName || "");
   const [boards, setBoards] = useState<MondayBoardOption[]>(
     selectedBoardId && selectedBoardName
       ? [
@@ -70,8 +73,10 @@ export function MondayBoardPicker({
   const [manualBoardId, setManualBoardId] = useState(selectedBoardId);
   const [manualOverride, setManualOverride] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [isLoadingBoards, startLoadingBoards] = useTransition();
+  const [isSavingBoard, startSavingBoard] = useTransition();
 
   const normalizedBoards = useMemo(() => {
     const seen = new Set<string>();
@@ -90,52 +95,84 @@ export function MondayBoardPicker({
   }, [boards]);
 
   const recommendedBoardId = useMemo(
-    () => (selectedBoardId ? selectedBoardId : getRecommendedBoardId(normalizedBoards)),
-    [normalizedBoards, selectedBoardId],
+    () => (savedBoardId ? savedBoardId : getRecommendedBoardId(normalizedBoards)),
+    [normalizedBoards, savedBoardId],
   );
 
   const selectedBoardRecord = normalizedBoards.find((board) => board.id === selectedPickerBoardId) || null;
 
   const effectiveBoardId = manualOverride ? manualBoardId : selectedPickerBoardId || manualBoardId;
 
+  useEffect(() => {
+    if (!canManage || loaded || isLoadingBoards) return;
+
+    startLoadingBoards(async () => {
+      const result = await listMondayBoardsAction(workspaceId);
+      if (result.ok) {
+        setBoards(result.boards);
+        setLoadError(null);
+        setLoaded(true);
+        if (!selectedBoardId) {
+          const recommendedId = getRecommendedBoardId(
+            result.boards.filter((board) => !isSubitemBoard(board)).sort((left, right) => {
+              const priorityDiff = getBoardPriority(left) - getBoardPriority(right);
+              if (priorityDiff !== 0) return priorityDiff;
+              return left.name.localeCompare(right.name);
+            }),
+          );
+          if (recommendedId) {
+            setSelectedPickerBoardId(recommendedId);
+          }
+        } else if (!selectedPickerBoardId) {
+          setSelectedPickerBoardId(selectedBoardId);
+        }
+      } else {
+        setLoadError(result.error || "Could not load monday boards. Paste a board ID manually.");
+        setLoaded(true);
+      }
+    });
+  }, [canManage, isLoadingBoards, loaded, savedBoardId, selectedBoardId, selectedPickerBoardId, workspaceId]);
+
+  function saveBoardSelection(boardId: string) {
+    if (!canManage || !boardId) return;
+
+    startSavingBoard(async () => {
+      const result = await updateMondayBoardSelectionAction({
+        workspaceId,
+        boardId,
+      });
+
+      if (!result.ok) {
+        setLoadError(result.error || "Monday board could not be saved right now.");
+        setSaveMessage(null);
+        return;
+      }
+
+      if (!result.board) {
+        setLoadError("Monday board could not be saved right now.");
+        setSaveMessage(null);
+        return;
+      }
+
+      setLoadError(null);
+      setSaveMessage(result.message || "Monday board saved.");
+      setSavedBoardId(result.board.id);
+      setSavedBoardName(result.board.name);
+      setSavedBoardWorkspaceName(result.board.workspaceName || "");
+      setManualBoardId(result.board.id);
+      setManualOverride(false);
+      setSelectedPickerBoardId(result.board.id);
+    });
+  }
+
   return (
     <div className="mt-4 space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          disabled={!canManage || isLoadingBoards}
-          onClick={() => {
-            startLoadingBoards(async () => {
-              const result = await listMondayBoardsAction(workspaceId);
-              if (result.ok) {
-                setBoards(result.boards);
-                setLoadError(null);
-                setLoaded(true);
-                if (!selectedBoardId) {
-                  const recommendedId = getRecommendedBoardId(
-                    result.boards.filter((board) => !isSubitemBoard(board)).sort((left, right) => {
-                      const priorityDiff = getBoardPriority(left) - getBoardPriority(right);
-                      if (priorityDiff !== 0) return priorityDiff;
-                      return left.name.localeCompare(right.name);
-                    }),
-                  );
-                  if (recommendedId) {
-                    setSelectedPickerBoardId(recommendedId);
-                  }
-                } else if (!selectedPickerBoardId) {
-                  setSelectedPickerBoardId(selectedBoardId);
-                }
-              } else {
-                setLoadError(result.error || "Could not load monday boards. Paste a board ID manually.");
-                setLoaded(true);
-              }
-            });
-          }}
-        >
-          {isLoadingBoards ? "Loading Boards..." : "Load Boards"}
-        </Button>
-      </div>
+      {isLoadingBoards ? (
+        <p className="text-xs text-[var(--muted)]">Loading monday boards...</p>
+      ) : null}
+      {isSavingBoard ? (
+        <p className="text-xs text-[var(--muted)]">Saving monday board...</p>
+      ) : null}
 
       {normalizedBoards.length ? (
         <div className="space-y-2">
@@ -149,10 +186,16 @@ export function MondayBoardPicker({
             id="mondayBoardPicker"
             value={selectedPickerBoardId || recommendedBoardId}
             onChange={(event) => {
-              setSelectedPickerBoardId(event.target.value);
+              const nextBoardId = event.target.value;
+              setSelectedPickerBoardId(nextBoardId);
               setManualOverride(false);
+              setSaveMessage(null);
+              if (nextBoardId) {
+                saveBoardSelection(nextBoardId);
+              }
             }}
             className="h-12 w-full rounded-[20px] border border-[var(--line)] bg-white/92 px-[1.125rem] text-sm text-[var(--ink)] shadow-[var(--shadow-soft)] outline-none transition-all duration-200 hover:border-[color-mix(in_oklab,var(--brand)_14%,white)] focus:border-[color-mix(in_oklab,var(--brand)_34%,white)] focus:bg-white focus:ring-2 focus:ring-[var(--soft-brand)] focus:ring-offset-2 focus:ring-offset-[var(--surface)]"
+            disabled={!canManage || isSavingBoard}
           >
             <option value="">Choose a monday board</option>
             {normalizedBoards.map((board) => (
@@ -175,20 +218,12 @@ export function MondayBoardPicker({
         <p className="text-xs text-[var(--muted)]">Could not load monday boards. You can paste a board ID manually.</p>
       ) : null}
 
-      <form action={saveMondayBoardIdAction} className="space-y-4">
-        <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
-        <input type="hidden" name="boardId" value={effectiveBoardId} />
-        <div className="flex flex-wrap gap-2">
-          <Button type="submit" variant="outline" disabled={!canManage || !effectiveBoardId}>
-            Save Board
-          </Button>
-        </div>
-
-        <details className="rounded-2xl border border-[var(--line)] bg-white/70 p-4">
-          <summary className="cursor-pointer text-sm font-medium text-[var(--ink)]">
-            Advanced
-          </summary>
-          <div className="mt-3 space-y-2">
+      <details className="rounded-2xl border border-[var(--line)] bg-white/70 p-4">
+        <summary className="cursor-pointer text-sm font-medium text-[var(--ink)]">
+          Advanced
+        </summary>
+        <div className="mt-3 space-y-3">
+          <div className="space-y-2">
             <label className="block text-sm font-medium text-[var(--ink)]" htmlFor="mondayBoardIdManual">
               Paste board ID manually
             </label>
@@ -198,17 +233,34 @@ export function MondayBoardPicker({
               onChange={(event) => {
                 setManualBoardId(event.target.value);
                 setManualOverride(true);
+                setSaveMessage(null);
               }}
               placeholder="Paste a monday board ID manually"
               inputMode="numeric"
+              disabled={!canManage || isSavingBoard}
             />
           </div>
-        </details>
-      </form>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!canManage || !manualBoardId || isSavingBoard}
+              onClick={() => saveBoardSelection(manualBoardId)}
+            >
+              Use Pasted Board ID
+            </Button>
+          </div>
+        </div>
+      </details>
 
-      {selectedBoardName ? (
+      {saveMessage ? (
+        <p className="text-xs text-emerald-700">{saveMessage}</p>
+      ) : null}
+
+      {savedBoardName ? (
         <p className="text-xs text-[var(--muted)]">
-          Selected board: {selectedBoardName}
+          Selected board: {savedBoardName}
+          {savedBoardWorkspaceName ? ` - ${savedBoardWorkspaceName}` : ""}
         </p>
       ) : effectiveBoardId ? (
         <p className="text-xs text-[var(--muted)]">Choose a monday board before sending a test lead.</p>
