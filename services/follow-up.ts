@@ -57,3 +57,33 @@ export async function sendWorkspaceInvitationEmail(input: {
 
   return { skipped: false };
 }
+
+export async function sendCrmIntegrationRequestEmail(input: {
+  crmName: string;
+  message?: string | null;
+  userEmail: string;
+  workspaceName?: string | null;
+  workspaceId?: string | null;
+  submittedAtIso: string;
+}) {
+  if (!isResendConfigured()) {
+    return { skipped: true };
+  }
+
+  const resend = new Resend(env.resendApiKey!);
+
+  await resend.emails.send({
+    from: env.resendFromEmail!,
+    to: "contact@sidekickstudioss.net",
+    subject: "New CRM request from SideKick",
+    text: [
+      `Requested CRM: ${input.crmName}`,
+      `Message/use case: ${input.message?.trim() || "No message provided."}`,
+      `User email: ${input.userEmail}`,
+      `Workspace: ${input.workspaceName || "Unknown workspace"} (${input.workspaceId || "no-workspace"})`,
+      `Submitted at: ${input.submittedAtIso}`,
+    ].join("\n"),
+  });
+
+  return { skipped: false };
+}

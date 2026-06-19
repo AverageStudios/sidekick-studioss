@@ -14,7 +14,7 @@ import { createCampaignBlueprint } from "@/lib/template-engine";
 import { env, isDemoModeEnabled, isSupabasePublicConfigured, isSupabaseServerConfigured } from "@/lib/env";
 import { getPublishedTemplateBySlug } from "@/lib/template-repository";
 import { slugify } from "@/lib/utils";
-import { sendLeadConfirmationEmail, sendWorkspaceInvitationEmail } from "@/services/follow-up";
+import { sendCrmIntegrationRequestEmail, sendLeadConfirmationEmail, sendWorkspaceInvitationEmail } from "@/services/follow-up";
 import { deleteStoragePaths, deleteStoragePrefix, getStoragePathFromPublicUrl, uploadAsset } from "@/services/storage";
 import { storageBucketName } from "@/services/storage";
 import { checkRateLimit, getIpFromHeaders, logRateLimitHit } from "@/lib/rate-limit";
@@ -84,6 +84,7 @@ const authSchema = z.object({
 });
 
 const RATE_LIMITED_ACTION_MESSAGE = "Too many attempts right now. Please wait a moment and try again.";
+const CRM_REQUEST_RATE_LIMIT_MESSAGE = "You've sent too many CRM requests. Please try again later.";
 
 const uuidSchema = z.string().uuid();
 const publicLeadSubmissionSchema = z.object({
@@ -99,6 +100,11 @@ const publicLeadSubmissionSchema = z.object({
     .max(40)
     .regex(/^[+()\d\s.-]+$/, "Enter a valid phone number."),
   serviceInterest: z.string().trim().min(1).max(160),
+  message: z.string().trim().max(1000).optional().default(""),
+});
+
+const crmRequestSchema = z.object({
+  crmName: z.string().trim().min(2).max(80),
   message: z.string().trim().max(1000).optional().default(""),
 });
 
@@ -4084,6 +4090,91 @@ export async function listMondayBoardsAction(workspaceId: string) {
       ok: false,
       boards: [] as Array<{ id: string; name: string; workspaceName?: string | null; kind?: string | null }>,
       error: "Could not load monday boards. Paste a board ID manually.",
+    };
+  }
+}
+
+export async function requestCrmIntegrationAction(input: {
+  crmName: string;
+  message?: string;
+}) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return {
+      ok: false,
+      error: "Could not send request. Please try again.",
+    };
+  }
+
+  const parsed = crmRequestSchema.safeParse({
+    crmName: input.crmName,
+    message: input.message || "",
+  });
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Could not send request. Please try again.",
+      fieldError: String(input.crmName || "").trim().length < 2 ? "Enter a CRM name." : undefined,
+    };
+  }
+
+  const workspaceContext = await ensureWorkspaceContextForUser(user).catch(() => null);
+  const workspaceId = workspaceContext?.activeWorkspace.id || null;
+  const workspaceName = workspaceContext?.activeWorkspace.name || null;
+
+  const headerStore = await headers();
+  const ip = getIpFromHeaders(headerStore);
+  const rateLimit = await checkRateLimit({
+    key: `crm:request:${workspaceId || "no-workspace"}`,
+    limit: 5,
+    windowMs: 60 * 60 * 1000,
+    identifiers: {
+      ip,
+      userId: user.id,
+      email: user.email || null,
+    },
+  });
+
+  if (!rateLimit.allowed) {
+    logRateLimitHit({
+      key: `crm:request:${workspaceId || "no-workspace"}`,
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+      matchedOn: rateLimit.matchedOn,
+      ip,
+      userId: user.id,
+    });
+    return {
+      ok: false,
+      error: CRM_REQUEST_RATE_LIMIT_MESSAGE,
+    };
+  }
+
+  if (!user.email) {
+    return {
+      ok: false,
+      error: "Could not send request. Please try again.",
+    };
+  }
+
+  try {
+    await sendCrmIntegrationRequestEmail({
+      crmName: parsed.data.crmName,
+      message: parsed.data.message,
+      userEmail: user.email,
+      workspaceName,
+      workspaceId,
+      submittedAtIso: new Date().toISOString(),
+    });
+    return {
+      ok: true,
+      message: "CRM request sent.",
+    };
+  } catch (error) {
+    logActionError("request crm integration", error);
+    return {
+      ok: false,
+      error: "Could not send request. Please try again.",
     };
   }
 }

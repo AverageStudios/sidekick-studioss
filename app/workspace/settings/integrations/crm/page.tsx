@@ -3,11 +3,12 @@ import { ArrowLeft } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { CrmProviderManageCard } from "@/components/crm-provider-manage-card";
 import { PageHeader } from "@/components/page-header";
+import { RequestCrmCard } from "@/components/request-crm-card";
 import { Button } from "@/components/ui/button";
 import { requireUser, getCurrentRole } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentWorkspaceContext } from "@/lib/workspaces";
-import { crmProviderMetadataList } from "@/lib/crm-providers";
+import { crmProviderMetadataList, getVisibleCrmProviderMetadataList } from "@/lib/crm-providers";
 import { getWorkspaceCrmState } from "@/lib/crm-integration";
 import {
   getFreshsalesEnvStatus,
@@ -26,7 +27,7 @@ export default async function WorkspaceCrmSelectionPage({
 }: {
   searchParams: Promise<{ provider?: string; saved?: string; error?: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const [{ provider: selectedProvider, saved, error }, workspaceContext, currentRole] = await Promise.all([
     searchParams,
     getCurrentWorkspaceContext(),
@@ -80,6 +81,18 @@ export default async function WorkspaceCrmSelectionPage({
   const canSendCrmTests =
     currentRole === "admin" || workspaceRole === "owner" || workspaceRole === "admin";
   const connectedCount = crmConnections.length;
+  const visibleProviders = getVisibleCrmProviderMetadataList();
+  const selectedVisibleProvider = visibleProviders.some((provider) => provider.key === selectedProvider)
+    ? selectedProvider
+    : undefined;
+  const selectedHiddenProviderMetadata =
+    selectedProvider && !visibleProviders.some((provider) => provider.key === selectedProvider)
+      ? crmProviderMetadataList.find((provider) => provider.key === selectedProvider) || null
+      : null;
+  const hiddenConnectedSelectedProvider =
+    selectedHiddenProviderMetadata && connectionMap.get(selectedHiddenProviderMetadata.key)
+      ? selectedHiddenProviderMetadata
+      : null;
 
   return (
     <AppShell currentPath="/settings">
@@ -128,19 +141,41 @@ export default async function WorkspaceCrmSelectionPage({
             CRM connections are not available until the active workspace is loaded.
           </div>
         ) : (
-          <div className="grid gap-5 lg:grid-cols-2">
-            {crmProviderMetadataList.map((provider) => (
-              <CrmProviderManageCard
-                key={provider.key}
-                provider={provider}
-                connection={connectionMap.get(provider.key) || null}
-                envConfigured={envStatusByProvider[provider.key].configured}
-                workspaceId={workspaceId}
-                canSendCrmTests={canSendCrmTests}
-                isSelected={selectedProvider === provider.key}
+          <>
+            <div className="grid gap-5 lg:grid-cols-2">
+              {visibleProviders.map((provider) => (
+                <CrmProviderManageCard
+                  key={provider.key}
+                  provider={provider}
+                  connection={connectionMap.get(provider.key) || null}
+                  envConfigured={envStatusByProvider[provider.key].configured}
+                  workspaceId={workspaceId}
+                  canSendCrmTests={canSendCrmTests}
+                  isSelected={selectedVisibleProvider === provider.key}
+                />
+              ))}
+            </div>
+
+            {hiddenConnectedSelectedProvider ? (
+              <div className="mt-5">
+                <CrmProviderManageCard
+                  provider={hiddenConnectedSelectedProvider}
+                  connection={connectionMap.get(hiddenConnectedSelectedProvider.key) || null}
+                  envConfigured={envStatusByProvider[hiddenConnectedSelectedProvider.key].configured}
+                  workspaceId={workspaceId}
+                  canSendCrmTests={canSendCrmTests}
+                  isSelected
+                />
+              </div>
+            ) : null}
+
+            <div className="mt-6">
+              <RequestCrmCard
+                userEmail={user.email || null}
+                workspaceName={workspaceName}
               />
-            ))}
-          </div>
+            </div>
+          </>
         )}
       </div>
     </AppShell>

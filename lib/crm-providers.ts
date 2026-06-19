@@ -6,6 +6,7 @@ export type CrmProviderMetadata = {
   shortDescription: string;
   shortCode: string;
   logoPath?: string;
+  visibleInSelection?: boolean;
   accentClassName: string;
   surfaceClassName: string;
   connectPath: string;
@@ -20,6 +21,7 @@ export const crmProviderMetadataList: CrmProviderMetadata[] = [
     shortDescription: "Send leads into GoHighLevel contacts and follow-up workflows.",
     shortCode: "GHL",
     logoPath: "/crm-logos/gohighlevel.png",
+    visibleInSelection: false,
     accentClassName: "text-sky-700",
     surfaceClassName: "bg-sky-100",
     connectPath: "/api/integrations/crm/connect?provider=gohighlevel",
@@ -40,6 +42,7 @@ export const crmProviderMetadataList: CrmProviderMetadata[] = [
     shortDescription: "Send captured leads into HubSpot as contacts.",
     shortCode: "HS",
     logoPath: "/crm-logos/hubspot.svg",
+    visibleInSelection: false,
     accentClassName: "text-orange-700",
     surfaceClassName: "bg-orange-100",
     connectPath: "/api/integrations/hubspot/connect",
@@ -60,6 +63,7 @@ export const crmProviderMetadataList: CrmProviderMetadata[] = [
     shortDescription: "Send leads into Freshsales contacts.",
     shortCode: "FS",
     logoPath: "/crm-logos/freshworks.webp",
+    visibleInSelection: false,
     accentClassName: "text-teal-700",
     surfaceClassName: "bg-teal-100",
     connectPath: "/api/integrations/freshsales/connect",
@@ -116,4 +120,8 @@ export function buildCrmProviderConnectHref(provider: CrmProvider, nextPath?: st
 
 export function buildCrmProviderManageHref(provider: CrmProvider) {
   return `/workspace/settings/integrations/crm?provider=${encodeURIComponent(provider)}`;
+}
+
+export function getVisibleCrmProviderMetadataList() {
+  return crmProviderMetadataList.filter((provider) => provider.visibleInSelection !== false);
 }

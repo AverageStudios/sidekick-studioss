@@ -27,14 +27,19 @@ Instead it shows:
 
 The CRM provider page shows cards for:
 
-- GoHighLevel
 - Pipedrive
-- HubSpot
 - Zoho CRM
-- Freshsales / Freshworks CRM
 - Monday CRM
 - Keap
 - Salesforce
+
+Hidden from the current selection UI for now:
+
+- GoHighLevel
+- HubSpot
+- Freshsales / Freshworks CRM
+
+Those providers still exist in the backend and existing workspace connections are preserved.
 
 Each card includes:
 
@@ -55,6 +60,8 @@ That expanded manage state keeps existing actions available, including:
 - reconnect
 - disconnect
 - `Send Test Lead`
+
+If a hidden provider is already connected for a workspace, SideKick can still open its manage state directly without showing it in the main visible selection grid.
 
 Monday CRM also keeps:
 
@@ -88,3 +95,18 @@ The assets were pulled from official provider-owned sources and stored locally s
 - no new public write endpoints were added
 - OAuth routing and token handling remain unchanged
 - CRM test delivery still requires authenticated admin or workspace owner/admin access
+
+## Request CRM
+
+The CRM page now includes a `Request a CRM` form.
+
+Authenticated users can submit:
+
+- CRM name
+- optional use case message
+
+SideKick sends that request server-side to:
+
+- `contact@sidekickstudioss.net`
+
+The request is rate limited and includes the requesting user email plus workspace context when available.
