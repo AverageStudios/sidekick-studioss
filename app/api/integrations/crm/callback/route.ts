@@ -13,6 +13,7 @@ import {
 } from "@/lib/crm-integration";
 import { env } from "@/lib/env";
 import { getFreshsalesOAuthDebugInfo } from "@/lib/integrations/freshsales";
+import { getCloseOAuthDebugInfo } from "@/lib/integrations/close";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 import { logRouteError } from "@/lib/api-security";
@@ -44,7 +45,28 @@ export async function GET(request: NextRequest) {
   const integrationsUrl = buildIntegrationsUrl(request);
   const code = request.nextUrl.searchParams.get("code");
   const providerError = request.nextUrl.searchParams.get("error");
+  const providerErrorDescription = request.nextUrl.searchParams.get("error_description");
   if (providerError) {
+    if (request.cookies.get("crm_oauth_provider")?.value === "close") {
+      const debug = getCloseOAuthDebugInfo();
+      console.error(
+        "[close-oauth]",
+        JSON.stringify({
+          provider: "close",
+          stage: "provider_redirect_error",
+          errorCode: providerError,
+          errorDescription:
+            typeof providerErrorDescription === "string" && providerErrorDescription.trim()
+              ? providerErrorDescription
+              : null,
+          authHost: debug.authHost,
+          authPath: debug.authPath,
+          redirectUri: debug.redirectUri,
+          scopeString: debug.scopeString,
+          scopeCount: debug.scopeCount,
+        }),
+      );
+    }
     integrationsUrl.searchParams.set(
       "error",
       providerError === "access_denied"
@@ -89,6 +111,29 @@ export async function GET(request: NextRequest) {
       }),
     );
   }
+  if (statePayload?.provider === "close" || providerCookie === "close") {
+    const debug = getCloseOAuthDebugInfo();
+    console.info(
+      "[close-oauth]",
+      JSON.stringify({
+        provider: "close",
+        stage: "callback_received",
+        workspaceId: statePayload?.workspaceId || workspaceCookie || null,
+        callbackHasCode: Boolean(code),
+        callbackStateValid: stateValid,
+        providerError: providerError || null,
+        providerErrorDescription:
+          typeof providerErrorDescription === "string" && providerErrorDescription.trim()
+            ? providerErrorDescription
+            : null,
+        authHost: debug.authHost,
+        authPath: debug.authPath,
+        redirectUri: debug.redirectUri,
+        scopeString: debug.scopeString,
+        scopeCount: debug.scopeCount,
+      }),
+    );
+  }
 
   if (
     !code ||
@@ -96,6 +141,19 @@ export async function GET(request: NextRequest) {
     (state && stateCookie && state !== stateCookie) ||
     (providerCookie && statePayload.provider !== providerCookie)
   ) {
+    if (providerCookie === "close" || statePayload?.provider === "close") {
+      console.error(
+        "[close-oauth]",
+        JSON.stringify({
+          provider: "close",
+          stage: "state_validation",
+          callbackHasCode: Boolean(code),
+          statePayloadPresent: Boolean(statePayload),
+          stateMatchesCookie: !(state && stateCookie && state !== stateCookie),
+          providerMatchesCookie: !(providerCookie && statePayload && statePayload.provider !== providerCookie),
+        }),
+      );
+    }
     integrationsUrl.searchParams.set(
       "error",
       "CRM connection was canceled or expired. Please try again.",
@@ -241,6 +299,7 @@ export async function GET(request: NextRequest) {
           workspaceId,
           userId: user.id,
           code,
+          redirectUri: new URL("/api/integrations/close/callback", getAppOrigin(request)).toString(),
         });
         break;
       default:
@@ -288,6 +347,47 @@ export async function GET(request: NextRequest) {
             ? "Freshsales connection failed. Check your Freshworks OAuth credentials and redirect URL."
             : "Freshsales connection failed. Please try again.";
       integrationsUrl.searchParams.set("error", message);
+    } else if (statePayload.provider === "close") {
+      const diagnosticError = error as Error & {
+        status?: number;
+        category?: string | null;
+        code?: string | null;
+        safeCategory?: string | null;
+      };
+      const debug = getCloseOAuthDebugInfo(
+        new URL("/api/integrations/close/callback", getAppOrigin(request)).toString(),
+      );
+      const messageText = error instanceof Error ? error.message : "unknown_error";
+      const inferredStage =
+        messageText.includes("state")
+          ? "state_validation"
+          : messageText.includes("token exchange") || messageText.includes("access token")
+            ? "token_exchange"
+            : messageText.includes("account lookup") || messageText.includes("verification")
+              ? "metadata_fetch"
+              : messageText.includes("workspace_provider_connections") || messageText.includes("database")
+                ? "store_connection"
+                : "callback_failed";
+      console.error(
+        "[close-oauth]",
+        JSON.stringify({
+          provider: "close",
+          stage: inferredStage,
+          workspaceId,
+          userId: user.id,
+          status: typeof diagnosticError.status === "number" ? diagnosticError.status : null,
+          category: typeof diagnosticError.category === "string" ? diagnosticError.category : null,
+          code: typeof diagnosticError.code === "string" ? diagnosticError.code : null,
+          safeCategory:
+            typeof diagnosticError.safeCategory === "string" ? diagnosticError.safeCategory : null,
+          authHost: debug.authHost,
+          authPath: debug.authPath,
+          redirectUri: debug.redirectUri,
+          scopeString: debug.scopeString,
+          scopeCount: debug.scopeCount,
+        }),
+      );
+      integrationsUrl.searchParams.set("error", "CRM connection failed. Please try again.");
     } else {
       integrationsUrl.searchParams.set("error", "CRM connection failed. Please try again.");
     }

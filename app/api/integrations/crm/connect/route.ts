@@ -9,7 +9,7 @@ import { buildKeapAuthorizationUrl } from "@/lib/integrations/keap";
 import { buildMondayAuthorizationUrl } from "@/lib/integrations/monday";
 import { buildSalesforceAuthorizationUrl } from "@/lib/integrations/salesforce";
 import { buildZohoAuthorizationUrl } from "@/lib/integrations/zoho";
-import { buildCloseAuthorizationUrl } from "@/lib/integrations/close";
+import { buildCloseAuthorizationUrl, getCloseOAuthDebugInfo } from "@/lib/integrations/close";
 import { CrmProvider } from "@/types";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 import { logRouteError } from "@/lib/api-security";
@@ -166,6 +166,26 @@ export async function GET(request: NextRequest) {
         }),
       );
     }
+    if (provider === "close") {
+      const debug = getCloseOAuthDebugInfo();
+      console.info(
+        "[close-oauth]",
+        JSON.stringify({
+          provider: "close",
+          stage: "connect_redirect",
+          workspaceId,
+          userId: user.id,
+          authHost: debug.authHost,
+          authPath: debug.authPath,
+          redirectUri: debug.redirectUri,
+          scopeString: debug.scopeString,
+          scopeCount: debug.scopeCount,
+          hasClientId: debug.hasClientId,
+          hasState: Boolean(oauthUrl.searchParams.get("state")),
+          responseType: oauthUrl.searchParams.get("response_type"),
+        }),
+      );
+    }
     const response = NextResponse.redirect(oauthUrl);
     response.cookies.set("crm_oauth_state", state, {
       httpOnly: true,
@@ -212,6 +232,23 @@ export async function GET(request: NextRequest) {
           redirectUri: debug.redirectUri,
           scopeString: debug.scopeString,
           scopeCount: debug.scopes.length,
+        }),
+      );
+    }
+    if (provider === "close") {
+      const debug = getCloseOAuthDebugInfo();
+      console.error(
+        "[close-oauth]",
+        JSON.stringify({
+          provider: "close",
+          stage: "connect_failed",
+          workspaceId,
+          userId: user.id,
+          authHost: debug.authHost,
+          authPath: debug.authPath,
+          redirectUri: debug.redirectUri,
+          scopeString: debug.scopeString,
+          scopeCount: debug.scopeCount,
         }),
       );
     }

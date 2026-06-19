@@ -69,6 +69,7 @@ import {
 import {
   createCloseTestLead,
   exchangeCloseCodeForTokens,
+  getCloseOAuthDebugInfo,
   getCloseAccountInfo,
   getCloseTokenMetadata,
   refreshCloseAccessToken,
@@ -2079,13 +2080,34 @@ export async function connectWorkspaceCloseOAuthProvider({
   workspaceId,
   userId,
   code,
+  redirectUri,
 }: {
   admin: SupabaseAdmin;
   workspaceId: string;
   userId: string;
   code: string;
+  redirectUri?: string | null;
 }) {
-  const token = await exchangeCloseCodeForTokens(code);
+  const debug = getCloseOAuthDebugInfo(redirectUri);
+  console.info(
+    "[close-oauth]",
+    JSON.stringify({
+      provider: "close",
+      stage: "token_exchange_start",
+      workspaceId,
+      userId,
+      authHost: debug.authHost,
+      authPath: debug.authPath,
+      redirectUri: debug.redirectUri,
+      scopeString: debug.scopeString,
+      scopeCount: debug.scopeCount,
+      hasClientId: debug.hasClientId,
+      includesRedirectUriOnFirstAttempt: false,
+      supportsRedirectUriRetry: true,
+    }),
+  );
+
+  const token = await exchangeCloseCodeForTokens(code, redirectUri);
   const tokenMetadata = getCloseTokenMetadata(token);
 
   return connectWorkspaceCrmProvider({
@@ -2102,7 +2124,7 @@ export async function connectWorkspaceCloseOAuthProvider({
       tokenType: tokenMetadata.tokenType,
       organizationId: tokenMetadata.organizationId,
       userId: tokenMetadata.userId,
-      redirectUri: env.closeRedirectUri || null,
+      redirectUri: redirectUri || env.closeRedirectUri || null,
     },
   });
 }

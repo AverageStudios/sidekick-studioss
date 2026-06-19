@@ -8,6 +8,8 @@ export type CloseOAuthTokenResponse = {
   scope?: string;
   organization_id?: string;
   user_id?: string;
+  error?: string;
+  error_description?: string;
 };
 
 type CloseMeResponse = {
@@ -31,6 +33,7 @@ type CloseLeadCreateResponse = {
 
 type CloseErrorPayload = {
   error?: string;
+  error_description?: string;
   message?: string;
   field_errors?: Record<string, unknown>;
   errors?: Array<Record<string, unknown>>;
@@ -83,9 +86,14 @@ function getScopeList(value: unknown) {
   return Array.from(new Set(value.split(/[,\s]+/).map((entry) => entry.trim()).filter(Boolean)));
 }
 
+function resolveRedirectUri(override?: string | null) {
+  return typeof override === "string" && override.trim().length > 0 ? override.trim() : getRequiredRedirectUri();
+}
+
 function getSafeProviderError(prefix: string, status: number, payload: CloseErrorPayload) {
   const candidates = [
     payload.message,
+    payload.error_description,
     payload.error,
     Array.isArray(payload.errors) ? payload.errors[0]?.message : null,
   ];
@@ -101,10 +109,12 @@ function getSafeProviderError(prefix: string, status: number, payload: CloseErro
 
 function classifyCloseError(status: number, payload: CloseErrorPayload) {
   const normalizedError = typeof payload.error === "string" ? payload.error.toLowerCase() : "";
+  const normalizedDescription =
+    typeof payload.error_description === "string" ? payload.error_description.toLowerCase() : "";
   const normalizedMessage = typeof payload.message === "string" ? payload.message.toLowerCase() : "";
   const hasFieldErrors =
     payload.field_errors && typeof payload.field_errors === "object" && Object.keys(payload.field_errors).length > 0;
-  const combined = `${normalizedError} ${normalizedMessage}`.trim();
+  const combined = `${normalizedError} ${normalizedDescription} ${normalizedMessage}`.trim();
 
   if (status === 401) return "AUTH_FAILED";
   if (status === 403) return "PERMISSION_DENIED";
@@ -162,34 +172,124 @@ export function buildCloseAuthorizationUrl(state: string, redirectUriOverride?: 
   const url = new URL("https://app.close.com/oauth2/authorize/");
   url.searchParams.set("client_id", getRequiredClientId());
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("redirect_uri", redirectUriOverride?.trim() || getRequiredRedirectUri());
+  url.searchParams.set("redirect_uri", resolveRedirectUri(redirectUriOverride));
   url.searchParams.set("scope", getRequiredScopes());
   url.searchParams.set("state", state);
   return url;
 }
 
-export async function exchangeCloseCodeForTokens(code: string) {
-  const payload = await requestJson<CloseOAuthTokenResponse>({
+function getCloseTokenExchangeDebug(error: unknown) {
+  if (!(error instanceof Error)) {
+    return {
+      status: null,
+      code: null,
+      safeCategory: null,
+      message: "unknown_error",
+    };
+  }
+
+  const candidate = error as Error & {
+    status?: number;
+    code?: string | null;
+    safeCategory?: string | null;
+  };
+
+  return {
+    status: typeof candidate.status === "number" ? candidate.status : null,
+    code: typeof candidate.code === "string" ? candidate.code : null,
+    safeCategory: typeof candidate.safeCategory === "string" ? candidate.safeCategory : null,
+    message: error.message,
+  };
+}
+
+export function getCloseOAuthDebugInfo(redirectUriOverride?: string | null) {
+  const authUrl = buildCloseAuthorizationUrl("STATE", redirectUriOverride);
+  const scopeString = getRequiredScopes();
+  const scopes = getScopeList(scopeString);
+
+  return {
+    provider: "close" as const,
+    authHost: authUrl.host,
+    authPath: authUrl.pathname,
+    redirectUri: resolveRedirectUri(redirectUriOverride),
+    scopeString,
+    scopeCount: scopes.length,
+    scopes,
+    hasClientId: Boolean(getRequiredClientId()),
+  };
+}
+
+async function exchangeCloseCodeForTokensOnce({
+  code,
+  includeRedirectUri,
+  redirectUriOverride,
+}: {
+  code: string;
+  includeRedirectUri: boolean;
+  redirectUriOverride?: string | null;
+}) {
+  const body = new URLSearchParams({
+    client_id: getRequiredClientId(),
+    client_secret: getRequiredClientSecret(),
+    grant_type: "authorization_code",
+    code,
+  });
+
+  if (includeRedirectUri) {
+    body.set("redirect_uri", resolveRedirectUri(redirectUriOverride));
+  }
+
+  return requestJson<CloseOAuthTokenResponse>({
     url: "https://api.close.com/oauth2/token/",
     method: "POST",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams({
-      client_id: getRequiredClientId(),
-      client_secret: getRequiredClientSecret(),
-      grant_type: "authorization_code",
-      code,
-    }).toString(),
+    body: body.toString(),
     errorPrefix: "Close token exchange failed",
   });
+}
 
-  if (!payload.access_token) {
-    throw new Error("Close did not return an access token.");
+export async function exchangeCloseCodeForTokens(code: string, redirectUriOverride?: string | null) {
+  try {
+    const payload = await exchangeCloseCodeForTokensOnce({
+      code,
+      includeRedirectUri: false,
+      redirectUriOverride,
+    });
+
+    if (!payload.access_token) {
+      throw new Error("Close did not return an access token.");
+    }
+
+    return payload;
+  } catch (error) {
+    const diagnostic = getCloseTokenExchangeDebug(error);
+    const shouldRetryWithRedirectUri =
+      diagnostic.status === 400 &&
+      (
+        diagnostic.code === "invalid_grant" ||
+        diagnostic.code === "invalid_request" ||
+        diagnostic.message.toLowerCase().includes("redirect")
+      );
+
+    if (!shouldRetryWithRedirectUri) {
+      throw error;
+    }
+
+    const payload = await exchangeCloseCodeForTokensOnce({
+      code,
+      includeRedirectUri: true,
+      redirectUriOverride,
+    });
+
+    if (!payload.access_token) {
+      throw new Error("Close did not return an access token.");
+    }
+
+    return payload;
   }
-
-  return payload;
 }
 
 export async function refreshCloseAccessToken(refreshToken: string) {
