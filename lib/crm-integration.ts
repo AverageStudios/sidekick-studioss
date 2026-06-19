@@ -7,6 +7,7 @@ import {
   isGhlConfigured,
   isHubSpotConfigured,
   isKeapConfigured,
+  isSalesforceConfigured,
   isZohoConfigured,
 } from "@/lib/env";
 import {
@@ -56,6 +57,14 @@ import {
   getZohoTokenMetadata,
   refreshZohoAccessToken,
 } from "@/lib/integrations/zoho";
+import {
+  createSalesforceTestLead,
+  exchangeSalesforceCodeForTokens,
+  getSalesforceIdentity,
+  getSalesforceOrganizationInfo,
+  getSalesforceTokenMetadata,
+  refreshSalesforceAccessToken,
+} from "@/lib/integrations/salesforce";
 import {
   CampaignRecord,
   CrmConnectionStatus,
@@ -288,6 +297,17 @@ type KeapMetadata = {
   accountHost?: string | null;
 };
 
+type SalesforceMetadata = {
+  tokenType?: string | null;
+  refreshToken?: string | null;
+  scope?: string | string[] | null;
+  instanceUrl?: string | null;
+  identityUrl?: string | null;
+  issuedAt?: string | null;
+  loginUrl?: string | null;
+  apiVersion?: string | null;
+};
+
 const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho", "freshsales", "monday", "keap"];
 const CRM_TEST_PROVIDER_LABELS: Record<CrmProvider, string> = {
   gohighlevel: "GoHighLevel",
@@ -323,6 +343,7 @@ export function isCrmTestDeliverySupported(provider: CrmProvider) {
     provider === "gohighlevel" ||
     provider === "pipedrive" ||
     provider === "hubspot" ||
+    provider === "salesforce" ||
     provider === "zoho" ||
     provider === "freshsales" ||
     provider === "monday" ||
@@ -552,6 +573,23 @@ export function getCrmTestDeliveryFailureMessage({
     const diagnostic = getCrmDiagnostic(error);
     if (diagnostic.safeCategory === "VALIDATION_FAILED") {
       return "Keap rejected the test contact because a required contact field is missing.";
+    }
+  }
+
+  if (provider === "salesforce") {
+    const diagnostic = getCrmDiagnostic(error);
+    if (
+      diagnostic.safeCategory === "REQUIRED_FIELD_MISSING" ||
+      diagnostic.safeCategory === "VALIDATION_FAILED"
+    ) {
+      return "Salesforce rejected the test lead because a required Lead field is missing.";
+    }
+
+    if (
+      diagnostic.safeCategory === "PERMISSION_DENIED" ||
+      diagnostic.safeCategory === "INVALID_SCOPE"
+    ) {
+      return "Salesforce rejected the test lead because SideKick does not have the required API permissions.";
     }
   }
 
@@ -960,6 +998,87 @@ async function validateKeapConnection({
   }
 }
 
+async function validateSalesforceConnection({
+  accessToken,
+  metadata,
+}: {
+  accessToken: string;
+  metadata?: SalesforceMetadata;
+}): Promise<ValidatedConnection> {
+  try {
+    const instanceUrl = getFirstString(metadata?.instanceUrl);
+    if (!instanceUrl) {
+      throw new Error("Salesforce did not provide an instance URL.");
+    }
+
+    const apiVersion = getFirstString(metadata?.apiVersion, env.salesforceApiVersion) || "v61.0";
+    const organization = await getSalesforceOrganizationInfo({
+      accessToken,
+      instanceUrl,
+      apiVersion,
+    });
+    const identityUrl = getFirstString(metadata?.identityUrl);
+    const identity = identityUrl
+      ? await getSalesforceIdentity({
+          accessToken,
+          identityUrl,
+        }).catch(() => null)
+      : null;
+    const instanceHost = instanceUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    const providerUserId =
+      getFirstString(organization.orgId, identity?.organization_id, identity?.user_id) || instanceHost;
+    const providerUserName =
+      getFirstString(organization.orgName, identity?.display_name, identity?.username) || instanceHost;
+
+    return {
+      providerUserId,
+      providerUserName,
+      tokenType: getFirstString(metadata?.tokenType) || "Bearer",
+      tokenExpiresAt: null,
+      refreshToken: getFirstString(metadata?.refreshToken),
+      scopes: getScopeList(metadata?.scope).length ? getScopeList(metadata?.scope) : ["api", "refresh_token"],
+      metadata: {
+        validated_at: new Date().toISOString(),
+        auth_type: "oauth",
+        instance_url: instanceUrl,
+        instance_host: instanceHost,
+        identity_url: identityUrl,
+        login_url: getFirstString(metadata?.loginUrl, env.salesforceLoginUrl) || null,
+        api_version: apiVersion,
+        issued_at: getFirstString(metadata?.issuedAt) || null,
+        org_id: organization.orgId,
+        org_name: organization.orgName,
+        user_id: getFirstString(identity?.user_id) || null,
+        username: getFirstString(identity?.username) || null,
+        display_name: getFirstString(identity?.display_name) || null,
+        email: getFirstString(identity?.email) || null,
+      },
+      destinations: [
+        {
+          assetId: "leads",
+          name: "Salesforce leads",
+          metadata: {
+            destinationType: "leads",
+            objectType: "Lead",
+            instanceUrl,
+            apiVersion,
+          },
+          selected: true,
+        },
+      ],
+    };
+  } catch (error) {
+    const diagnostic = getCrmDiagnostic(error);
+    if (diagnostic.status === 401) {
+      throw new Error("Salesforce token is invalid or expired. Reconnect Salesforce.");
+    }
+    if (diagnostic.status === 403) {
+      throw new Error("Salesforce access is missing required API permissions. Reconnect Salesforce.");
+    }
+    throw new Error(diagnostic.message || "Salesforce verification could not be completed.");
+  }
+}
+
 async function validateCrmConnection(input: {
   provider: CrmProvider;
   accessToken: string;
@@ -998,6 +1117,11 @@ async function validateCrmConnection(input: {
       return validateHubSpotConnection({
         accessToken: input.accessToken,
         metadata: input.metadata as HubSpotMetadata | undefined,
+      });
+    case "salesforce":
+      return validateSalesforceConnection({
+        accessToken: input.accessToken,
+        metadata: input.metadata as SalesforceMetadata | undefined,
       });
     case "pipedrive":
       return validatePipedriveConnection({
@@ -1803,6 +1927,43 @@ export async function connectWorkspaceKeapOAuthProvider({
   });
 }
 
+export async function connectWorkspaceSalesforceOAuthProvider({
+  admin,
+  workspaceId,
+  userId,
+  code,
+  redirectUri,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+  userId: string;
+  code: string;
+  redirectUri?: string | null;
+}) {
+  const token = await exchangeSalesforceCodeForTokens(code, redirectUri);
+  const tokenMetadata = getSalesforceTokenMetadata(token);
+
+  return connectWorkspaceCrmProvider({
+    admin,
+    workspaceId,
+    userId,
+    provider: "salesforce",
+    accessToken: normalizeAccessToken(token.access_token || ""),
+    metadata: {
+      authType: "oauth",
+      scope: token.scope || tokenMetadata.scopes,
+      refreshToken: tokenMetadata.refreshToken,
+      tokenType: tokenMetadata.tokenType,
+      instanceUrl: tokenMetadata.instanceUrl,
+      identityUrl: tokenMetadata.identityUrl,
+      issuedAt: tokenMetadata.issuedAt,
+      loginUrl: env.salesforceLoginUrl,
+      apiVersion: env.salesforceApiVersion,
+      redirectUri: redirectUri || env.salesforceRedirectUri || null,
+    },
+  });
+}
+
 export async function disconnectWorkspaceCrmProvider({
   admin,
   workspaceId,
@@ -2417,6 +2578,81 @@ async function getKeapAccessToken({
   }).catch(() => {
     throw new Error("Keap token is invalid or expired. Reconnect Keap.");
   });
+}
+
+async function refreshSalesforceToken({
+  admin,
+  connection,
+  refreshToken,
+}: {
+  admin: SupabaseAdmin;
+  connection: WorkspaceCrmConnectionRow;
+  refreshToken: string;
+}) {
+  if (!isSalesforceConfigured()) {
+    throw new Error("Salesforce OAuth env vars are missing.");
+  }
+
+  const refreshed = await refreshSalesforceAccessToken(refreshToken);
+  const metadata = getSalesforceTokenMetadata(refreshed);
+  const accessPayload = encryptCrmSecret(refreshed.access_token || "");
+  const nextRefreshToken = metadata.refreshToken || refreshToken;
+  const refreshPayload = nextRefreshToken ? encryptCrmSecret(nextRefreshToken) : null;
+
+  const { error } = await admin
+    .from("workspace_provider_connections")
+    .update({
+      token_ciphertext: accessPayload.ciphertext,
+      token_iv: accessPayload.iv,
+      token_tag: accessPayload.tag,
+      refresh_token_ciphertext: refreshPayload?.ciphertext || null,
+      refresh_token_iv: refreshPayload?.iv || null,
+      refresh_token_tag: refreshPayload?.tag || null,
+      token_type: metadata.tokenType || connection.token_type || "Bearer",
+      scopes: metadata.scopes.length ? metadata.scopes : connection.scopes,
+      metadata_json: {
+        ...connection.metadata_json,
+        auth_type: "oauth",
+        instance_url: metadata.instanceUrl || connection.metadata_json.instance_url || null,
+        identity_url: metadata.identityUrl || connection.metadata_json.identity_url || null,
+        issued_at: metadata.issuedAt || connection.metadata_json.issued_at || null,
+      },
+      last_synced_at: new Date().toISOString(),
+      status: "connected",
+      disconnected_at: null,
+      is_active: true,
+    })
+    .eq("id", connection.id);
+
+  if (error) throw new Error(error.message);
+
+  return {
+    accessToken: refreshed.access_token || "",
+    instanceUrl: metadata.instanceUrl || getFirstString(connection.metadata_json.instance_url) || "",
+  };
+}
+
+async function getSalesforceAccessToken({
+  admin,
+  connection,
+}: {
+  admin: SupabaseAdmin;
+  connection: WorkspaceCrmConnectionRow;
+}) {
+  const accessToken = decryptCrmSecret(connection);
+  if (!accessToken) {
+    throw Object.assign(new Error("Salesforce token is unavailable."), {
+      provider: "salesforce" as const,
+      step: "token_load",
+      safeCategory: "AUTH_FAILED",
+    } satisfies Partial<CrmDiagnosticError>);
+  }
+
+  const instanceUrl = getFirstString(connection.metadata_json.instance_url);
+  if (!instanceUrl) {
+    throw new Error("Salesforce instance URL is unavailable.");
+  }
+  return { accessToken, instanceUrl };
 }
 
 async function refreshPipedriveToken({
@@ -3165,6 +3401,99 @@ export async function sendWorkspaceKeapTestLead({
   } satisfies CrmTestDeliveryResult;
 }
 
+export async function sendWorkspaceSalesforceTestLead({
+  admin,
+  workspaceId,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+}) {
+  const connections = await listCrmConnections(admin, workspaceId);
+  const connection =
+    connections.find((entry) => entry.provider === "salesforce" && entry.is_active && entry.status === "connected") ||
+    null;
+
+  if (!connection) {
+    throw new Error("Salesforce is not connected for this workspace.");
+  }
+
+  const requiredScopes = ["api"];
+  const missingScopes = requiredScopes.filter((scope) => !connection.scopes.includes(scope));
+  if (missingScopes.length) {
+    throw Object.assign(new Error("Salesforce connection is missing required API scopes."), {
+      provider: "salesforce" as const,
+      step: "scope_check",
+      safeCategory: "INVALID_SCOPE",
+      code: "MISSING_REQUIRED_SCOPE",
+      category: "scope",
+    } satisfies Partial<CrmDiagnosticError>);
+  }
+
+  const { accessToken, instanceUrl } = await getSalesforceAccessToken({
+    admin,
+    connection,
+  });
+  const apiVersion = getFirstString(connection.metadata_json.api_version, env.salesforceApiVersion) || "v61.0";
+  const refreshToken = decryptEncryptedSecret({
+    ciphertext: connection.refresh_token_ciphertext,
+    iv: connection.refresh_token_iv,
+    tag: connection.refresh_token_tag,
+  });
+
+  let result;
+  try {
+    try {
+      result = await createSalesforceTestLead({
+        accessToken,
+        instanceUrl,
+        apiVersion,
+      });
+    } catch (error) {
+      const diagnostic = getCrmDiagnostic(error);
+      if (diagnostic.status === 401 && refreshToken) {
+        const refreshed = await refreshSalesforceToken({
+          admin,
+          connection,
+          refreshToken,
+        });
+        result = await createSalesforceTestLead({
+          accessToken: refreshed.accessToken,
+          instanceUrl: refreshed.instanceUrl || instanceUrl,
+          apiVersion,
+        });
+      } else {
+        throw error;
+      }
+    }
+  } catch (error) {
+    const diagnostic = getCrmDiagnostic(error);
+    throw Object.assign(
+      new Error(error instanceof Error ? error.message : "Salesforce lead creation failed."),
+      {
+        provider: "salesforce" as const,
+        step: diagnostic.step || "create_lead",
+        status: diagnostic.status ?? undefined,
+        category: diagnostic.category,
+        code: diagnostic.code,
+        safeCategory: diagnostic.safeCategory || "UNKNOWN_PROVIDER_ERROR",
+      } satisfies Partial<CrmDiagnosticError>,
+    );
+  }
+
+  return {
+    success: true,
+    provider: "salesforce",
+    providerName: "Salesforce",
+    message: "Test lead sent to Salesforce.",
+    messageKey: "crm_test_delivery_salesforce_success",
+    safeMessage: "Test lead sent to Salesforce.",
+    createdObjectType: "lead",
+    providerRecordIds: {
+      leadId: result.leadId,
+    },
+  } satisfies CrmTestDeliveryResult;
+}
+
 export async function sendWorkspaceCrmTestLead({
   admin,
   workspaceId,
@@ -3181,6 +3510,8 @@ export async function sendWorkspaceCrmTestLead({
       return sendWorkspaceGoHighLevelTestLead({ admin, workspaceId });
     case "hubspot":
       return sendWorkspaceHubSpotTestLead({ admin, workspaceId });
+    case "salesforce":
+      return sendWorkspaceSalesforceTestLead({ admin, workspaceId });
     case "zoho":
       return sendWorkspaceZohoTestLead({ admin, workspaceId });
     case "freshsales":

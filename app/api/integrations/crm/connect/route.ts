@@ -7,6 +7,7 @@ import { buildFreshsalesAuthorizationUrl, getFreshsalesOAuthDebugInfo } from "@/
 import { buildHubSpotAuthorizationUrl } from "@/lib/integrations/hubspot";
 import { buildKeapAuthorizationUrl } from "@/lib/integrations/keap";
 import { buildMondayAuthorizationUrl } from "@/lib/integrations/monday";
+import { buildSalesforceAuthorizationUrl } from "@/lib/integrations/salesforce";
 import { buildZohoAuthorizationUrl } from "@/lib/integrations/zoho";
 import { CrmProvider } from "@/types";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
@@ -60,6 +61,8 @@ function getProviderConnectUrl(provider: CrmProvider, state: string) {
       return buildMondayAuthorizationUrl(state);
     case "keap":
       return buildKeapAuthorizationUrl(state);
+    case "salesforce":
+      return buildSalesforceAuthorizationUrl(state);
     default:
       throw new Error(`${provider} connect flow is not implemented yet.`);
   }

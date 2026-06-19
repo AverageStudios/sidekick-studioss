@@ -70,6 +70,12 @@ export const env = {
   keapClientSecret: readEnv("KEAP_CLIENT_SECRET"),
   keapRedirectUri: readEnv("KEAP_REDIRECT_URI"),
   keapScopes: readEnv("KEAP_SCOPES"),
+  salesforceClientId: readEnv("SALESFORCE_CLIENT_ID"),
+  salesforceClientSecret: readEnv("SALESFORCE_CLIENT_SECRET"),
+  salesforceRedirectUri: readEnv("SALESFORCE_REDIRECT_URI"),
+  salesforceScopes: readEnv("SALESFORCE_SCOPES") || "api refresh_token",
+  salesforceLoginUrl: readEnv("SALESFORCE_LOGIN_URL") || "https://login.salesforce.com",
+  salesforceApiVersion: readEnv("SALESFORCE_API_VERSION") || "v61.0",
 } as const;
 
 export function getSupabasePublicEnvStatus() {
@@ -187,6 +193,18 @@ export function getKeapEnvStatus() {
   };
 }
 
+export function getSalesforceEnvStatus() {
+  const missingKeys = missing([
+    "SALESFORCE_CLIENT_ID",
+    "SALESFORCE_CLIENT_SECRET",
+    "SALESFORCE_REDIRECT_URI",
+  ]);
+  return {
+    configured: missingKeys.length === 0,
+    missingKeys,
+  };
+}
+
 export function isSupabasePublicConfigured() {
   return getSupabasePublicEnvStatus().configured;
 }
@@ -238,6 +256,10 @@ export function isMondayConfigured() {
 
 export function isKeapConfigured() {
   return getKeapEnvStatus().configured;
+}
+
+export function isSalesforceConfigured() {
+  return getSalesforceEnvStatus().configured;
 }
 
 export function isCrmProviderDebugEnabled() {

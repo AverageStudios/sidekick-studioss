@@ -3609,6 +3609,10 @@ export async function saveCrmConnectionAction(formData: FormData) {
     redirect("/workspace/settings?section=integrations&error=Connect%20Keap%20through%20the%20OAuth%20flow.");
   }
 
+  if (provider === "salesforce") {
+    redirect("/workspace/settings?section=integrations&error=Connect%20Salesforce%20through%20the%20OAuth%20flow.");
+  }
+
   if (!provider || !accessToken) {
     redirect("/workspace/settings?section=integrations&error=Provider%20and%20access%20token%20are%20required.");
   }
@@ -3618,7 +3622,7 @@ export async function saveCrmConnectionAction(formData: FormData) {
       admin,
       workspaceId,
       userId: user.id,
-      provider: provider as "gohighlevel" | "hubspot" | "pipedrive" | "zoho" | "freshsales" | "monday" | "keap",
+      provider: provider as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce" | "zoho" | "freshsales" | "monday" | "keap",
       accessToken,
       metadata: locationId ? { locationId } : {},
     });
@@ -3666,7 +3670,7 @@ export async function disconnectCrmConnectionAction(formData: FormData) {
     await disconnectWorkspaceCrmProvider({
       admin,
       workspaceId,
-      provider: provider as "gohighlevel" | "hubspot" | "pipedrive" | "zoho" | "freshsales" | "monday" | "keap",
+      provider: provider as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce" | "zoho" | "freshsales" | "monday" | "keap",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not disconnect CRM.";

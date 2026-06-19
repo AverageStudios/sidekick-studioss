@@ -7,6 +7,7 @@ import {
   connectWorkspaceHubSpotOAuthProvider,
   connectWorkspaceKeapOAuthProvider,
   connectWorkspaceMondayOAuthProvider,
+  connectWorkspaceSalesforceOAuthProvider,
   connectWorkspaceZohoOAuthProvider,
 } from "@/lib/crm-integration";
 import { env } from "@/lib/env";
@@ -222,6 +223,15 @@ export async function GET(request: NextRequest) {
           userId: user.id,
           code,
           redirectUri: new URL("/api/integrations/keap/callback", getAppOrigin(request)).toString(),
+        });
+        break;
+      case "salesforce":
+        await connectWorkspaceSalesforceOAuthProvider({
+          admin,
+          workspaceId,
+          userId: user.id,
+          code,
+          redirectUri: new URL("/api/integrations/salesforce/callback", getAppOrigin(request)).toString(),
         });
         break;
       default:

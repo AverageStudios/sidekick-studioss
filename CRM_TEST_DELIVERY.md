@@ -25,6 +25,7 @@ Current test-delivery support:
 - GoHighLevel
 - Pipedrive
 - HubSpot
+- Salesforce
 - Zoho CRM
 - Freshsales / Freshworks CRM
 - Monday CRM
@@ -32,7 +33,6 @@ Current test-delivery support:
 
 Not available yet:
 
-- Salesforce
 - future CRM providers until a provider-specific helper is implemented
 
 ## Test lead payload
@@ -103,6 +103,21 @@ Required Zoho scopes:
 Success message:
 
 - `Test lead sent to Zoho CRM.`
+
+### Salesforce
+
+Creates:
+
+- Lead
+
+Required Salesforce scopes:
+
+- `api`
+- `refresh_token`
+
+Success message:
+
+- `Test lead sent to Salesforce.`
 
 ### Freshsales / Freshworks CRM
 

@@ -41,6 +41,7 @@ import {
   getKeapEnvStatus,
   getMondayEnvStatus,
   getPipedriveEnvStatus,
+  getSalesforceEnvStatus,
   getZohoEnvStatus,
   isSupabaseServerConfigured,
 } from "@/lib/env";
@@ -165,6 +166,7 @@ export default async function WorkspaceSettingsPage({
   const freshsalesConnection = crmConnections.find((item) => item.provider === "freshsales") || null;
   const mondayConnection = crmConnections.find((item) => item.provider === "monday") || null;
   const keapConnection = crmConnections.find((item) => item.provider === "keap") || null;
+  const salesforceConnection = crmConnections.find((item) => item.provider === "salesforce") || null;
   const ghlEnvStatus = getGhlEnvStatus();
   const hubspotEnvStatus = getHubSpotEnvStatus();
   const pipedriveEnvStatus = getPipedriveEnvStatus();
@@ -172,6 +174,7 @@ export default async function WorkspaceSettingsPage({
   const freshsalesEnvStatus = getFreshsalesEnvStatus();
   const mondayEnvStatus = getMondayEnvStatus();
   const keapEnvStatus = getKeapEnvStatus();
+  const salesforceEnvStatus = getSalesforceEnvStatus();
   const providerDestinations = crmState.destinations.filter((destination) => destination.is_available);
   const canSendCrmTests =
     currentRole === "admin" || workspaceRole === "owner" || workspaceRole === "admin";
@@ -941,6 +944,63 @@ export default async function WorkspaceSettingsPage({
                             )
                           ) : (
                             <p className="mt-3 text-xs text-[var(--muted)]">Connect Pipedrive to send a test lead.</p>
+                          )}
+                        </div>
+                      </details>
+
+                      <details open={Boolean(salesforceConnection)} className="group rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)]">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <p className="text-base font-semibold text-[var(--ink)]">Salesforce</p>
+                              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", formatStatusTone(Boolean(salesforceConnection)))}>
+                                {salesforceConnection ? "Connected" : "Not connected"}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm text-[var(--muted)]">
+                              Connect Salesforce to send new SideKick leads into your Salesforce Lead object.
+                            </p>
+                            {salesforceConnection ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">
+                                {typeof salesforceConnection.metadata_json.org_name === "string"
+                                  ? salesforceConnection.metadata_json.org_name
+                                  : salesforceConnection.provider_user_name || "Salesforce connected"}
+                              </p>
+                            ) : !salesforceEnvStatus.configured ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">OAuth setup is not configured yet.</p>
+                            ) : null}
+                          </div>
+                          <ChevronDown className="h-4 w-4 shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180" />
+                        </summary>
+
+                        <div className="border-t border-[var(--line)] px-5 py-5">
+                          <div className="flex flex-wrap gap-2">
+                            <Button asChild disabled={!salesforceEnvStatus.configured}>
+                              <Link href="/api/integrations/salesforce/connect?next=/workspace/settings?section=integrations">
+                                {salesforceConnection ? "Reconnect" : "Connect Salesforce"}
+                              </Link>
+                            </Button>
+                            {salesforceConnection && workspaceId && canSendCrmTests && isCrmTestDeliverySupported("salesforce") ? (
+                              <form action={testCrmDeliveryAction}>
+                                <input type="hidden" name="workspaceId" value={workspaceId} />
+                                <input type="hidden" name="provider" value="salesforce" />
+                                <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
+                                <Button type="submit" variant="secondary">Send Test Lead</Button>
+                              </form>
+                            ) : null}
+                            {salesforceConnection ? (
+                              <form action={disconnectCrmConnectionAction}>
+                                <input type="hidden" name="provider" value="salesforce" />
+                                <Button type="submit" variant="outline">Disconnect</Button>
+                              </form>
+                            ) : null}
+                          </div>
+                          {salesforceConnection ? (
+                            canSendCrmTests ? null : (
+                              <p className="mt-3 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
+                            )
+                          ) : (
+                            <p className="mt-3 text-xs text-[var(--muted)]">Connect Salesforce to send a test lead.</p>
                           )}
                         </div>
                       </details>
