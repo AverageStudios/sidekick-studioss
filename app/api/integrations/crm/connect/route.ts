@@ -9,6 +9,7 @@ import { buildKeapAuthorizationUrl } from "@/lib/integrations/keap";
 import { buildMondayAuthorizationUrl } from "@/lib/integrations/monday";
 import { buildSalesforceAuthorizationUrl } from "@/lib/integrations/salesforce";
 import { buildZohoAuthorizationUrl } from "@/lib/integrations/zoho";
+import { buildCloseAuthorizationUrl } from "@/lib/integrations/close";
 import { CrmProvider } from "@/types";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 import { logRouteError } from "@/lib/api-security";
@@ -35,6 +36,7 @@ function resolveProvider(value: string | null): CrmProvider | null {
     case "freshsales":
     case "monday":
     case "keap":
+    case "close":
       return value;
     default:
       return null;
@@ -63,6 +65,8 @@ function getProviderConnectUrl(provider: CrmProvider, state: string) {
       return buildKeapAuthorizationUrl(state);
     case "salesforce":
       return buildSalesforceAuthorizationUrl(state);
+    case "close":
+      return buildCloseAuthorizationUrl(state);
     default:
       throw new Error(`${provider} connect flow is not implemented yet.`);
   }

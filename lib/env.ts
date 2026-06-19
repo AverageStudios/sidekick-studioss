@@ -76,6 +76,10 @@ export const env = {
   salesforceScopes: readEnv("SALESFORCE_SCOPES") || "api refresh_token",
   salesforceLoginUrl: readEnv("SALESFORCE_LOGIN_URL") || "https://login.salesforce.com",
   salesforceApiVersion: readEnv("SALESFORCE_API_VERSION") || "v61.0",
+  closeClientId: readEnv("CLOSE_CLIENT_ID"),
+  closeClientSecret: readEnv("CLOSE_CLIENT_SECRET"),
+  closeRedirectUri: readEnv("CLOSE_REDIRECT_URI"),
+  closeScopes: readEnv("CLOSE_SCOPES") || "all.full_access offline_access",
 } as const;
 
 export function getSupabasePublicEnvStatus() {
@@ -205,6 +209,19 @@ export function getSalesforceEnvStatus() {
   };
 }
 
+export function getCloseEnvStatus() {
+  const missingKeys = missing([
+    "CLOSE_CLIENT_ID",
+    "CLOSE_CLIENT_SECRET",
+    "CLOSE_REDIRECT_URI",
+    "CLOSE_SCOPES",
+  ]);
+  return {
+    configured: missingKeys.length === 0,
+    missingKeys,
+  };
+}
+
 export function isSupabasePublicConfigured() {
   return getSupabasePublicEnvStatus().configured;
 }
@@ -260,6 +277,10 @@ export function isKeapConfigured() {
 
 export function isSalesforceConfigured() {
   return getSalesforceEnvStatus().configured;
+}
+
+export function isCloseConfigured() {
+  return getCloseEnvStatus().configured;
 }
 
 export function isCrmProviderDebugEnabled() {

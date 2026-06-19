@@ -3,6 +3,7 @@ import { decryptCrmSecret, decryptEncryptedSecret, encryptCrmSecret } from "@/li
 import {
   env,
   isCrmProviderDebugEnabled,
+  isCloseConfigured,
   isFreshsalesConfigured,
   isGhlConfigured,
   isHubSpotConfigured,
@@ -65,6 +66,13 @@ import {
   getSalesforceTokenMetadata,
   refreshSalesforceAccessToken,
 } from "@/lib/integrations/salesforce";
+import {
+  createCloseTestLead,
+  exchangeCloseCodeForTokens,
+  getCloseAccountInfo,
+  getCloseTokenMetadata,
+  refreshCloseAccessToken,
+} from "@/lib/integrations/close";
 import {
   CampaignRecord,
   CrmConnectionStatus,
@@ -308,7 +316,17 @@ type SalesforceMetadata = {
   apiVersion?: string | null;
 };
 
-const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho", "freshsales", "monday", "keap"];
+type CloseMetadata = {
+  tokenType?: string | null;
+  refreshToken?: string | null;
+  expiresIn?: number | string | null;
+  scope?: string | string[] | null;
+  redirectUri?: string | null;
+  organizationId?: string | null;
+  userId?: string | null;
+};
+
+const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho", "freshsales", "monday", "keap", "close"];
 const CRM_TEST_PROVIDER_LABELS: Record<CrmProvider, string> = {
   gohighlevel: "GoHighLevel",
   hubspot: "HubSpot",
@@ -318,6 +336,7 @@ const CRM_TEST_PROVIDER_LABELS: Record<CrmProvider, string> = {
   freshsales: "Freshsales",
   monday: "Monday CRM",
   keap: "Keap",
+  close: "Close CRM",
 };
 
 const CRM_TEST_LEAD = {
@@ -347,7 +366,8 @@ export function isCrmTestDeliverySupported(provider: CrmProvider) {
     provider === "zoho" ||
     provider === "freshsales" ||
     provider === "monday" ||
-    provider === "keap"
+    provider === "keap" ||
+    provider === "close"
   );
 }
 
@@ -413,11 +433,11 @@ function normalizeCrmDatabaseError(error: { message?: string | null } | null | u
   const message = error?.message || "";
 
   if (message.includes("workspace_provider_connections_provider_check")) {
-    return "CRM providers are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/031_keap_crm_provider_support.sql, then try connecting again.";
+    return "CRM providers are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/032_close_crm_provider_support.sql, then try connecting again.";
   }
 
   if (message.includes("workspace_provider_assets_provider_check")) {
-    return "CRM provider assets are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/031_keap_crm_provider_support.sql, then try again.";
+    return "CRM provider assets are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/032_close_crm_provider_support.sql, then try again.";
   }
 
   if (message.includes("workspace_provider_assets_type_check")) {
@@ -590,6 +610,23 @@ export function getCrmTestDeliveryFailureMessage({
       diagnostic.safeCategory === "INVALID_SCOPE"
     ) {
       return "Salesforce rejected the test lead because SideKick does not have the required API permissions.";
+    }
+  }
+
+  if (provider === "close") {
+    const diagnostic = getCrmDiagnostic(error);
+    if (
+      diagnostic.safeCategory === "REQUIRED_FIELD_MISSING" ||
+      diagnostic.safeCategory === "VALIDATION_FAILED"
+    ) {
+      return "Close CRM rejected the test lead because a required field is missing.";
+    }
+
+    if (
+      diagnostic.safeCategory === "PERMISSION_DENIED" ||
+      diagnostic.safeCategory === "INVALID_SCOPE"
+    ) {
+      return "Close CRM rejected the test lead because SideKick does not have the required API permissions.";
     }
   }
 
@@ -1079,6 +1116,74 @@ async function validateSalesforceConnection({
   }
 }
 
+async function validateCloseConnection({
+  accessToken,
+  metadata,
+}: {
+  accessToken: string;
+  metadata?: CloseMetadata;
+}): Promise<ValidatedConnection> {
+  try {
+    const account = await getCloseAccountInfo(accessToken);
+    const organizationId = getFirstString(metadata?.organizationId, account.organizationId) || "close-org";
+    const organizationName =
+      getFirstString(account.organizationName, account.email) || `Close org ${organizationId}`;
+    const providerUserId = getFirstString(metadata?.userId, account.userId) || organizationId;
+    const providerUserName =
+      getFirstString(
+        [account.firstName, account.lastName].filter(Boolean).join(" "),
+        account.email,
+        organizationName,
+      ) || organizationName;
+
+    return {
+      providerUserId,
+      providerUserName,
+      tokenType: getFirstString(metadata?.tokenType) || "Bearer",
+      tokenExpiresAt: buildTokenExpiry(
+        typeof metadata?.expiresIn === "number"
+          ? metadata.expiresIn
+          : typeof metadata?.expiresIn === "string"
+            ? Number(metadata.expiresIn)
+            : undefined,
+      ),
+      refreshToken: getFirstString(metadata?.refreshToken),
+      scopes: getScopeList(metadata?.scope).length
+        ? getScopeList(metadata?.scope)
+        : ["all.full_access", "offline_access"],
+      metadata: {
+        validated_at: new Date().toISOString(),
+        auth_type: "oauth",
+        redirect_uri: getFirstString(metadata?.redirectUri, env.closeRedirectUri) || null,
+        organization_id: organizationId,
+        organization_name: organizationName,
+        user_id: getFirstString(account.userId) || null,
+        user_email: getFirstString(account.email) || null,
+      },
+      destinations: [
+        {
+          assetId: "leads",
+          name: "Close leads",
+          metadata: {
+            destinationType: "leads",
+            objectType: "lead",
+          },
+          selected: true,
+        },
+      ],
+    };
+  } catch (error) {
+    const diagnostic = getCrmDiagnostic(error);
+    if (diagnostic.status === 401) {
+      throw new Error("Close token is invalid or expired. Reconnect Close CRM.");
+    }
+    if (diagnostic.status === 403) {
+      throw new Error("Close CRM access is missing required API permissions. Reconnect Close CRM.");
+    }
+    throw new Error(diagnostic.message || "Close CRM verification could not be completed.");
+  }
+}
+
 async function validateCrmConnection(input: {
   provider: CrmProvider;
   accessToken: string;
@@ -1147,6 +1252,11 @@ async function validateCrmConnection(input: {
       return validateKeapConnection({
         accessToken: input.accessToken,
         metadata: input.metadata as KeapMetadata | undefined,
+      });
+    case "close":
+      return validateCloseConnection({
+        accessToken: input.accessToken,
+        metadata: input.metadata as CloseMetadata | undefined,
       });
     default:
       throw new Error(`${input.provider} is not available in this first CRM pass yet.`);
@@ -1964,6 +2074,39 @@ export async function connectWorkspaceSalesforceOAuthProvider({
   });
 }
 
+export async function connectWorkspaceCloseOAuthProvider({
+  admin,
+  workspaceId,
+  userId,
+  code,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+  userId: string;
+  code: string;
+}) {
+  const token = await exchangeCloseCodeForTokens(code);
+  const tokenMetadata = getCloseTokenMetadata(token);
+
+  return connectWorkspaceCrmProvider({
+    admin,
+    workspaceId,
+    userId,
+    provider: "close",
+    accessToken: normalizeAccessToken(token.access_token || ""),
+    metadata: {
+      authType: "oauth",
+      scope: token.scope || tokenMetadata.scopes,
+      refreshToken: tokenMetadata.refreshToken,
+      expiresIn: tokenMetadata.expiresIn,
+      tokenType: tokenMetadata.tokenType,
+      organizationId: tokenMetadata.organizationId,
+      userId: tokenMetadata.userId,
+      redirectUri: env.closeRedirectUri || null,
+    },
+  });
+}
+
 export async function disconnectWorkspaceCrmProvider({
   admin,
   workspaceId,
@@ -2633,10 +2776,8 @@ async function refreshSalesforceToken({
 }
 
 async function getSalesforceAccessToken({
-  admin,
   connection,
 }: {
-  admin: SupabaseAdmin;
   connection: WorkspaceCrmConnectionRow;
 }) {
   const accessToken = decryptCrmSecret(connection);
@@ -2653,6 +2794,108 @@ async function getSalesforceAccessToken({
     throw new Error("Salesforce instance URL is unavailable.");
   }
   return { accessToken, instanceUrl };
+}
+
+async function refreshCloseToken({
+  admin,
+  connection,
+  refreshToken,
+}: {
+  admin: SupabaseAdmin;
+  connection: WorkspaceCrmConnectionRow;
+  refreshToken: string;
+}) {
+  if (!isCloseConfigured()) {
+    throw new Error("Close OAuth env vars are missing.");
+  }
+
+  const refreshed = await refreshCloseAccessToken(refreshToken);
+  const metadata = getCloseTokenMetadata(refreshed);
+  const accessPayload = encryptCrmSecret(refreshed.access_token || "");
+  const nextRefreshToken = metadata.refreshToken || refreshToken;
+  const refreshPayload = nextRefreshToken ? encryptCrmSecret(nextRefreshToken) : null;
+
+  const { error } = await admin
+    .from("workspace_provider_connections")
+    .update({
+      token_ciphertext: accessPayload.ciphertext,
+      token_iv: accessPayload.iv,
+      token_tag: accessPayload.tag,
+      refresh_token_ciphertext: refreshPayload?.ciphertext || null,
+      refresh_token_iv: refreshPayload?.iv || null,
+      refresh_token_tag: refreshPayload?.tag || null,
+      token_type: metadata.tokenType || connection.token_type || "Bearer",
+      token_expires_at: buildTokenExpiry(
+        typeof metadata.expiresIn === "number" ? metadata.expiresIn : undefined,
+      ),
+      scopes: metadata.scopes.length ? metadata.scopes : connection.scopes,
+      metadata_json: {
+        ...connection.metadata_json,
+        auth_type: "oauth",
+        organization_id:
+          metadata.organizationId || getFirstString(connection.metadata_json.organization_id) || null,
+        user_id: metadata.userId || getFirstString(connection.metadata_json.user_id) || null,
+      },
+      last_synced_at: new Date().toISOString(),
+      status: "connected",
+      disconnected_at: null,
+      is_active: true,
+    })
+    .eq("id", connection.id);
+
+  if (error) throw new Error(error.message);
+
+  return refreshed.access_token || "";
+}
+
+async function getCloseAccessToken({
+  admin,
+  connection,
+}: {
+  admin: SupabaseAdmin;
+  connection: WorkspaceCrmConnectionRow;
+}) {
+  const accessToken = decryptCrmSecret(connection);
+  if (!accessToken) {
+    throw Object.assign(new Error("Close token is unavailable."), {
+      provider: "close" as const,
+      step: "token_load",
+      safeCategory: "AUTH_FAILED",
+    } satisfies Partial<CrmDiagnosticError>);
+  }
+
+  const expiresAt = connection.token_expires_at ? new Date(connection.token_expires_at).getTime() : null;
+  const expiresSoon = typeof expiresAt === "number" && Number.isFinite(expiresAt) && expiresAt <= Date.now() + 60_000;
+
+  if (!expiresSoon) {
+    return accessToken;
+  }
+
+  const refreshToken = decryptEncryptedSecret({
+    ciphertext: connection.refresh_token_ciphertext,
+    iv: connection.refresh_token_iv,
+    tag: connection.refresh_token_tag,
+  });
+
+  if (!refreshToken) {
+    throw Object.assign(new Error("Close refresh token is missing. Reconnect Close CRM."), {
+      provider: "close" as const,
+      step: "token_refresh",
+      safeCategory: "REFRESH_FAILED",
+    } satisfies Partial<CrmDiagnosticError>);
+  }
+
+  return refreshCloseToken({
+    admin,
+    connection,
+    refreshToken,
+  }).catch(() => {
+    throw Object.assign(new Error("Close token is invalid or expired. Reconnect Close CRM."), {
+      provider: "close" as const,
+      step: "token_refresh",
+      safeCategory: "REFRESH_FAILED",
+    } satisfies Partial<CrmDiagnosticError>);
+  });
 }
 
 async function refreshPipedriveToken({
@@ -3429,10 +3672,7 @@ export async function sendWorkspaceSalesforceTestLead({
     } satisfies Partial<CrmDiagnosticError>);
   }
 
-  const { accessToken, instanceUrl } = await getSalesforceAccessToken({
-    admin,
-    connection,
-  });
+  const { accessToken, instanceUrl } = await getSalesforceAccessToken({ connection });
   const apiVersion = getFirstString(connection.metadata_json.api_version, env.salesforceApiVersion) || "v61.0";
   const refreshToken = decryptEncryptedSecret({
     ciphertext: connection.refresh_token_ciphertext,
@@ -3494,6 +3734,71 @@ export async function sendWorkspaceSalesforceTestLead({
   } satisfies CrmTestDeliveryResult;
 }
 
+export async function sendWorkspaceCloseTestLead({
+  admin,
+  workspaceId,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+}) {
+  const connections = await listCrmConnections(admin, workspaceId);
+  const connection =
+    connections.find((entry) => entry.provider === "close" && entry.is_active && entry.status === "connected") ||
+    null;
+
+  if (!connection) {
+    throw new Error("Close CRM is not connected for this workspace.");
+  }
+
+  const requiredScopes = ["all.full_access"];
+  const missingScopes = requiredScopes.filter((scope) => !connection.scopes.includes(scope));
+  if (missingScopes.length) {
+    throw Object.assign(new Error("Close CRM connection is missing required API permissions."), {
+      provider: "close" as const,
+      step: "scope_check",
+      safeCategory: "INVALID_SCOPE",
+      code: "MISSING_REQUIRED_SCOPE",
+      category: "scope",
+    } satisfies Partial<CrmDiagnosticError>);
+  }
+
+  const accessToken = await getCloseAccessToken({
+    admin,
+    connection,
+  });
+
+  const result = await createCloseTestLead({
+    accessToken,
+  }).catch((error) => {
+    const diagnostic = getCrmDiagnostic(error);
+    throw Object.assign(
+      new Error(error instanceof Error ? error.message : "Close lead creation failed."),
+      {
+        provider: "close" as const,
+        step: diagnostic.step || "create_lead",
+        status: diagnostic.status ?? undefined,
+        category: diagnostic.category,
+        code: diagnostic.code,
+        safeCategory: diagnostic.safeCategory || "UNKNOWN_PROVIDER_ERROR",
+      } satisfies Partial<CrmDiagnosticError>,
+    );
+  });
+
+  return {
+    success: true,
+    provider: "close",
+    providerName: "Close CRM",
+    message: "Test lead sent to Close CRM.",
+    messageKey: "crm_test_delivery_close_success",
+    safeMessage: "Test lead sent to Close CRM.",
+    createdObjectType: "lead",
+    providerRecordIds: {
+      leadId: result.leadId,
+      contactId: result.contactId,
+    },
+  } satisfies CrmTestDeliveryResult;
+}
+
 export async function sendWorkspaceCrmTestLead({
   admin,
   workspaceId,
@@ -3520,6 +3825,8 @@ export async function sendWorkspaceCrmTestLead({
       return sendWorkspaceMondayTestLead({ admin, workspaceId });
     case "keap":
       return sendWorkspaceKeapTestLead({ admin, workspaceId });
+    case "close":
+      return sendWorkspaceCloseTestLead({ admin, workspaceId });
     default:
       throw new Error(`${getCrmProviderLabel(provider)} test delivery is not available yet.`);
   }

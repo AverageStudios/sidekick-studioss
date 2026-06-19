@@ -9,6 +9,7 @@ import {
   connectWorkspaceMondayOAuthProvider,
   connectWorkspaceSalesforceOAuthProvider,
   connectWorkspaceZohoOAuthProvider,
+  connectWorkspaceCloseOAuthProvider,
 } from "@/lib/crm-integration";
 import { env } from "@/lib/env";
 import { getFreshsalesOAuthDebugInfo } from "@/lib/integrations/freshsales";
@@ -232,6 +233,14 @@ export async function GET(request: NextRequest) {
           userId: user.id,
           code,
           redirectUri: new URL("/api/integrations/salesforce/callback", getAppOrigin(request)).toString(),
+        });
+        break;
+      case "close":
+        await connectWorkspaceCloseOAuthProvider({
+          admin,
+          workspaceId,
+          userId: user.id,
+          code,
         });
         break;
       default:

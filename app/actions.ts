@@ -3628,7 +3628,7 @@ export async function saveCrmConnectionAction(formData: FormData) {
       admin,
       workspaceId,
       userId: user.id,
-      provider: provider as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce" | "zoho" | "freshsales" | "monday" | "keap",
+      provider: provider as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce" | "zoho" | "freshsales" | "monday" | "keap" | "close",
       accessToken,
       metadata: locationId ? { locationId } : {},
     });
@@ -3677,7 +3677,7 @@ export async function disconnectCrmConnectionAction(formData: FormData) {
     await disconnectWorkspaceCrmProvider({
       admin,
       workspaceId,
-      provider: provider as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce" | "zoho" | "freshsales" | "monday" | "keap",
+      provider: provider as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce" | "zoho" | "freshsales" | "monday" | "keap" | "close",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not disconnect CRM.";
@@ -3696,13 +3696,13 @@ export async function testCrmDeliveryAction(formData: FormData) {
 
   const workspaceId = String(formData.get("workspaceId") || "").trim();
   const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=integrations");
-  const provider = String(formData.get("provider") || "").trim() as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce" | "zoho" | "freshsales" | "monday" | "keap";
+  const provider = String(formData.get("provider") || "").trim() as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce" | "zoho" | "freshsales" | "monday" | "keap" | "close";
 
   if (!workspaceId) {
     redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect your CRM or try again."));
   }
 
-  if (!provider || !["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho", "freshsales", "monday", "keap"].includes(provider)) {
+  if (!provider || !["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho", "freshsales", "monday", "keap", "close"].includes(provider)) {
     redirect(appendQueryParam(redirectTo, "error", "Test not available yet."));
   }
 

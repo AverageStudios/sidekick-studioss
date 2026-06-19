@@ -30,6 +30,7 @@ Current test-delivery support:
 - Freshsales / Freshworks CRM
 - Monday CRM
 - Keap
+- Close CRM
 
 Not available yet:
 
@@ -180,6 +181,27 @@ Connection requirement:
 
 - Keap must be connected through OAuth
 - SideKick stores and refreshes Keap OAuth tokens server-side
+
+### Close CRM
+
+Creates:
+
+- Lead
+- nested Contact details on that lead
+
+Required Close scopes:
+
+- `all.full_access`
+- `offline_access`
+
+Success message:
+
+- `Test lead sent to Close CRM.`
+
+Connection requirement:
+
+- Close CRM must be connected through OAuth
+- SideKick stores and refreshes Close OAuth tokens server-side
 
 ## Security notes
 

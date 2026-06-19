@@ -101,6 +101,15 @@ export const crmProviderMetadataList: CrmProviderMetadata[] = [
     surfaceClassName: "bg-blue-100",
     connectPath: "/api/integrations/salesforce/connect",
   },
+  {
+    key: "close",
+    label: "Close CRM",
+    shortDescription: "Create Close leads with contact details from SideKick.",
+    shortCode: "C",
+    accentClassName: "text-slate-700",
+    surfaceClassName: "bg-slate-100",
+    connectPath: "/api/integrations/close/connect",
+  },
 ];
 
 export function getCrmProviderMetadata(provider: CrmProvider) {

@@ -32,6 +32,7 @@ The CRM provider page shows cards for:
 - Monday CRM
 - Keap
 - Salesforce
+- Close CRM
 
 Hidden from the current selection UI for now:
 
@@ -87,6 +88,8 @@ This flow uses local provider logo assets stored in:
 - `public/crm-logos/`
 
 The assets were pulled from official provider-owned sources and stored locally so the UI does not depend on external hotlinks at runtime.
+
+If a provider does not yet have a local logo asset, SideKick falls back to a clean provider letter badge instead of an external hotlink.
 
 ## Security notes
 

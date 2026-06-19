@@ -19,6 +19,7 @@ import {
   getPipedriveEnvStatus,
   getSalesforceEnvStatus,
   getZohoEnvStatus,
+  getCloseEnvStatus,
   isSupabaseServerConfigured,
 } from "@/lib/env";
 
@@ -77,6 +78,7 @@ export default async function WorkspaceCrmSelectionPage({
     monday: getMondayEnvStatus(),
     keap: getKeapEnvStatus(),
     salesforce: getSalesforceEnvStatus(),
+    close: getCloseEnvStatus(),
   } as const;
   const canSendCrmTests =
     currentRole === "admin" || workspaceRole === "owner" || workspaceRole === "admin";
