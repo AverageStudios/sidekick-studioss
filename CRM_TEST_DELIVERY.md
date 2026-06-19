@@ -28,6 +28,7 @@ Current test-delivery support:
 - Zoho CRM
 - Freshsales / Freshworks CRM
 - Monday CRM
+- Keap
 
 Not available yet:
 
@@ -145,6 +146,25 @@ Additional requirement:
 Success message:
 
 - `Test lead sent to Monday CRM.`
+
+### Keap
+
+Creates:
+
+- Contact
+
+Required Keap scope:
+
+- `full`
+
+Success message:
+
+- `Test contact sent to Keap.`
+
+Connection requirement:
+
+- Keap must be connected through OAuth
+- SideKick stores and refreshes Keap OAuth tokens server-side
 
 ## Security notes
 

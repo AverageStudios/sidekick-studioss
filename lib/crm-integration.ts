@@ -6,6 +6,7 @@ import {
   isFreshsalesConfigured,
   isGhlConfigured,
   isHubSpotConfigured,
+  isKeapConfigured,
   isZohoConfigured,
 } from "@/lib/env";
 import {
@@ -26,6 +27,13 @@ import {
   type MondayBoardOption,
   getMondayTokenMetadata,
 } from "@/lib/integrations/monday";
+import {
+  createOrUpdateKeapTestContact,
+  exchangeKeapCodeForTokens,
+  getKeapAccountInfo,
+  getKeapTokenMetadata,
+  refreshKeapAccessToken,
+} from "@/lib/integrations/keap";
 import {
   createOrUpdateHubSpotContact,
   exchangeHubSpotCodeForTokens,
@@ -271,7 +279,16 @@ type MondayMetadata = {
   boardName?: string | null;
 };
 
-const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho", "freshsales", "monday"];
+type KeapMetadata = {
+  tokenType?: string | null;
+  expiresIn?: number | string | null;
+  refreshToken?: string | null;
+  scope?: string | string[] | null;
+  redirectUri?: string | null;
+  accountHost?: string | null;
+};
+
+const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho", "freshsales", "monday", "keap"];
 const CRM_TEST_PROVIDER_LABELS: Record<CrmProvider, string> = {
   gohighlevel: "GoHighLevel",
   hubspot: "HubSpot",
@@ -280,6 +297,7 @@ const CRM_TEST_PROVIDER_LABELS: Record<CrmProvider, string> = {
   zoho: "Zoho CRM",
   freshsales: "Freshsales",
   monday: "Monday CRM",
+  keap: "Keap",
 };
 
 const CRM_TEST_LEAD = {
@@ -307,7 +325,8 @@ export function isCrmTestDeliverySupported(provider: CrmProvider) {
     provider === "hubspot" ||
     provider === "zoho" ||
     provider === "freshsales" ||
-    provider === "monday"
+    provider === "monday" ||
+    provider === "keap"
   );
 }
 
@@ -373,11 +392,11 @@ function normalizeCrmDatabaseError(error: { message?: string | null } | null | u
   const message = error?.message || "";
 
   if (message.includes("workspace_provider_connections_provider_check")) {
-    return "CRM providers are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/030_monday_crm_provider_support.sql, then try connecting again.";
+    return "CRM providers are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/031_keap_crm_provider_support.sql, then try connecting again.";
   }
 
   if (message.includes("workspace_provider_assets_provider_check")) {
-    return "CRM provider assets are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/030_monday_crm_provider_support.sql, then try again.";
+    return "CRM provider assets are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/031_keap_crm_provider_support.sql, then try again.";
   }
 
   if (message.includes("workspace_provider_assets_type_check")) {
@@ -526,6 +545,13 @@ export function getCrmTestDeliveryFailureMessage({
 
     if (diagnostic.safeCategory === "INVALID_BOARD") {
       return "SideKick could not access that monday board. Check the board ID and permissions.";
+    }
+  }
+
+  if (provider === "keap") {
+    const diagnostic = getCrmDiagnostic(error);
+    if (diagnostic.safeCategory === "VALIDATION_FAILED") {
+      return "Keap rejected the test contact because a required contact field is missing.";
     }
   }
 
@@ -879,6 +905,61 @@ async function validateMondayConnection({
   }
 }
 
+async function validateKeapConnection({
+  accessToken,
+  metadata,
+}: {
+  accessToken: string;
+  metadata?: KeapMetadata;
+}): Promise<ValidatedConnection> {
+  try {
+    const scopeValue = Array.isArray(metadata?.scope) ? metadata.scope.join(" ") : getFirstString(metadata?.scope);
+    const account = await getKeapAccountInfo(accessToken, scopeValue || null);
+    const scopes = getScopeList(metadata?.scope).length ? getScopeList(metadata?.scope) : ["full"];
+    const accountHost = getFirstString(metadata?.accountHost, account.accountHost);
+    return {
+      providerUserId: accountHost,
+      providerUserName: accountHost || "Keap account",
+      tokenType: getFirstString(metadata?.tokenType) || "bearer",
+      tokenExpiresAt: buildTokenExpiry(
+        typeof metadata?.expiresIn === "number"
+          ? metadata.expiresIn
+          : typeof metadata?.expiresIn === "string"
+            ? Number(metadata.expiresIn)
+            : undefined,
+      ),
+      refreshToken: getFirstString(metadata?.refreshToken),
+      scopes,
+      metadata: {
+        validated_at: new Date().toISOString(),
+        auth_type: "oauth",
+        account_host: accountHost,
+        redirect_uri: getFirstString(metadata?.redirectUri) || null,
+      },
+      destinations: [
+        {
+          assetId: "contacts",
+          name: "Keap contacts",
+          metadata: {
+            destinationType: "contacts",
+            objectType: "contacts",
+          },
+          selected: true,
+        },
+      ],
+    };
+  } catch (error) {
+    const diagnostic = getCrmDiagnostic(error);
+    if (diagnostic.status === 401) {
+      throw new Error("Keap token is invalid or expired. Reconnect Keap.");
+    }
+    if (diagnostic.status === 403) {
+      throw new Error("Keap access is missing required permissions. Reconnect Keap with full scope.");
+    }
+    throw new Error(diagnostic.message || "Keap verification could not be completed.");
+  }
+}
+
 async function validateCrmConnection(input: {
   provider: CrmProvider;
   accessToken: string;
@@ -937,6 +1018,11 @@ async function validateCrmConnection(input: {
       return validateMondayConnection({
         accessToken: input.accessToken,
         metadata: input.metadata as MondayMetadata | undefined,
+      });
+    case "keap":
+      return validateKeapConnection({
+        accessToken: input.accessToken,
+        metadata: input.metadata as KeapMetadata | undefined,
       });
     default:
       throw new Error(`${input.provider} is not available in this first CRM pass yet.`);
@@ -1683,6 +1769,40 @@ export async function connectWorkspaceMondayOAuthProvider({
   });
 }
 
+export async function connectWorkspaceKeapOAuthProvider({
+  admin,
+  workspaceId,
+  userId,
+  code,
+  redirectUri,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+  userId: string;
+  code: string;
+  redirectUri?: string | null;
+}) {
+  const token = await exchangeKeapCodeForTokens(code, redirectUri);
+  const tokenMetadata = getKeapTokenMetadata(token);
+
+  return connectWorkspaceCrmProvider({
+    admin,
+    workspaceId,
+    userId,
+    provider: "keap",
+    accessToken: normalizeAccessToken(token.access_token || ""),
+    metadata: {
+      authType: "oauth",
+      scope: token.scope || tokenMetadata.scopes,
+      refreshToken: tokenMetadata.refreshToken,
+      expiresIn: tokenMetadata.expiresIn,
+      tokenType: tokenMetadata.tokenType,
+      redirectUri: redirectUri || env.keapRedirectUri || null,
+      accountHost: tokenMetadata.accountHost,
+    },
+  });
+}
+
 export async function disconnectWorkspaceCrmProvider({
   admin,
   workspaceId,
@@ -2209,6 +2329,94 @@ async function getMondayAccessToken({
   }
 
   return accessToken;
+}
+
+async function refreshKeapToken({
+  admin,
+  connection,
+  refreshToken,
+}: {
+  admin: SupabaseAdmin;
+  connection: WorkspaceCrmConnectionRow;
+  refreshToken: string;
+}) {
+  if (!isKeapConfigured()) {
+    throw new Error("Keap OAuth env vars are missing.");
+  }
+
+  const refreshed = await refreshKeapAccessToken(refreshToken);
+  const metadata = getKeapTokenMetadata(refreshed);
+  const accessPayload = encryptCrmSecret(refreshed.access_token || "");
+  const nextRefreshToken = metadata.refreshToken || refreshToken;
+  const refreshPayload = nextRefreshToken ? encryptCrmSecret(nextRefreshToken) : null;
+
+  const { error } = await admin
+    .from("workspace_provider_connections")
+    .update({
+      token_ciphertext: accessPayload.ciphertext,
+      token_iv: accessPayload.iv,
+      token_tag: accessPayload.tag,
+      refresh_token_ciphertext: refreshPayload?.ciphertext || null,
+      refresh_token_iv: refreshPayload?.iv || null,
+      refresh_token_tag: refreshPayload?.tag || null,
+      token_type: metadata.tokenType || connection.token_type || "bearer",
+      token_expires_at: buildTokenExpiry(
+        typeof metadata.expiresIn === "number" ? metadata.expiresIn : undefined,
+      ),
+      scopes: metadata.scopes.length ? metadata.scopes : connection.scopes,
+      metadata_json: {
+        ...connection.metadata_json,
+        auth_type: "oauth",
+        account_host: metadata.accountHost || connection.metadata_json.account_host || null,
+      },
+      last_synced_at: new Date().toISOString(),
+      status: "connected",
+      disconnected_at: null,
+      is_active: true,
+    })
+    .eq("id", connection.id);
+
+  if (error) throw new Error(error.message);
+
+  return refreshed.access_token || "";
+}
+
+async function getKeapAccessToken({
+  admin,
+  connection,
+}: {
+  admin: SupabaseAdmin;
+  connection: WorkspaceCrmConnectionRow;
+}) {
+  const accessToken = decryptCrmSecret(connection);
+  if (!accessToken) {
+    throw new Error("Keap token is unavailable.");
+  }
+
+  const expiresAt = connection.token_expires_at ? new Date(connection.token_expires_at).getTime() : null;
+  const expiresSoon = typeof expiresAt === "number" && Number.isFinite(expiresAt) && expiresAt <= Date.now() + 60_000;
+
+  if (!expiresSoon) {
+    return accessToken;
+  }
+
+  const refreshToken = decryptEncryptedSecret({
+    ciphertext: connection.refresh_token_ciphertext,
+    iv: connection.refresh_token_iv,
+    tag: connection.refresh_token_tag,
+  });
+
+  if (!refreshToken) {
+    throw new Error("Keap refresh token is missing. Reconnect Keap.");
+  }
+
+  return refreshKeapToken({
+    admin,
+    connection,
+    refreshToken,
+  }).catch(() => {
+    throw new Error("Keap token is invalid or expired. Reconnect Keap.");
+  });
 }
 
 async function refreshPipedriveToken({
@@ -2905,6 +3113,58 @@ export async function sendWorkspaceMondayTestLead({
   } satisfies CrmTestDeliveryResult;
 }
 
+export async function sendWorkspaceKeapTestLead({
+  admin,
+  workspaceId,
+}: {
+  admin: SupabaseAdmin;
+  workspaceId: string;
+}) {
+  const connections = await listCrmConnections(admin, workspaceId);
+  const connection =
+    connections.find((entry) => entry.provider === "keap" && entry.is_active && entry.status === "connected") ||
+    null;
+
+  if (!connection) {
+    throw new Error("Keap is not connected for this workspace.");
+  }
+
+  const token = await getKeapAccessToken({
+    admin,
+    connection,
+  });
+
+  const result = await createOrUpdateKeapTestContact({
+    accessToken: token,
+  }).catch((error) => {
+    const diagnostic = getCrmDiagnostic(error);
+    throw Object.assign(
+      new Error(error instanceof Error ? error.message : "Keap contact creation failed."),
+      {
+        provider: "keap" as const,
+        step: "create_contact",
+        status: diagnostic.status ?? undefined,
+        category: diagnostic.category,
+        code: diagnostic.code,
+        safeCategory: diagnostic.safeCategory || "UNKNOWN_PROVIDER_ERROR",
+      } satisfies Partial<CrmDiagnosticError>,
+    );
+  });
+
+  return {
+    success: true,
+    provider: "keap",
+    providerName: "Keap",
+    message: "Test contact sent to Keap.",
+    messageKey: "crm_test_delivery_keap_success",
+    safeMessage: "Test contact sent to Keap.",
+    createdObjectType: "contact",
+    providerRecordIds: {
+      contactId: result.contactId,
+    },
+  } satisfies CrmTestDeliveryResult;
+}
+
 export async function sendWorkspaceCrmTestLead({
   admin,
   workspaceId,
@@ -2927,6 +3187,8 @@ export async function sendWorkspaceCrmTestLead({
       return sendWorkspaceFreshsalesTestLead({ admin, workspaceId });
     case "monday":
       return sendWorkspaceMondayTestLead({ admin, workspaceId });
+    case "keap":
+      return sendWorkspaceKeapTestLead({ admin, workspaceId });
     default:
       throw new Error(`${getCrmProviderLabel(provider)} test delivery is not available yet.`);
   }

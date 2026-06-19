@@ -5,6 +5,7 @@ import { createCrmOAuthState } from "@/lib/crm-oauth-state";
 import { env, isGhlConfigured } from "@/lib/env";
 import { buildFreshsalesAuthorizationUrl, getFreshsalesOAuthDebugInfo } from "@/lib/integrations/freshsales";
 import { buildHubSpotAuthorizationUrl } from "@/lib/integrations/hubspot";
+import { buildKeapAuthorizationUrl } from "@/lib/integrations/keap";
 import { buildMondayAuthorizationUrl } from "@/lib/integrations/monday";
 import { buildZohoAuthorizationUrl } from "@/lib/integrations/zoho";
 import { CrmProvider } from "@/types";
@@ -32,6 +33,7 @@ function resolveProvider(value: string | null): CrmProvider | null {
     case "zoho":
     case "freshsales":
     case "monday":
+    case "keap":
       return value;
     default:
       return null;
@@ -56,6 +58,8 @@ function getProviderConnectUrl(provider: CrmProvider, state: string) {
       return buildFreshsalesAuthorizationUrl(state);
     case "monday":
       return buildMondayAuthorizationUrl(state);
+    case "keap":
+      return buildKeapAuthorizationUrl(state);
     default:
       throw new Error(`${provider} connect flow is not implemented yet.`);
   }

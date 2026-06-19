@@ -66,6 +66,10 @@ export const env = {
   mondayClientSecret: readEnv("MONDAY_CLIENT_SECRET"),
   mondayRedirectUri: readEnv("MONDAY_REDIRECT_URI"),
   mondayScopes: readEnv("MONDAY_SCOPES"),
+  keapClientId: readEnv("KEAP_CLIENT_ID"),
+  keapClientSecret: readEnv("KEAP_CLIENT_SECRET"),
+  keapRedirectUri: readEnv("KEAP_REDIRECT_URI"),
+  keapScopes: readEnv("KEAP_SCOPES"),
 } as const;
 
 export function getSupabasePublicEnvStatus() {
@@ -170,6 +174,19 @@ export function getMondayEnvStatus() {
   };
 }
 
+export function getKeapEnvStatus() {
+  const missingKeys = missing([
+    "KEAP_CLIENT_ID",
+    "KEAP_CLIENT_SECRET",
+    "KEAP_REDIRECT_URI",
+    "KEAP_SCOPES",
+  ]);
+  return {
+    configured: missingKeys.length === 0,
+    missingKeys,
+  };
+}
+
 export function isSupabasePublicConfigured() {
   return getSupabasePublicEnvStatus().configured;
 }
@@ -217,6 +234,10 @@ export function isFreshsalesConfigured() {
 
 export function isMondayConfigured() {
   return getMondayEnvStatus().configured;
+}
+
+export function isKeapConfigured() {
+  return getKeapEnvStatus().configured;
 }
 
 export function isCrmProviderDebugEnabled() {

@@ -38,6 +38,7 @@ import {
   getFreshsalesEnvStatus,
   getGhlEnvStatus,
   getHubSpotEnvStatus,
+  getKeapEnvStatus,
   getMondayEnvStatus,
   getPipedriveEnvStatus,
   getZohoEnvStatus,
@@ -163,12 +164,14 @@ export default async function WorkspaceSettingsPage({
   const zohoConnection = crmConnections.find((item) => item.provider === "zoho") || null;
   const freshsalesConnection = crmConnections.find((item) => item.provider === "freshsales") || null;
   const mondayConnection = crmConnections.find((item) => item.provider === "monday") || null;
+  const keapConnection = crmConnections.find((item) => item.provider === "keap") || null;
   const ghlEnvStatus = getGhlEnvStatus();
   const hubspotEnvStatus = getHubSpotEnvStatus();
   const pipedriveEnvStatus = getPipedriveEnvStatus();
   const zohoEnvStatus = getZohoEnvStatus();
   const freshsalesEnvStatus = getFreshsalesEnvStatus();
   const mondayEnvStatus = getMondayEnvStatus();
+  const keapEnvStatus = getKeapEnvStatus();
   const providerDestinations = crmState.destinations.filter((destination) => destination.is_available);
   const canSendCrmTests =
     currentRole === "admin" || workspaceRole === "owner" || workspaceRole === "admin";
@@ -1122,6 +1125,63 @@ export default async function WorkspaceSettingsPage({
                           {mondayConnection && !canSendCrmTests ? (
                             <p className="mt-2 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
                           ) : null}
+                        </div>
+                      </details>
+
+                      <details open={Boolean(keapConnection)} className="group rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)]">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <p className="text-base font-semibold text-[var(--ink)]">Keap</p>
+                              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", formatStatusTone(Boolean(keapConnection)))}>
+                                {keapConnection ? "Connected" : "Not connected"}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm text-[var(--muted)]">
+                              Connect Keap to send new SideKick leads into your Keap contacts.
+                            </p>
+                            {keapConnection ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">
+                                {typeof keapConnection.metadata_json.account_host === "string"
+                                  ? keapConnection.metadata_json.account_host
+                                  : keapConnection.provider_user_name || "Keap connected"}
+                              </p>
+                            ) : !keapEnvStatus.configured ? (
+                              <p className="mt-1 text-xs text-[var(--muted)]">OAuth setup is not configured yet.</p>
+                            ) : null}
+                          </div>
+                          <ChevronDown className="h-4 w-4 shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180" />
+                        </summary>
+
+                        <div className="border-t border-[var(--line)] px-5 py-5">
+                          <div className="flex flex-wrap gap-2">
+                            <Button asChild disabled={!keapEnvStatus.configured}>
+                              <Link href="/api/integrations/keap/connect?next=/workspace/settings?section=integrations">
+                                {keapConnection ? "Reconnect" : "Connect Keap"}
+                              </Link>
+                            </Button>
+                            {keapConnection && workspaceId && canSendCrmTests && isCrmTestDeliverySupported("keap") ? (
+                              <form action={testCrmDeliveryAction}>
+                                <input type="hidden" name="workspaceId" value={workspaceId} />
+                                <input type="hidden" name="provider" value="keap" />
+                                <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
+                                <Button type="submit" variant="secondary">Send Test Lead</Button>
+                              </form>
+                            ) : null}
+                            {keapConnection ? (
+                              <form action={disconnectCrmConnectionAction}>
+                                <input type="hidden" name="provider" value="keap" />
+                                <Button type="submit" variant="outline">Disconnect</Button>
+                              </form>
+                            ) : null}
+                          </div>
+                          {keapConnection ? (
+                            canSendCrmTests ? null : (
+                              <p className="mt-3 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
+                            )
+                          ) : (
+                            <p className="mt-3 text-xs text-[var(--muted)]">Connect Keap to send a test lead.</p>
+                          )}
                         </div>
                       </details>
                     </div>
