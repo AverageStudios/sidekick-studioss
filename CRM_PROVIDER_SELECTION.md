@@ -75,20 +75,11 @@ Current `Needs setup` examples:
 
 ## Logos and icons
 
-This flow uses local text-based provider marks instead of remote logos.
+This flow uses local provider logo assets stored in:
 
-Examples:
+- `public/crm-logos/`
 
-- `GHL`
-- `PD`
-- `HS`
-- `ZO`
-- `FS`
-- `M`
-- `K`
-- `SF`
-
-This keeps the UI polished without adding remote asset dependencies.
+The assets were pulled from official provider-owned sources and stored locally so the UI does not depend on external hotlinks at runtime.
 
 ## Security notes
 
