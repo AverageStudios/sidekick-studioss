@@ -8,43 +8,32 @@ import {
   Settings2,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { MondayBoardPicker } from "@/components/monday-board-picker";
+import { CrmProviderMark } from "@/components/crm-provider-mark";
 import { WorkspaceLogoField } from "@/components/workspace-logo-field";
 import {
-  disconnectCrmConnectionAction,
   disconnectMetaIntegrationAction,
   refreshMetaIntegrationAssetsAction,
   retryCrmDeliveryAction,
   retryFailedCrmDeliveriesAction,
   saveMetaIntegrationSelectionsAction,
-  testCrmDeliveryAction,
   syncMetaLeadsAction,
   updateWorkspaceGeneralAction,
   updateWorkspaceIconAction,
 } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getCurrentRole, requireUser } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { getDashboardSnapshot } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
-import { getCrmProviderLabel, getWorkspaceCrmState, isCrmTestDeliverySupported } from "@/lib/crm-integration";
+import { getCrmProviderLabel, getWorkspaceCrmState } from "@/lib/crm-integration";
+import { buildCrmProviderManageHref, crmProviderMetadataList } from "@/lib/crm-providers";
 import { getCurrentWorkspaceContext } from "@/lib/workspaces";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isMetaConfigured } from "@/lib/meta";
 import { getWorkspaceMetaIntegrationState } from "@/lib/meta-integration";
 import { getWorkspaceLeadSyncHealth } from "@/lib/meta-leads";
-import {
-  getFreshsalesEnvStatus,
-  getGhlEnvStatus,
-  getHubSpotEnvStatus,
-  getKeapEnvStatus,
-  getMondayEnvStatus,
-  getPipedriveEnvStatus,
-  getSalesforceEnvStatus,
-  getZohoEnvStatus,
-  isSupabaseServerConfigured,
-} from "@/lib/env";
+import { isSupabaseServerConfigured } from "@/lib/env";
 
 const workspaceSections = [
   { id: "general", label: "General", icon: Settings2 },
@@ -63,6 +52,12 @@ function formatStatusTone(connected: boolean) {
   return connected
     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
     : "border-amber-200 bg-amber-50 text-amber-700";
+}
+
+function formatSetupTone(needsSetup: boolean) {
+  return needsSetup
+    ? "border-amber-200 bg-amber-50 text-amber-700"
+    : "border-emerald-200 bg-emerald-50 text-emerald-700";
 }
 
 function formatDeliveryStateTone(state: string) {
@@ -92,11 +87,10 @@ export default async function WorkspaceSettingsPage({
   searchParams: Promise<{ section?: string; saved?: string; error?: string; created?: string }>;
 }) {
   const user = await requireUser();
-  const [{ section: rawSection, saved, error, created }, workspaceContext, dashboardSnapshot, currentRole] = await Promise.all([
+  const [{ section: rawSection, saved, error, created }, workspaceContext, dashboardSnapshot] = await Promise.all([
     searchParams,
     getCurrentWorkspaceContext(),
     getDashboardSnapshot(user.id),
-    getCurrentRole(),
   ]);
 
   const section = getSection(rawSection);
@@ -159,41 +153,38 @@ export default async function WorkspaceSettingsPage({
   const metaConnected =
     Boolean(connection && integrationState?.tokenAvailable && connection.status === "connected");
   const crmConnections = crmState.connections.filter((item) => item.is_active);
-  const ghlConnection = crmConnections.find((item) => item.provider === "gohighlevel") || null;
-  const hubspotConnection = crmConnections.find((item) => item.provider === "hubspot") || null;
-  const pipedriveConnection = crmConnections.find((item) => item.provider === "pipedrive") || null;
-  const zohoConnection = crmConnections.find((item) => item.provider === "zoho") || null;
-  const freshsalesConnection = crmConnections.find((item) => item.provider === "freshsales") || null;
-  const mondayConnection = crmConnections.find((item) => item.provider === "monday") || null;
-  const keapConnection = crmConnections.find((item) => item.provider === "keap") || null;
-  const salesforceConnection = crmConnections.find((item) => item.provider === "salesforce") || null;
-  const ghlEnvStatus = getGhlEnvStatus();
-  const hubspotEnvStatus = getHubSpotEnvStatus();
-  const pipedriveEnvStatus = getPipedriveEnvStatus();
-  const zohoEnvStatus = getZohoEnvStatus();
-  const freshsalesEnvStatus = getFreshsalesEnvStatus();
-  const mondayEnvStatus = getMondayEnvStatus();
-  const keapEnvStatus = getKeapEnvStatus();
-  const salesforceEnvStatus = getSalesforceEnvStatus();
+  const crmConnectionMap = new Map(crmConnections.map((item) => [item.provider, item]));
   const providerDestinations = crmState.destinations.filter((destination) => destination.is_available);
-  const canSendCrmTests =
-    currentRole === "admin" || workspaceRole === "owner" || workspaceRole === "admin";
-  const mondayBoardId =
-    (typeof mondayConnection?.metadata_json.board_id === "string" && mondayConnection.metadata_json.board_id) ||
-    (typeof mondayConnection?.metadata_json.boardId === "string" && mondayConnection.metadata_json.boardId) ||
-    "";
-  const mondayBoardName =
-    (typeof mondayConnection?.metadata_json.board_name === "string" && mondayConnection.metadata_json.board_name) ||
-    (typeof mondayConnection?.metadata_json.boardName === "string" && mondayConnection.metadata_json.boardName) ||
-    "";
-  const mondayBoardWorkspaceName =
-    (typeof mondayConnection?.metadata_json.board_workspace_name === "string" &&
-      mondayConnection.metadata_json.board_workspace_name) ||
-    (typeof mondayConnection?.metadata_json.boardWorkspaceName === "string" &&
-      mondayConnection.metadata_json.boardWorkspaceName) ||
-    "";
-  const hubspotOauthConnected = hubspotConnection?.metadata_json?.auth_type === "oauth";
-  const hubspotNeedsReconnect = Boolean(hubspotConnection && !hubspotOauthConnected);
+  const connectedCrmProviders = crmProviderMetadataList
+    .map((provider) => {
+      const connection = crmConnectionMap.get(provider.key) || null;
+      if (!connection) return null;
+
+      const mondayBoardId =
+        provider.key === "monday"
+          ? ((typeof connection.metadata_json.board_id === "string" && connection.metadata_json.board_id) ||
+              (typeof connection.metadata_json.boardId === "string" && connection.metadata_json.boardId) ||
+              "")
+          : "";
+      const hubspotNeedsReconnect =
+        provider.key === "hubspot" && connection.metadata_json?.auth_type !== "oauth";
+      const needsSetup = Boolean(
+        hubspotNeedsReconnect || (provider.key === "monday" && !mondayBoardId),
+      );
+
+      return {
+        provider,
+        connection,
+        needsSetup,
+        helper:
+          provider.key === "monday" && !mondayBoardId
+            ? "Board selection still needs to be finished."
+            : provider.key === "hubspot" && hubspotNeedsReconnect
+              ? "Reconnect to finish the OAuth-based setup."
+              : connection.provider_user_name || provider.shortDescription,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
   const metaConnectNext = encodeURIComponent("/workspace/settings?section=integrations");
   const selectedPageLeadFormAccess =
     connection?.metadata_json &&
@@ -771,479 +762,57 @@ export default async function WorkspaceSettingsPage({
                         </div>
                       </details>
 
-                      <details open={Boolean(ghlConnection)} className="group rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)]">
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <p className="text-base font-semibold text-[var(--ink)]">GoHighLevel</p>
-                              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", formatStatusTone(Boolean(ghlConnection)))}>
-                                {ghlConnection ? "Connected" : "Not connected"}
-                              </span>
-                            </div>
-                            <p className="mt-2 text-sm text-[var(--muted)]">
-                              Send new Meta lead form submissions from this workspace directly into GoHighLevel.
+                      <div className="rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] p-5">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-base font-semibold text-[var(--ink)]">CRM Connections</p>
+                            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+                              Connect the CRMs SideKick should deliver leads into, then manage test delivery and provider-specific setup from one place.
                             </p>
-                            {ghlConnection ? (
-                              <p className="mt-1 text-xs text-[var(--muted)]">
-                                {typeof ghlConnection.metadata_json.location_name === "string"
-                                  ? ghlConnection.metadata_json.location_name
-                                  : ghlConnection.provider_user_name || "Workspace connected"}
-                              </p>
-                            ) : !ghlEnvStatus.configured ? (
-                              <p className="mt-1 text-xs text-[var(--muted)]">OAuth setup is not configured yet.</p>
-                            ) : null}
                           </div>
-                          <ChevronDown className="h-4 w-4 shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180" />
-                        </summary>
-
-                        <div className="border-t border-[var(--line)] px-5 py-5">
-                          <div className="flex flex-wrap gap-2">
-                            <Button asChild disabled={!ghlEnvStatus.configured}>
-                              <Link href="/api/integrations/crm/connect?provider=gohighlevel&next=/workspace/settings?section=integrations">
-                                {ghlConnection ? "Reconnect" : "Connect"}
-                              </Link>
-                            </Button>
-                            {ghlConnection && workspaceId && canSendCrmTests && isCrmTestDeliverySupported("gohighlevel") ? (
-                              <form action={testCrmDeliveryAction}>
-                                <input type="hidden" name="workspaceId" value={workspaceId} />
-                                <input type="hidden" name="provider" value="gohighlevel" />
-                                <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
-                                <Button type="submit" variant="secondary">Send Test Lead</Button>
-                              </form>
-                            ) : null}
-                            {ghlConnection ? (
-                              <form action={disconnectCrmConnectionAction}>
-                                <input type="hidden" name="provider" value="gohighlevel" />
-                                <Button type="submit" variant="outline">Disconnect</Button>
-                              </form>
-                            ) : null}
-                          </div>
-                          {ghlConnection ? (
-                            canSendCrmTests ? null : (
-                              <p className="mt-3 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
-                            )
-                          ) : (
-                            <p className="mt-3 text-xs text-[var(--muted)]">Connect GoHighLevel to send a test lead.</p>
-                          )}
+                          <Button asChild className="w-full sm:w-auto">
+                            <Link href="/workspace/settings/integrations/crm">Connect CRM</Link>
+                          </Button>
                         </div>
-                      </details>
 
-                      <details open={Boolean(hubspotConnection)} className="group rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)]">
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <p className="text-base font-semibold text-[var(--ink)]">HubSpot</p>
-                              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", formatStatusTone(Boolean(hubspotConnection)))}>
-                                {hubspotConnection ? "Connected" : "Not connected"}
-                              </span>
-                            </div>
-                            <p className="mt-2 text-sm text-[var(--muted)]">
-                              Send new Meta lead form submissions from this workspace into HubSpot contacts.
-                            </p>
-                            {hubspotConnection ? (
-                              <p className="mt-1 text-xs text-[var(--muted)]">
-                                {hubspotConnection.provider_user_name || "HubSpot account connected"}
-                              </p>
-                            ) : null}
+                        {connectedCrmProviders.length ? (
+                          <div className="mt-5 grid gap-3 md:grid-cols-2">
+                            {connectedCrmProviders.map(({ provider, needsSetup, helper }) => (
+                              <div
+                                key={provider.key}
+                                className="rounded-[1.2rem] border border-[var(--line)] bg-white px-4 py-4 shadow-[var(--shadow-soft)]"
+                              >
+                                <div className="flex items-start gap-3">
+                                  <CrmProviderMark provider={provider.key} size="md" />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <p className="text-sm font-semibold text-[var(--ink)]">{provider.label}</p>
+                                      <span
+                                        className={cn(
+                                          "rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+                                          formatSetupTone(needsSetup),
+                                        )}
+                                      >
+                                        {needsSetup ? "Needs setup" : "Connected"}
+                                      </span>
+                                    </div>
+                                    <p className="mt-2 text-xs leading-5 text-[var(--muted)]">{helper}</p>
+                                  </div>
+                                </div>
+                                <div className="mt-4">
+                                  <Button asChild variant="outline" size="sm">
+                                    <Link href={buildCrmProviderManageHref(provider.key)}>Manage</Link>
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                          <ChevronDown className="h-4 w-4 shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180" />
-                        </summary>
-
-                        <div className="border-t border-[var(--line)] px-5 py-5">
-                          {hubspotConnection ? (
-                            <div className="flex flex-wrap gap-2">
-                              <Button asChild disabled={!hubspotEnvStatus.configured}>
-                                <Link href="/api/integrations/hubspot/connect?next=/workspace/settings?section=integrations">
-                                  Reconnect
-                                </Link>
-                              </Button>
-                              {workspaceId && canSendCrmTests && isCrmTestDeliverySupported("hubspot") && hubspotOauthConnected ? (
-                                <form action={testCrmDeliveryAction}>
-                                  <input type="hidden" name="workspaceId" value={workspaceId} />
-                                  <input type="hidden" name="provider" value="hubspot" />
-                                  <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
-                                  <Button type="submit" variant="secondary">Send Test Lead</Button>
-                                </form>
-                              ) : null}
-                              <form action={disconnectCrmConnectionAction}>
-                                <input type="hidden" name="provider" value="hubspot" />
-                                <Button type="submit" variant="outline">Disconnect</Button>
-                              </form>
-                            </div>
-                          ) : (
-                            <Button asChild disabled={!hubspotEnvStatus.configured}>
-                              <Link href="/api/integrations/hubspot/connect?next=/workspace/settings?section=integrations">
-                                Connect HubSpot
-                              </Link>
-                            </Button>
-                          )}
-                          {hubspotConnection ? (
-                            hubspotNeedsReconnect ? (
-                              <p className="mt-3 text-xs text-[var(--muted)]">
-                                Reconnect HubSpot to replace this older manual token connection with OAuth.
-                              </p>
-                            ) : canSendCrmTests ? null : (
-                              <p className="mt-3 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
-                            )
-                          ) : (
-                            <p className="mt-3 text-xs text-[var(--muted)]">Connect HubSpot to send a test lead.</p>
-                          )}
-                        </div>
-                      </details>
-
-                      <details open={Boolean(pipedriveConnection)} className="group rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)]">
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <p className="text-base font-semibold text-[var(--ink)]">Pipedrive</p>
-                              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", formatStatusTone(Boolean(pipedriveConnection)))}>
-                                {pipedriveConnection ? "Connected" : "Not connected"}
-                              </span>
-                            </div>
-                            <p className="mt-2 text-sm text-[var(--muted)]">
-                              Connect this workspace to Pipedrive with a simple OAuth sign-in flow.
-                            </p>
-                            {pipedriveConnection ? (
-                              <p className="mt-1 text-xs text-[var(--muted)]">
-                                {typeof pipedriveConnection.metadata_json.company_name === "string"
-                                  ? pipedriveConnection.metadata_json.company_name
-                                  : pipedriveConnection.provider_user_name || "Pipedrive account connected"}
-                              </p>
-                            ) : !pipedriveEnvStatus.configured ? (
-                              <p className="mt-1 text-xs text-[var(--muted)]">OAuth setup is not configured yet.</p>
-                            ) : null}
+                        ) : (
+                          <div className="mt-5 rounded-[1.2rem] border border-dashed border-[var(--line)] bg-white px-5 py-5 text-sm text-[var(--muted)]">
+                            No CRMs are connected yet. Start with GoHighLevel, HubSpot, Pipedrive, or any other provider in the CRM library.
                           </div>
-                          <ChevronDown className="h-4 w-4 shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180" />
-                        </summary>
-
-                        <div className="border-t border-[var(--line)] px-5 py-5">
-                          <div className="flex flex-wrap gap-2">
-                            <Button asChild disabled={!pipedriveEnvStatus.configured}>
-                              <Link href="/api/integrations/pipedrive/connect?next=/workspace/settings?section=integrations">
-                                {pipedriveConnection ? "Reconnect" : "Connect"}
-                              </Link>
-                            </Button>
-                            {pipedriveConnection && workspaceId && canSendCrmTests && isCrmTestDeliverySupported("pipedrive") ? (
-                              <form action={testCrmDeliveryAction}>
-                                <input type="hidden" name="workspaceId" value={workspaceId} />
-                                <input type="hidden" name="provider" value="pipedrive" />
-                                <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
-                                <Button type="submit" variant="secondary">Send Test Lead</Button>
-                              </form>
-                            ) : null}
-                            {pipedriveConnection ? (
-                              <form action={disconnectCrmConnectionAction}>
-                                <input type="hidden" name="provider" value="pipedrive" />
-                                <Button type="submit" variant="outline">Disconnect</Button>
-                              </form>
-                            ) : null}
-                          </div>
-                          {pipedriveConnection ? (
-                            canSendCrmTests ? null : (
-                              <p className="mt-3 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
-                            )
-                          ) : (
-                            <p className="mt-3 text-xs text-[var(--muted)]">Connect Pipedrive to send a test lead.</p>
-                          )}
-                        </div>
-                      </details>
-
-                      <details open={Boolean(salesforceConnection)} className="group rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)]">
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <p className="text-base font-semibold text-[var(--ink)]">Salesforce</p>
-                              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", formatStatusTone(Boolean(salesforceConnection)))}>
-                                {salesforceConnection ? "Connected" : "Not connected"}
-                              </span>
-                            </div>
-                            <p className="mt-2 text-sm text-[var(--muted)]">
-                              Connect Salesforce to send new SideKick leads into your Salesforce Lead object.
-                            </p>
-                            {salesforceConnection ? (
-                              <p className="mt-1 text-xs text-[var(--muted)]">
-                                {typeof salesforceConnection.metadata_json.org_name === "string"
-                                  ? salesforceConnection.metadata_json.org_name
-                                  : salesforceConnection.provider_user_name || "Salesforce connected"}
-                              </p>
-                            ) : !salesforceEnvStatus.configured ? (
-                              <p className="mt-1 text-xs text-[var(--muted)]">OAuth setup is not configured yet.</p>
-                            ) : null}
-                          </div>
-                          <ChevronDown className="h-4 w-4 shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180" />
-                        </summary>
-
-                        <div className="border-t border-[var(--line)] px-5 py-5">
-                          <div className="flex flex-wrap gap-2">
-                            <Button asChild disabled={!salesforceEnvStatus.configured}>
-                              <Link href="/api/integrations/salesforce/connect?next=/workspace/settings?section=integrations">
-                                {salesforceConnection ? "Reconnect" : "Connect Salesforce"}
-                              </Link>
-                            </Button>
-                            {salesforceConnection && workspaceId && canSendCrmTests && isCrmTestDeliverySupported("salesforce") ? (
-                              <form action={testCrmDeliveryAction}>
-                                <input type="hidden" name="workspaceId" value={workspaceId} />
-                                <input type="hidden" name="provider" value="salesforce" />
-                                <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
-                                <Button type="submit" variant="secondary">Send Test Lead</Button>
-                              </form>
-                            ) : null}
-                            {salesforceConnection ? (
-                              <form action={disconnectCrmConnectionAction}>
-                                <input type="hidden" name="provider" value="salesforce" />
-                                <Button type="submit" variant="outline">Disconnect</Button>
-                              </form>
-                            ) : null}
-                          </div>
-                          {salesforceConnection ? (
-                            canSendCrmTests ? null : (
-                              <p className="mt-3 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
-                            )
-                          ) : (
-                            <p className="mt-3 text-xs text-[var(--muted)]">Connect Salesforce to send a test lead.</p>
-                          )}
-                        </div>
-                      </details>
-
-                      <details open={Boolean(zohoConnection)} className="group rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)]">
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <p className="text-base font-semibold text-[var(--ink)]">Zoho CRM</p>
-                              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", formatStatusTone(Boolean(zohoConnection)))}>
-                                {zohoConnection ? "Connected" : "Not connected"}
-                              </span>
-                            </div>
-                            <p className="mt-2 text-sm text-[var(--muted)]">
-                              Connect Zoho CRM to send new SideKick leads into Zoho.
-                            </p>
-                            {zohoConnection ? (
-                              <p className="mt-1 text-xs text-[var(--muted)]">
-                                {typeof zohoConnection.metadata_json.org_name === "string"
-                                  ? zohoConnection.metadata_json.org_name
-                                  : zohoConnection.provider_user_name || "Zoho CRM connected"}
-                              </p>
-                            ) : !zohoEnvStatus.configured ? (
-                              <p className="mt-1 text-xs text-[var(--muted)]">OAuth setup is not configured yet.</p>
-                            ) : null}
-                          </div>
-                          <ChevronDown className="h-4 w-4 shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180" />
-                        </summary>
-
-                        <div className="border-t border-[var(--line)] px-5 py-5">
-                          <div className="flex flex-wrap gap-2">
-                            <Button asChild disabled={!zohoEnvStatus.configured}>
-                              <Link href="/api/integrations/zoho/connect?next=/workspace/settings?section=integrations">
-                                {zohoConnection ? "Reconnect" : "Connect Zoho"}
-                              </Link>
-                            </Button>
-                            {zohoConnection && workspaceId && canSendCrmTests && isCrmTestDeliverySupported("zoho") ? (
-                              <form action={testCrmDeliveryAction}>
-                                <input type="hidden" name="workspaceId" value={workspaceId} />
-                                <input type="hidden" name="provider" value="zoho" />
-                                <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
-                                <Button type="submit" variant="secondary">Send Test Lead</Button>
-                              </form>
-                            ) : null}
-                            {zohoConnection ? (
-                              <form action={disconnectCrmConnectionAction}>
-                                <input type="hidden" name="provider" value="zoho" />
-                                <Button type="submit" variant="outline">Disconnect</Button>
-                              </form>
-                            ) : null}
-                          </div>
-                          {zohoConnection ? (
-                            canSendCrmTests ? null : (
-                              <p className="mt-3 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
-                            )
-                          ) : (
-                            <p className="mt-3 text-xs text-[var(--muted)]">Connect Zoho CRM to send a test lead.</p>
-                          )}
-                        </div>
-                      </details>
-
-                      <details open={Boolean(freshsalesConnection)} className="group rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)]">
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <p className="text-base font-semibold text-[var(--ink)]">Freshsales / Freshworks CRM</p>
-                              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", formatStatusTone(Boolean(freshsalesConnection)))}>
-                                {freshsalesConnection ? "Connected" : "Not connected"}
-                              </span>
-                            </div>
-                            <p className="mt-2 text-sm text-[var(--muted)]">
-                              Connect Freshsales to send new SideKick leads into Freshworks CRM.
-                            </p>
-                            {freshsalesConnection ? (
-                              <p className="mt-1 text-xs text-[var(--muted)]">
-                                {typeof freshsalesConnection.metadata_json.account_host === "string"
-                                  ? freshsalesConnection.metadata_json.account_host
-                                  : freshsalesConnection.provider_user_name || "Freshsales connected"}
-                              </p>
-                            ) : !freshsalesEnvStatus.configured ? (
-                              <p className="mt-1 text-xs text-[var(--muted)]">OAuth setup is not configured yet.</p>
-                            ) : null}
-                          </div>
-                          <ChevronDown className="h-4 w-4 shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180" />
-                        </summary>
-
-                        <div className="border-t border-[var(--line)] px-5 py-5">
-                          <div className="flex flex-wrap gap-2">
-                            <Button asChild disabled={!freshsalesEnvStatus.configured}>
-                              <Link href="/api/integrations/freshsales/connect?next=/workspace/settings?section=integrations">
-                                {freshsalesConnection ? "Reconnect" : "Connect Freshsales"}
-                              </Link>
-                            </Button>
-                            {freshsalesConnection && workspaceId && canSendCrmTests && isCrmTestDeliverySupported("freshsales") ? (
-                              <form action={testCrmDeliveryAction}>
-                                <input type="hidden" name="workspaceId" value={workspaceId} />
-                                <input type="hidden" name="provider" value="freshsales" />
-                                <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
-                                <Button type="submit" variant="secondary">Send Test Lead</Button>
-                              </form>
-                            ) : null}
-                            {freshsalesConnection ? (
-                              <form action={disconnectCrmConnectionAction}>
-                                <input type="hidden" name="provider" value="freshsales" />
-                                <Button type="submit" variant="outline">Disconnect</Button>
-                              </form>
-                            ) : null}
-                          </div>
-                          {freshsalesConnection ? (
-                            canSendCrmTests ? null : (
-                              <p className="mt-3 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
-                            )
-                          ) : (
-                            <p className="mt-3 text-xs text-[var(--muted)]">Connect Freshsales to send a test lead.</p>
-                          )}
-                        </div>
-                      </details>
-
-                      <details open={Boolean(mondayConnection)} className="group rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)]">
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <p className="text-base font-semibold text-[var(--ink)]">Monday CRM</p>
-                              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", formatStatusTone(Boolean(mondayConnection)))}>
-                                {mondayConnection ? "Connected" : "Not connected"}
-                              </span>
-                            </div>
-                            <p className="mt-2 text-sm text-[var(--muted)]">
-                              Connect Monday CRM and choose the board SideKick should use for CRM delivery checks.
-                            </p>
-                            {mondayConnection ? (
-                              <p className="mt-1 text-xs text-[var(--muted)]">
-                                {mondayBoardName
-                                  ? `${mondayBoardName}${mondayBoardId ? ` • Board ${mondayBoardId}` : ""}`
-                                  : mondayConnection.provider_user_name || "Monday CRM connected"}
-                              </p>
-                            ) : !mondayEnvStatus.configured ? (
-                              <p className="mt-1 text-xs text-[var(--muted)]">OAuth setup is not configured yet.</p>
-                            ) : null}
-                          </div>
-                          <ChevronDown className="h-4 w-4 shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180" />
-                        </summary>
-
-                        <div className="border-t border-[var(--line)] px-5 py-5">
-                          <div className="flex flex-wrap gap-2">
-                            <Button asChild disabled={!mondayEnvStatus.configured}>
-                              <Link href="/api/integrations/monday/connect?next=/workspace/settings?section=integrations">
-                                {mondayConnection ? "Reconnect" : "Connect Monday"}
-                              </Link>
-                            </Button>
-                            {mondayConnection && workspaceId && canSendCrmTests && isCrmTestDeliverySupported("monday") ? (
-                              <form action={testCrmDeliveryAction}>
-                                <input type="hidden" name="workspaceId" value={workspaceId} />
-                                <input type="hidden" name="provider" value="monday" />
-                                <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
-                                <Button type="submit" variant="secondary" disabled={!mondayBoardId}>
-                                  Send Test Lead
-                                </Button>
-                              </form>
-                            ) : null}
-                            {mondayConnection ? (
-                              <form action={disconnectCrmConnectionAction}>
-                                <input type="hidden" name="provider" value="monday" />
-                                <Button type="submit" variant="outline">Disconnect</Button>
-                              </form>
-                            ) : null}
-                          </div>
-
-                          {mondayConnection && workspaceId ? (
-                            <MondayBoardPicker
-                              workspaceId={workspaceId}
-                              selectedBoardId={mondayBoardId}
-                              selectedBoardName={mondayBoardName}
-                              selectedBoardWorkspaceName={mondayBoardWorkspaceName}
-                              canManage={canSendCrmTests}
-                            />
-                          ) : null}
-
-                          {!mondayConnection ? (
-                            <p className="mt-3 text-xs text-[var(--muted)]">Connect Monday CRM to send a test lead.</p>
-                          ) : null}
-                          {mondayConnection && !canSendCrmTests ? (
-                            <p className="mt-2 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
-                          ) : null}
-                        </div>
-                      </details>
-
-                      <details open={Boolean(keapConnection)} className="group rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)]">
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <p className="text-base font-semibold text-[var(--ink)]">Keap</p>
-                              <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", formatStatusTone(Boolean(keapConnection)))}>
-                                {keapConnection ? "Connected" : "Not connected"}
-                              </span>
-                            </div>
-                            <p className="mt-2 text-sm text-[var(--muted)]">
-                              Connect Keap to send new SideKick leads into your Keap contacts.
-                            </p>
-                            {keapConnection ? (
-                              <p className="mt-1 text-xs text-[var(--muted)]">
-                                {typeof keapConnection.metadata_json.account_host === "string"
-                                  ? keapConnection.metadata_json.account_host
-                                  : keapConnection.provider_user_name || "Keap connected"}
-                              </p>
-                            ) : !keapEnvStatus.configured ? (
-                              <p className="mt-1 text-xs text-[var(--muted)]">OAuth setup is not configured yet.</p>
-                            ) : null}
-                          </div>
-                          <ChevronDown className="h-4 w-4 shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180" />
-                        </summary>
-
-                        <div className="border-t border-[var(--line)] px-5 py-5">
-                          <div className="flex flex-wrap gap-2">
-                            <Button asChild disabled={!keapEnvStatus.configured}>
-                              <Link href="/api/integrations/keap/connect?next=/workspace/settings?section=integrations">
-                                {keapConnection ? "Reconnect" : "Connect Keap"}
-                              </Link>
-                            </Button>
-                            {keapConnection && workspaceId && canSendCrmTests && isCrmTestDeliverySupported("keap") ? (
-                              <form action={testCrmDeliveryAction}>
-                                <input type="hidden" name="workspaceId" value={workspaceId} />
-                                <input type="hidden" name="provider" value="keap" />
-                                <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
-                                <Button type="submit" variant="secondary">Send Test Lead</Button>
-                              </form>
-                            ) : null}
-                            {keapConnection ? (
-                              <form action={disconnectCrmConnectionAction}>
-                                <input type="hidden" name="provider" value="keap" />
-                                <Button type="submit" variant="outline">Disconnect</Button>
-                              </form>
-                            ) : null}
-                          </div>
-                          {keapConnection ? (
-                            canSendCrmTests ? null : (
-                              <p className="mt-3 text-xs text-[var(--muted)]">Only workspace owners or admins can send test leads.</p>
-                            )
-                          ) : (
-                            <p className="mt-3 text-xs text-[var(--muted)]">Connect Keap to send a test lead.</p>
-                          )}
-                        </div>
-                      </details>
+                        )}
+                      </div>
                     </div>
 
                     <div className="mt-6 rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] p-5">

@@ -3662,8 +3662,9 @@ export async function disconnectCrmConnectionAction(formData: FormData) {
 
   const workspaceId = workspaceContext?.activeWorkspace.id;
   const provider = String(formData.get("provider") || "").trim();
+  const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=integrations").trim();
   if (!workspaceId || !provider) {
-    redirect("/workspace/settings?section=integrations&error=Missing%20workspace%20or%20provider.");
+    redirect(appendQueryParam(redirectTo, "error", "Missing workspace or provider."));
   }
 
   try {
@@ -3674,11 +3675,11 @@ export async function disconnectCrmConnectionAction(formData: FormData) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not disconnect CRM.";
-    redirect(`/workspace/settings?section=integrations&error=${encodeURIComponent(message)}`);
+    redirect(appendQueryParam(redirectTo, "error", message));
   }
 
   revalidatePath("/workspace/settings");
-  redirect(`/workspace/settings?section=integrations&saved=${encodeURIComponent(`${provider} disconnected`)}`);
+  redirect(appendQueryParam(redirectTo, "saved", `${provider} disconnected`));
 }
 
 export async function testCrmDeliveryAction(formData: FormData) {
