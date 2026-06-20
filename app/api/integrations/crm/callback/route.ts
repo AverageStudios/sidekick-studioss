@@ -31,6 +31,10 @@ function getFreshsalesCallbackUrl(request: NextRequest) {
   return new URL("/api/integrations/freshsales/callback", getAppOrigin(request)).toString();
 }
 
+function getCloseCallbackUrl(request: NextRequest) {
+  return new URL("/api/integrations/close/callback", getAppOrigin(request)).toString();
+}
+
 function clearOauthCookies(response: NextResponse) {
   response.cookies.delete("crm_oauth_state");
   response.cookies.delete("crm_oauth_next");
@@ -48,7 +52,7 @@ export async function GET(request: NextRequest) {
   const providerErrorDescription = request.nextUrl.searchParams.get("error_description");
   if (providerError) {
     if (request.cookies.get("crm_oauth_provider")?.value === "close") {
-      const debug = getCloseOAuthDebugInfo();
+      const debug = getCloseOAuthDebugInfo(getCloseCallbackUrl(request));
       console.error(
         "[close-oauth]",
         JSON.stringify({
@@ -65,6 +69,10 @@ export async function GET(request: NextRequest) {
           scopeString: debug.scopeString,
           scopeCount: debug.scopeCount,
           sendsScopeParam: debug.sendsScopeParam,
+          callbackPath: request.nextUrl.pathname,
+          requestHost: request.nextUrl.host,
+          secureCookieMode: request.nextUrl.protocol === "https:",
+          sameSite: "lax",
         }),
       );
     }
@@ -113,7 +121,7 @@ export async function GET(request: NextRequest) {
     );
   }
   if (statePayload?.provider === "close" || providerCookie === "close") {
-    const debug = getCloseOAuthDebugInfo();
+    const debug = getCloseOAuthDebugInfo(getCloseCallbackUrl(request));
     console.info(
       "[close-oauth]",
       JSON.stringify({
@@ -133,6 +141,12 @@ export async function GET(request: NextRequest) {
         scopeString: debug.scopeString,
         scopeCount: debug.scopeCount,
         sendsScopeParam: debug.sendsScopeParam,
+        callbackPath: request.nextUrl.pathname,
+        requestHost: request.nextUrl.host,
+        secureCookieMode: request.nextUrl.protocol === "https:",
+        sameSite: "lax",
+        hasStateParam: Boolean(state),
+        hasStateCookie: Boolean(stateCookie),
       }),
     );
   }
@@ -148,8 +162,18 @@ export async function GET(request: NextRequest) {
         "[close-oauth]",
         JSON.stringify({
           provider: "close",
-          stage: "state_validation",
-          callbackHasCode: Boolean(code),
+          stage: "state_validation_failed",
+          hasCode: Boolean(code),
+          hasStateParam: Boolean(state),
+          hasStateCookie: Boolean(stateCookie),
+          expectedProvider:
+            typeof providerCookie === "string" && providerCookie.trim().length > 0
+              ? providerCookie
+              : null,
+          callbackPath: request.nextUrl.pathname,
+          requestHost: request.nextUrl.host,
+          secureCookieMode: request.nextUrl.protocol === "https:",
+          sameSite: "lax",
           statePayloadPresent: Boolean(statePayload),
           stateMatchesCookie: !(state && stateCookie && state !== stateCookie),
           providerMatchesCookie: !(providerCookie && statePayload && statePayload.provider !== providerCookie),
@@ -158,7 +182,9 @@ export async function GET(request: NextRequest) {
     }
     integrationsUrl.searchParams.set(
       "error",
-      "CRM connection was canceled or expired. Please try again.",
+      code
+        ? "CRM connection expired. Please start the connection again from SideKick."
+        : "CRM connection was canceled or expired. Please try again.",
     );
     const response = NextResponse.redirect(integrationsUrl);
     clearOauthCookies(response);
@@ -357,7 +383,7 @@ export async function GET(request: NextRequest) {
         safeCategory?: string | null;
       };
       const debug = getCloseOAuthDebugInfo(
-        new URL("/api/integrations/close/callback", getAppOrigin(request)).toString(),
+        getCloseCallbackUrl(request),
       );
       const messageText = error instanceof Error ? error.message : "unknown_error";
       const inferredStage =

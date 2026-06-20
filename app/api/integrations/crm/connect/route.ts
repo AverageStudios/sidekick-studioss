@@ -76,6 +76,10 @@ function getFreshsalesCallbackUrl(request: NextRequest) {
   return new URL("/api/integrations/freshsales/callback", getAppOrigin(request)).toString();
 }
 
+function getCloseCallbackUrl(request: NextRequest) {
+  return new URL("/api/integrations/close/callback", getAppOrigin(request)).toString();
+}
+
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -142,7 +146,9 @@ export async function GET(request: NextRequest) {
     const oauthUrl =
       provider === "freshsales"
         ? buildFreshsalesAuthorizationUrl(state, getFreshsalesCallbackUrl(request))
-        : getProviderConnectUrl(provider, state);
+        : provider === "close"
+          ? buildCloseAuthorizationUrl(state, getCloseCallbackUrl(request))
+          : getProviderConnectUrl(provider, state);
     if (provider === "freshsales") {
       const debug = getFreshsalesOAuthDebugInfo(getFreshsalesCallbackUrl(request));
       console.info(
@@ -167,7 +173,22 @@ export async function GET(request: NextRequest) {
       );
     }
     if (provider === "close") {
-      const debug = getCloseOAuthDebugInfo();
+      const debug = getCloseOAuthDebugInfo(getCloseCallbackUrl(request));
+      const requestOrigin = getAppOrigin(request);
+      const configuredRedirectOrigin = env.closeRedirectUri
+        ? new URL(env.closeRedirectUri).origin
+        : null;
+      if (configuredRedirectOrigin && requestOrigin !== configuredRedirectOrigin) {
+        console.warn(
+          "[close-oauth]",
+          JSON.stringify({
+            provider: "close",
+            stage: "origin_mismatch",
+            requestOrigin,
+            redirectOrigin: configuredRedirectOrigin,
+          }),
+        );
+      }
       console.info(
         "[close-oauth]",
         JSON.stringify({
@@ -184,6 +205,9 @@ export async function GET(request: NextRequest) {
           hasClientId: debug.hasClientId,
           hasState: Boolean(oauthUrl.searchParams.get("state")),
           responseType: oauthUrl.searchParams.get("response_type"),
+          secureCookieMode: request.nextUrl.protocol === "https:",
+          sameSite: "lax",
+          cookiePath: "/",
         }),
       );
     }
@@ -237,7 +261,7 @@ export async function GET(request: NextRequest) {
       );
     }
     if (provider === "close") {
-      const debug = getCloseOAuthDebugInfo();
+      const debug = getCloseOAuthDebugInfo(getCloseCallbackUrl(request));
       console.error(
         "[close-oauth]",
         JSON.stringify({
@@ -251,6 +275,9 @@ export async function GET(request: NextRequest) {
           scopeString: debug.scopeString,
           scopeCount: debug.scopeCount,
           sendsScopeParam: debug.sendsScopeParam,
+          secureCookieMode: request.nextUrl.protocol === "https:",
+          sameSite: "lax",
+          cookiePath: "/",
         }),
       );
     }
