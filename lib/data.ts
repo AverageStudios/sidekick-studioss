@@ -9,7 +9,25 @@ import { buildLeadSyncReconnectUrl, getLeadInboxSearchMatch, getWorkspaceLeadSyn
 import { listPublishedTemplates, getPublishedTemplateBySlug } from "@/lib/template-repository";
 import { ensureWorkspaceContextByUserId, getActiveWorkspaceIdForUser, userHasWorkspaceAccess } from "@/lib/workspaces";
 import { getWorkspaceMetaIntegrationState } from "@/lib/meta-integration";
+import { countLeadsByStatus, countLeadsInPastDays } from "@/lib/workspace-metrics";
 import { BusinessProfile, CampaignBundle, CampaignRecord, LeadRecord, TemplateRecord } from "@/types";
+
+type DashboardSnapshotOptions = {
+  allowDemo?: boolean;
+};
+
+export type DashboardSnapshot = {
+  liveFunnels: number;
+  totalLeads: number;
+  newLeads: number;
+  newLeadsLast30Days: number;
+  contactedLeads: number;
+  bookedLeads: number;
+  recentLeads: LeadRecord[];
+  campaigns: CampaignRecord[];
+  funnels: Array<Record<string, unknown>>;
+  loadError: string | null;
+};
 
 async function getTemplateRecordById(id: string) {
   if (!isSupabaseServerConfigured()) {
@@ -30,15 +48,18 @@ async function getTemplateRecordById(id: string) {
   return (data as TemplateRecord | null) || null;
 }
 
-function getEmptyDashboardSnapshot() {
+export function getEmptyDashboardSnapshot(): DashboardSnapshot {
   return {
     liveFunnels: 0,
+    totalLeads: 0,
     newLeads: 0,
+    newLeadsLast30Days: 0,
     contactedLeads: 0,
     bookedLeads: 0,
     recentLeads: [],
     campaigns: [],
     funnels: [],
+    loadError: null,
   };
 }
 
@@ -55,66 +76,99 @@ export const getBusinessProfile = cache(async (userId: string) => {
   return context?.businessProfile || null;
 });
 
-export const getDashboardSnapshot = cache(async (userId: string) => {
+export const getDashboardSnapshot = cache(async (userId: string, options?: DashboardSnapshotOptions) => {
+  const allowDemo = options?.allowDemo ?? true;
+
   if (!isSupabaseServerConfigured()) {
-    if (!isDemoModeEnabled()) {
+    if (!allowDemo || !isDemoModeEnabled()) {
       return getEmptyDashboardSnapshot();
     }
 
+    const counts = countLeadsByStatus(demoLeads);
     return {
       liveFunnels: 1,
-      newLeads: demoLeads.filter((lead) => lead.status === "new").length,
-      contactedLeads: demoLeads.filter((lead) => lead.status === "contacted").length,
-      bookedLeads: demoLeads.filter((lead) => getCanonicalLeadStatus(lead.status) === "qualified").length,
+      totalLeads: counts.total,
+      newLeads: counts.newCount,
+      newLeadsLast30Days: countLeadsInPastDays(demoLeads, 30),
+      contactedLeads: counts.contactedCount,
+      bookedLeads: counts.qualifiedCount,
       recentLeads: demoLeads,
       campaigns: [demoCampaign],
       funnels: [demoFunnel],
+      loadError: null,
     };
   }
 
   const supabase = createSupabaseAdminClient();
   if (!supabase) {
-    return isDemoModeEnabled()
+    return allowDemo && isDemoModeEnabled()
         ? {
+          totalLeads: demoLeads.length,
           liveFunnels: 1,
-          newLeads: demoLeads.filter((lead) => lead.status === "new").length,
-          contactedLeads: demoLeads.filter((lead) => lead.status === "contacted").length,
-          bookedLeads: demoLeads.filter((lead) => getCanonicalLeadStatus(lead.status) === "qualified").length,
+          newLeads: countLeadsByStatus(demoLeads).newCount,
+          newLeadsLast30Days: countLeadsInPastDays(demoLeads, 30),
+          contactedLeads: countLeadsByStatus(demoLeads).contactedCount,
+          bookedLeads: countLeadsByStatus(demoLeads).qualifiedCount,
           recentLeads: demoLeads,
           campaigns: [demoCampaign],
           funnels: [demoFunnel],
+          loadError: null,
         }
       : getEmptyDashboardSnapshot();
   }
+
   const activeWorkspaceId = await getActiveWorkspaceIdForUser(userId);
-  const [funnelsResult, leadsResult, campaignsResult] = await Promise.all([
-    activeWorkspaceId
-      ? supabase.from("funnels").select("*").eq("workspace_id", activeWorkspaceId)
-      : supabase.from("funnels").select("*").eq("user_id", userId),
-    activeWorkspaceId
-      ? supabase.from("leads").select("*").eq("workspace_id", activeWorkspaceId).order("created_at", { ascending: false }).limit(8)
-      : supabase.from("leads").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(8),
-    activeWorkspaceId
-      ? supabase.from("campaigns").select("*").eq("workspace_id", activeWorkspaceId).order("created_at", { ascending: false })
-      : supabase.from("campaigns").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
-  ]);
+  if (!activeWorkspaceId) {
+    return getEmptyDashboardSnapshot();
+  }
 
-  const leads = (leadsResult.data || []) as LeadRecord[];
-  const campaigns = await hydrateAndSyncCampaignRecords({
-    admin: supabase,
-    campaigns: (campaignsResult.data || []) as CampaignRecord[],
-    syncLiveStatuses: true,
-  });
+  try {
+    const [funnelsResult, leadCountsResult, recentLeadsResult, campaignsResult] = await Promise.all([
+      supabase.from("funnels").select("*").eq("workspace_id", activeWorkspaceId),
+      supabase
+        .from("leads")
+        .select("id, status, created_at, meta_created_time")
+        .eq("workspace_id", activeWorkspaceId),
+      supabase
+        .from("leads")
+        .select("*")
+        .eq("workspace_id", activeWorkspaceId)
+        .order("created_at", { ascending: false })
+        .limit(8),
+      supabase.from("campaigns").select("*").eq("workspace_id", activeWorkspaceId).order("created_at", { ascending: false }),
+    ]);
 
-  return {
-    liveFunnels: (funnelsResult.data || []).filter((funnel) => funnel.is_published).length,
-    newLeads: leads.filter((lead) => getCanonicalLeadStatus(lead.status) === "new").length,
-    contactedLeads: leads.filter((lead) => getCanonicalLeadStatus(lead.status) === "contacted").length,
-    bookedLeads: leads.filter((lead) => getCanonicalLeadStatus(lead.status) === "qualified").length,
-    recentLeads: leads,
-    campaigns,
-    funnels: funnelsResult.data || [],
-  };
+    if (funnelsResult.error) throw new Error(funnelsResult.error.message);
+    if (leadCountsResult.error) throw new Error(leadCountsResult.error.message);
+    if (recentLeadsResult.error) throw new Error(recentLeadsResult.error.message);
+    if (campaignsResult.error) throw new Error(campaignsResult.error.message);
+
+    const allLeadRows = (leadCountsResult.data || []) as LeadRecord[];
+    const leadCounts = countLeadsByStatus(allLeadRows);
+    const campaigns = await hydrateAndSyncCampaignRecords({
+      admin: supabase,
+      campaigns: (campaignsResult.data || []) as CampaignRecord[],
+      syncLiveStatuses: true,
+    });
+
+    return {
+      liveFunnels: (funnelsResult.data || []).filter((funnel) => funnel.is_published).length,
+      totalLeads: leadCounts.total,
+      newLeads: leadCounts.newCount,
+      newLeadsLast30Days: countLeadsInPastDays(allLeadRows, 30),
+      contactedLeads: leadCounts.contactedCount,
+      bookedLeads: leadCounts.qualifiedCount,
+      recentLeads: (recentLeadsResult.data || []) as LeadRecord[],
+      campaigns,
+      funnels: (funnelsResult.data || []) as Array<Record<string, unknown>>,
+      loadError: null,
+    };
+  } catch (error) {
+    return {
+      ...getEmptyDashboardSnapshot(),
+      loadError: error instanceof Error ? error.message : "Dashboard metrics could not be loaded.",
+    };
+  }
 });
 
 export const getCampaignBundle = cache(async (userId: string, id: string) => {
@@ -284,9 +338,11 @@ export const getFunnelBySlug = cache(async (slug: string) => {
   } as CampaignBundle;
 });
 
-export const getLeads = cache(async (userId: string, status?: string) => {
+export const getLeads = cache(async (userId: string, status?: string, options?: { allowDemo?: boolean }) => {
+  const allowDemo = options?.allowDemo ?? true;
+
   if (!isSupabaseServerConfigured()) {
-    if (!isDemoModeEnabled()) {
+    if (!allowDemo || !isDemoModeEnabled()) {
       return [];
     }
 
@@ -295,7 +351,7 @@ export const getLeads = cache(async (userId: string, status?: string) => {
 
   const supabase = createSupabaseAdminClient();
   if (!supabase) {
-    if (!isDemoModeEnabled()) {
+    if (!allowDemo || !isDemoModeEnabled()) {
       return [];
     }
 
@@ -314,7 +370,10 @@ export const getLeads = cache(async (userId: string, status?: string) => {
     query = query.eq("status", status);
   }
 
-  const { data } = await query;
+  const { data, error } = await query;
+  if (error) {
+    throw new Error(error.message);
+  }
   return (data || []) as LeadRecord[];
 });
 

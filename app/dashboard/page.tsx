@@ -1,5 +1,15 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, CheckCircle2, RefreshCcw, ShieldCheck, Sparkles, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  BarChart3,
+  CheckCircle2,
+  PlusCircle,
+  RefreshCcw,
+  ShieldCheck,
+  Sparkles,
+  Users,
+} from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
@@ -7,10 +17,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
 import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
+import { getWorkspaceCrmState } from "@/lib/crm-integration";
 import { getDashboardSnapshot, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
+import { getLeadContactSummary, getLeadDisplayName, getLeadStatusLabel } from "@/lib/leads";
 import { getWorkspaceLeadSyncHealth } from "@/lib/meta-leads";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { formatDate } from "@/lib/utils";
+import { summarizeCampaignLifecycles } from "@/lib/workspace-metrics";
 import { getActiveWorkspaceIdForUser } from "@/lib/workspaces";
 
 type AttentionItem = {
@@ -22,10 +34,10 @@ type AttentionItem = {
 };
 
 function formatRelativeTime(value?: string | null) {
-  if (!value) return "Just now";
+  if (!value) return "Recently";
 
   const timestamp = new Date(value).getTime();
-  if (!Number.isFinite(timestamp)) return "Just now";
+  if (!Number.isFinite(timestamp)) return "Recently";
 
   const diffMs = timestamp - Date.now();
   const diffSeconds = Math.round(diffMs / 1000);
@@ -37,7 +49,11 @@ function formatRelativeTime(value?: string | null) {
   if (absSeconds < 24 * 60 * 60) return rtf.format(Math.round(diffSeconds / 3600), "hour");
   if (absSeconds < 7 * 24 * 60 * 60) return rtf.format(Math.round(diffSeconds / 86400), "day");
 
-  return formatDate(value);
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function getCampaignStatusTone(state: string) {
@@ -91,9 +107,7 @@ function buildAttentionItems({
     items.push({
       key: "campaign-errors",
       title: errorCampaigns.length === 1 ? "Campaign error" : "Campaign errors",
-      detail: `${errorCampaigns.length} campaign${errorCampaigns.length === 1 ? "" : "s"} ${
-        errorCampaigns.length === 1 ? "needs" : "need"
-      } a sync check.`,
+      detail: `${errorCampaigns.length} campaign${errorCampaigns.length === 1 ? "" : "s"} need a sync check.`,
       href: `/campaigns/${errorCampaigns[0]?.id}`,
       tone: "danger",
     });
@@ -114,23 +128,21 @@ function buildAttentionItems({
       key: "draft-campaigns",
       title: draftCampaigns.length === 1 ? "Draft not launched" : "Drafts not launched",
       detail: joinNames(draftCampaigns.slice(0, 3).map((campaign) => campaign.name)),
-      href: `/templates/drafts`,
+      href: "/templates/drafts",
       tone: "warning",
     });
   }
 
   if (leadSyncHealth && (!leadSyncHealth.canReadLeads || leadSyncHealth.lastWorkspaceSyncError)) {
-    const detail = leadSyncHealth.lastWorkspaceSyncError
-      ? leadSyncHealth.lastWorkspaceSyncError
-      : leadSyncHealth.requiredScopesMissing.length
-        ? `Missing scopes: ${leadSyncHealth.requiredScopesMissing.join(", ")}`
-        : "Lead sync needs attention.";
-
     items.unshift({
       key: "lead-sync",
       title: "Capture sync issue",
-      detail,
-      href: "/integrations",
+      detail:
+        leadSyncHealth.lastWorkspaceSyncError ||
+        (leadSyncHealth.requiredScopesMissing.length
+          ? `Missing scopes: ${leadSyncHealth.requiredScopesMissing.join(", ")}`
+          : "Lead sync needs attention."),
+      href: "/workspace/settings?section=integrations",
       tone: "danger",
     });
   }
@@ -138,67 +150,95 @@ function buildAttentionItems({
   return items.slice(0, 4);
 }
 
-function DashboardConnectState() {
+function EmptyWorkspaceState() {
   return (
     <AppShell currentPath="/dashboard">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 py-10 sm:py-14">
         <PageHeader
           variant="plain"
           badge="Home"
-          title="Connect Meta"
-          description="Meta is not connected yet."
+          title="Create your first workspace"
+          description="Set up a workspace first so SideKick can keep your campaigns, leads, and CRM handoff data isolated."
         />
 
         <Card className="overflow-hidden border-[var(--line)] bg-[rgba(255,255,255,0.8)] p-7 shadow-[0_10px_24px_rgba(16,24,40,0.03)] sm:p-8">
-          <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
-            <div className="space-y-5">
-              <div className="inline-flex items-center gap-2 rounded-full border border-[rgba(244,114,182,0.2)] bg-[rgba(244,114,182,0.08)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#b42373]">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Meta required
-              </div>
-
-              <div className="space-y-3">
-                <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)] sm:text-[2.15rem]">
-                  Meta is not connected yet
-                </h2>
-                <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-[15px]">
-                  Connect Meta to unlock live campaign status, campaign capture, and CRM handoff readiness.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-start gap-3 rounded-[22px] bg-[var(--soft-panel)] px-4 py-4">
-                  <Sparkles className="mt-0.5 h-4 w-4 text-[var(--brand)]" />
-                  <p className="text-sm leading-6 text-[var(--muted-strong)]">
-                    Campaign status, capture readiness, and integration health.
-                  </p>
-                </div>
-                <div className="flex items-start gap-3 rounded-[22px] bg-[var(--soft-panel)] px-4 py-4">
-                  <Users className="mt-0.5 h-4 w-4 text-[var(--brand)]" />
-                  <p className="text-sm leading-6 text-[var(--muted-strong)]">
-                    Setup returns you here when the connection finishes.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Button asChild size="lg" className="sm:min-w-48">
-                  <Link href="/api/meta/connect?next=/dashboard">
-                    Connect Meta
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-                <Button asChild size="lg" variant="outline" className="sm:min-w-48">
-                  <Link href="/workspace/settings?section=integrations">Open integrations</Link>
-                </Button>
-              </div>
+          <div className="space-y-5">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[rgba(109,94,248,0.18)] bg-[rgba(109,94,248,0.08)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand)]">
+              <Sparkles className="h-3.5 w-3.5" />
+              Launch setup
             </div>
-
-            <div className="rounded-[28px] border border-[var(--line)] bg-white/72 p-5" />
+            <div className="space-y-3">
+              <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)] sm:text-[2.15rem]">
+                Your home page is ready once a workspace exists
+              </h2>
+              <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-[15px]">
+                Create a workspace to unlock campaign launch, lead capture, CRM routing, and performance reporting.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg" className="sm:min-w-48">
+                <Link href="/workspaces/new">
+                  Create workspace
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="sm:min-w-48">
+                <Link href="/academy/workspace-basics">Read workspace basics</Link>
+              </Button>
+            </div>
           </div>
         </Card>
       </div>
     </AppShell>
+  );
+}
+
+function MetaConnectionCallout() {
+  return (
+    <Card className="overflow-hidden border-[var(--line)] bg-[rgba(255,255,255,0.8)] p-6 shadow-[0_10px_24px_rgba(16,24,40,0.03)] sm:p-7">
+      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+        <div className="space-y-4">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[rgba(244,114,182,0.2)] bg-[rgba(244,114,182,0.08)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#b42373]">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Meta not connected
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
+              Connect Meta when you are ready to launch and report
+            </h2>
+            <p className="max-w-2xl text-sm leading-6 text-[var(--muted)]">
+              Your workspace metrics still work without Meta. Connect it next to unlock live campaign status, lead capture sync, and Meta delivery reporting.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button asChild>
+              <Link href="/api/meta/connect?next=/dashboard">
+                Connect Meta
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/workspace/settings?section=integrations">Open integrations</Link>
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+          <div className="flex items-start gap-3 rounded-[22px] bg-[var(--soft-panel)] px-4 py-4">
+            <Sparkles className="mt-0.5 h-4 w-4 text-[var(--brand)]" />
+            <p className="text-sm leading-6 text-[var(--muted-strong)]">
+              Launch campaigns from templates, then sync status and reporting back here.
+            </p>
+          </div>
+          <div className="flex items-start gap-3 rounded-[22px] bg-[var(--soft-panel)] px-4 py-4">
+            <Users className="mt-0.5 h-4 w-4 text-[var(--brand)]" />
+            <p className="text-sm leading-6 text-[var(--muted-strong)]">
+              Meta lead capture can feed connected CRMs once the workspace connection is in place.
+            </p>
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -208,11 +248,16 @@ export default async function DashboardPage({
   searchParams: Promise<{ success?: string }>;
 }) {
   const user = await requireUser();
-  const [{ success }, snapshot, metaIntegration] = await Promise.all([
+  const [{ success }, snapshot, metaIntegration, activeWorkspaceId] = await Promise.all([
     searchParams,
-    getDashboardSnapshot(user.id),
+    getDashboardSnapshot(user.id, { allowDemo: false }),
     getWorkspaceMetaIntegrationForUser(user.id),
+    getActiveWorkspaceIdForUser(user.id),
   ]);
+
+  if (!activeWorkspaceId) {
+    return <EmptyWorkspaceState />;
+  }
 
   const metaConnected = Boolean(
     metaIntegration?.connection &&
@@ -220,58 +265,110 @@ export default async function DashboardPage({
       metaIntegration.connection.status === "connected",
   );
 
-  if (!metaConnected) {
-    return <DashboardConnectState />;
-  }
-
-  const activeWorkspaceId = await getActiveWorkspaceIdForUser(user.id);
   const admin = createSupabaseAdminClient();
-  const leadSyncHealth =
-    admin && activeWorkspaceId
-      ? await getWorkspaceLeadSyncHealth({ admin, workspaceId: activeWorkspaceId }).catch(() => null)
-      : null;
+  const [leadSyncHealth, crmState] = await Promise.all([
+    admin
+      ? getWorkspaceLeadSyncHealth({ admin, workspaceId: activeWorkspaceId }).catch(() => null)
+      : Promise.resolve(null),
+    admin
+      ? getWorkspaceCrmState({ admin, workspaceId: activeWorkspaceId }).catch(() => null)
+      : Promise.resolve(null),
+  ]);
 
-  const campaigns = snapshot.campaigns.slice().sort((left, right) => +new Date(right.updated_at) - +new Date(left.updated_at));
+  const campaigns = snapshot.campaigns
+    .slice()
+    .sort((left, right) => +new Date(right.updated_at) - +new Date(left.updated_at));
   const recentCampaigns = campaigns.slice(0, 5);
-  const activeCampaigns = campaigns.filter((campaign) => getCampaignLifecycleState(campaign) === "active");
-  const pausedCampaigns = campaigns.filter((campaign) => getCampaignLifecycleState(campaign) === "paused");
-  const draftCampaigns = campaigns.filter((campaign) => getCampaignLifecycleState(campaign) === "draft");
+  const campaignSummary = summarizeCampaignLifecycles(campaigns);
   const attentionItems = buildAttentionItems({ campaigns, leadSyncHealth });
+  const connectedCrmCount =
+    crmState?.connections.filter((connection) => connection.is_active && connection.status === "connected").length || 0;
+  const deliveredCount = crmState?.deliveryCounts.delivered || 0;
+  const failedCount = crmState?.deliveryCounts.failed || 0;
+  const pendingCount = (crmState?.deliveryCounts.pending || 0) + (crmState?.deliveryCounts.retrying || 0);
+
   return (
     <AppShell currentPath="/dashboard">
-      {success ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          {success}
-        </div>
-      ) : null}
-
       <div className="space-y-8">
+        {success ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {success}
+          </div>
+        ) : null}
+
+        {snapshot.loadError ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Some workspace metrics are temporarily unavailable. The page is showing safe fallback states until the next refresh.
+          </div>
+        ) : null}
+
         <PageHeader
           variant="plain"
           badge="Home"
-          title="Operational overview"
-          description="A compact view of what is active, what needs attention, and whether campaign capture is ready for CRM handoff."
+          title="Workspace overview"
+          description="A launch-safe view of campaign activity, lead volume, and CRM handoff readiness for the current workspace."
           actions={
             <>
               <Button asChild variant="outline">
-                <Link href="/integrations">Open integrations</Link>
+                <Link href="/performance">View performance</Link>
               </Button>
               <Button asChild>
-                <Link href="/templates">Browse templates</Link>
+                <Link href="/templates/new">Create campaign</Link>
               </Button>
             </>
           }
         />
 
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <Button asChild variant="outline" className="justify-between rounded-[22px] px-5 py-6 text-left">
+            <Link href="/templates/new">
+              <span className="flex items-center gap-3">
+                <PlusCircle className="h-4.5 w-4.5 text-[var(--brand)]" />
+                Create campaign
+              </span>
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="justify-between rounded-[22px] px-5 py-6 text-left">
+            <Link href="/templates">
+              <span className="flex items-center gap-3">
+                <Sparkles className="h-4.5 w-4.5 text-[var(--brand)]" />
+                View templates
+              </span>
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="justify-between rounded-[22px] px-5 py-6 text-left">
+            <Link href="/workspace/settings?section=integrations">
+              <span className="flex items-center gap-3">
+                <RefreshCcw className="h-4.5 w-4.5 text-[var(--brand)]" />
+                Connect CRM
+              </span>
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="justify-between rounded-[22px] px-5 py-6 text-left">
+            <Link href="/performance">
+              <span className="flex items-center gap-3">
+                <BarChart3 className="h-4.5 w-4.5 text-[var(--brand)]" />
+                View performance
+              </span>
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </section>
+
+        {!metaConnected ? <MetaConnectionCallout /> : null}
+
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Total Leads" value={snapshot.totalLeads} helper="Across this workspace" />
+          <StatCard label="New Leads" value={snapshot.newLeadsLast30Days} helper="Last 30 days" />
+          <StatCard label="Active Campaigns" value={campaignSummary.active} helper="Currently delivering" />
           <StatCard
-            label="Active Campaigns"
-            value={activeCampaigns.length}
-            helper="Live now"
+            label="Connected CRMs"
+            value={connectedCrmCount}
+            helper={connectedCrmCount ? "Ready for lead handoff" : "No CRM connected yet"}
           />
-          <StatCard label="Paused Campaigns" value={pausedCampaigns.length} helper="On hold" />
-          <StatCard label="Draft Campaigns" value={draftCampaigns.length} helper="Saved for later" />
-          <StatCard label="Captured Inquiries" value={snapshot.newLeads} helper="Campaign intake" />
         </section>
 
         <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
@@ -335,6 +432,109 @@ export default async function DashboardPage({
           <Card className="border-[var(--line)] bg-[rgba(255,255,255,0.8)] p-6 shadow-[0_10px_24px_rgba(16,24,40,0.03)] sm:p-7">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+                Recent activity
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
+                Latest captured leads
+              </h2>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {snapshot.recentLeads.length ? (
+                snapshot.recentLeads.map((lead) => (
+                  <div
+                    key={lead.id}
+                    className="rounded-[22px] border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="min-w-0 truncate text-sm font-semibold text-[var(--ink)]">
+                        {getLeadDisplayName(lead)}
+                      </p>
+                      <span className="rounded-full border border-[var(--line)] bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted-strong)]">
+                        {getLeadStatusLabel(lead.status)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-[var(--muted)]">
+                      {getLeadContactSummary(lead) || "Contact details not available"}
+                    </p>
+                    <p className="mt-2 text-xs text-[var(--muted)]">
+                      Captured {formatRelativeTime(lead.meta_created_time || lead.created_at)}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[24px] border border-dashed border-[var(--line)] px-5 py-10 text-center">
+                  <p className="text-base font-medium text-[var(--ink)]">No lead activity yet</p>
+                  <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
+                    When leads arrive from live campaigns, they will show up here as recent activity.
+                  </p>
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-[1fr_0.95fr]">
+          <Card className="border-[var(--line)] bg-[rgba(255,255,255,0.8)] p-6 shadow-[0_10px_24px_rgba(16,24,40,0.03)] sm:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+                  CRM handoff
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
+                  Delivery status
+                </h2>
+              </div>
+              <Link href="/workspace/settings?section=integrations" className="text-sm font-medium text-[var(--brand)]">
+                Open integrations
+              </Link>
+            </div>
+
+            <div className="mt-5 grid gap-3 lg:grid-cols-3">
+              <div className="rounded-[22px] border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-4">
+                <div className="flex items-center gap-2">
+                  {leadSyncHealth?.canReadLeads ? (
+                    <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600" />
+                  ) : (
+                    <AlertTriangle className="h-4.5 w-4.5 text-amber-600" />
+                  )}
+                  <p className="text-sm font-semibold text-[var(--ink)]">Capture source</p>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                  {leadSyncHealth?.canReadLeads
+                    ? "Meta lead capture is connected and ready to feed CRM delivery."
+                    : "Lead capture still needs attention before CRM handoff can be considered healthy."}
+                </p>
+              </div>
+
+              <div className="rounded-[22px] border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-4">
+                <div className="flex items-center gap-2">
+                  <RefreshCcw className="h-4.5 w-4.5 text-[var(--brand)]" />
+                  <p className="text-sm font-semibold text-[var(--ink)]">Connected destinations</p>
+                </div>
+                <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">{connectedCrmCount}</p>
+                <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+                  {connectedCrmCount ? "Every connected CRM can receive eligible lead-form submissions." : "Connect a CRM to start handoff."}
+                </p>
+              </div>
+
+              <div className="rounded-[22px] border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-4">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4.5 w-4.5 text-[var(--brand)]" />
+                  <p className="text-sm font-semibold text-[var(--ink)]">Recent delivery log</p>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                  {deliveredCount || failedCount || pendingCount
+                    ? `${deliveredCount} delivered, ${failedCount} failed, ${pendingCount} pending or retrying.`
+                    : "No CRM delivery attempts yet for this workspace."}
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="border-[var(--line)] bg-[rgba(255,255,255,0.8)] p-6 shadow-[0_10px_24px_rgba(16,24,40,0.03)] sm:p-7">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
                 Needs attention
               </p>
               <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
@@ -390,60 +590,6 @@ export default async function DashboardPage({
             </div>
           </Card>
         </div>
-
-        <Card className="border-[var(--line)] bg-[rgba(255,255,255,0.8)] p-6 shadow-[0_10px_24px_rgba(16,24,40,0.03)] sm:p-7">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
-                CRM handoff
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
-                Keep lead handling outside SideKick
-              </h2>
-            </div>
-            <Link href="/integrations" className="text-sm font-medium text-[var(--brand)]">
-              Open hub
-            </Link>
-          </div>
-
-          <div className="mt-5 grid gap-3 lg:grid-cols-3">
-            <div className="rounded-[22px] border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-4">
-              <div className="flex items-center gap-2">
-                {leadSyncHealth?.canReadLeads ? (
-                  <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600" />
-                ) : (
-                  <AlertTriangle className="h-4.5 w-4.5 text-amber-600" />
-                )}
-                <p className="text-sm font-semibold text-[var(--ink)]">Capture source</p>
-              </div>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                {leadSyncHealth?.canReadLeads
-                  ? "Meta lead capture is connected and ready to feed the delivery layer."
-                  : "Meta capture still needs attention before reliable CRM handoff can happen."}
-              </p>
-            </div>
-
-            <div className="rounded-[22px] border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-4">
-              <div className="flex items-center gap-2">
-                <RefreshCcw className="h-4.5 w-4.5 text-[var(--brand)]" />
-                <p className="text-sm font-semibold text-[var(--ink)]">Routing direction</p>
-              </div>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                Workspace-level CRM routing replaces the old internal Leads inbox as the main handling path.
-              </p>
-            </div>
-
-            <div className="rounded-[22px] border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-4">
-              <div className="flex items-center gap-2">
-                <Users className="h-4.5 w-4.5 text-[var(--brand)]" />
-                <p className="text-sm font-semibold text-[var(--ink)]">Captured inquiries</p>
-              </div>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                {snapshot.newLeads} new captured inquir{snapshot.newLeads === 1 ? "y" : "ies"} currently tracked for campaign reporting, not inbox management.
-              </p>
-            </div>
-          </div>
-        </Card>
       </div>
     </AppShell>
   );

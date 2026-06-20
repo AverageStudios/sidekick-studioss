@@ -9,6 +9,7 @@ import {
   DollarSign,
   Gauge,
   MousePointerClick,
+  RefreshCcw,
   Target,
   TrendingUp,
   UsersRound,
@@ -19,14 +20,24 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { deleteDraftCampaignAction } from "@/app/actions";
 import { requireUser } from "@/lib/auth";
-import { getDashboardSnapshot, getLeads } from "@/lib/data";
 import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
-import { getCanonicalLeadStatus, getLeadSubmittedAt } from "@/lib/leads";
+import { getWorkspaceCrmState } from "@/lib/crm-integration";
+import { getDashboardSnapshot, getLeads, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
+import { getLeadSubmittedAt } from "@/lib/leads";
 import { fetchMetaAdAccountDetails, fetchMetaAdAccountInsights } from "@/lib/meta";
 import { getWorkspaceLeadSyncHealth, type WorkspaceLeadSyncHealth } from "@/lib/meta-leads";
 import { getWorkspaceMetaAccessToken } from "@/lib/meta-integration";
-import { getWorkspaceMetaIntegrationForUser } from "@/lib/data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  buildLeadBuckets,
+  countLeadsByStatus,
+  countLeadsInPastDays,
+  formatMetricDate,
+  getSafeAverage,
+  getSafePercentage,
+  parseMetricNumber,
+  summarizeCampaignLifecycles,
+} from "@/lib/workspace-metrics";
 import { getActiveWorkspaceIdForUser } from "@/lib/workspaces";
 import { CampaignRecord, LeadRecord } from "@/types";
 
@@ -38,52 +49,17 @@ type AttentionItem = {
   tone: "critical" | "warning" | "neutral";
 };
 
-type LeadBucket = {
-  label: string;
-  total: number;
-  newCount: number;
-  contactedCount: number;
-  qualifiedCount: number;
-  closedCount: number;
-};
-
 type CampaignReportRow = {
   id: string;
   name: string;
   updatedAt: string;
   lifecycleState: ReturnType<typeof getCampaignLifecycleState>;
   lifecycleLabel: string;
-  leads: number;
-  spend: string;
-  cpl: string;
-  impressions: string;
-  clicks: string;
-  ctr: string;
+  totalLeads: number;
+  newLeads: number;
+  qualifiedLeads: number;
+  lastLeadAt: string | null;
 };
-
-function startOfWeek(date: Date) {
-  const copy = new Date(date);
-  const day = copy.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  copy.setHours(0, 0, 0, 0);
-  copy.setDate(copy.getDate() + diff);
-  return copy;
-}
-
-function addDays(date: Date, days: number) {
-  const copy = new Date(date);
-  copy.setDate(copy.getDate() + days);
-  return copy;
-}
-
-function parseMetricNumber(value: unknown) {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
 
 function formatCompactNumber(value: number | null) {
   if (value === null) return "—";
@@ -111,17 +87,6 @@ function formatCurrencyValue(value: number | null, currency: string) {
   }).format(value);
 }
 
-function formatDate(value: string | null | undefined) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 function getCampaignPriority(state: ReturnType<typeof getCampaignLifecycleState>) {
   switch (state) {
     case "active":
@@ -130,11 +95,13 @@ function getCampaignPriority(state: ReturnType<typeof getCampaignLifecycleState>
       return 1;
     case "draft":
       return 2;
-    case "unknown":
+    case "in_review":
       return 3;
+    case "unknown":
+      return 4;
     case "archived":
     default:
-      return 4;
+      return 5;
   }
 }
 
@@ -172,60 +139,33 @@ function getToneClasses(tone: MetricTone) {
   }
 }
 
-function buildLeadBuckets(leads: LeadRecord[], weeks = 8): LeadBucket[] {
-  const formatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
-  const currentWeekStart = startOfWeek(new Date());
-
-  return Array.from({ length: weeks }, (_, index) => {
-    const start = addDays(currentWeekStart, (index - (weeks - 1)) * 7);
-    const end = addDays(start, 7);
-    const bucketLeads = leads.filter((lead) => {
-      const submittedAt = new Date(getLeadSubmittedAt(lead));
-      return submittedAt >= start && submittedAt < end;
-    });
-
-    const counts = {
-      newCount: bucketLeads.filter((lead) => getCanonicalLeadStatus(lead.status) === "new").length,
-      contactedCount: bucketLeads.filter((lead) => getCanonicalLeadStatus(lead.status) === "contacted").length,
-      qualifiedCount: bucketLeads.filter((lead) => getCanonicalLeadStatus(lead.status) === "qualified").length,
-      closedCount: bucketLeads.filter((lead) => getCanonicalLeadStatus(lead.status) === "closed").length,
-    };
-
-    return {
-      label: formatter.format(start),
-      total: bucketLeads.length,
-      ...counts,
-    };
-  });
-}
-
-function buildCampaignRows(
-  campaigns: CampaignRecord[],
-  leads: LeadRecord[],
-): CampaignReportRow[] {
+function buildCampaignRows(campaigns: CampaignRecord[], leads: LeadRecord[]): CampaignReportRow[] {
   return campaigns
     .map((campaign) => {
-      const state = getCampaignLifecycleState(campaign);
+      const lifecycleState = getCampaignLifecycleState(campaign);
       const campaignLeads = leads.filter((lead) => lead.campaign_id === campaign.id);
+      const counts = countLeadsByStatus(campaignLeads);
+      const lastLeadAt = campaignLeads
+        .map((lead) => getLeadSubmittedAt(lead))
+        .filter(Boolean)
+        .sort((left, right) => +new Date(right) - +new Date(left))[0] || null;
 
       return {
         id: campaign.id,
         name: campaign.name,
         updatedAt: campaign.updated_at,
-        lifecycleState: state,
+        lifecycleState,
         lifecycleLabel: getCampaignLifecycleLabel(campaign),
-        leads: campaignLeads.length,
-        spend: "—",
-        cpl: "—",
-        impressions: "—",
-        clicks: "—",
-        ctr: "—",
+        totalLeads: counts.total,
+        newLeads: counts.newCount,
+        qualifiedLeads: counts.qualifiedCount,
+        lastLeadAt,
       };
     })
     .sort((left, right) => {
-      const priorityDelta =
-        getCampaignPriority(left.lifecycleState) - getCampaignPriority(right.lifecycleState);
+      const priorityDelta = getCampaignPriority(left.lifecycleState) - getCampaignPriority(right.lifecycleState);
       if (priorityDelta !== 0) return priorityDelta;
+      if (right.totalLeads !== left.totalLeads) return right.totalLeads - left.totalLeads;
       return +new Date(right.updatedAt) - +new Date(left.updatedAt);
     });
 }
@@ -250,7 +190,7 @@ function buildAttentionItems({
   if (!metaConnected) {
     items.push({
       title: "Connect Meta",
-      detail: "Spend, clicks, impressions, CTR, and CPC will stay hidden until Meta reporting is connected.",
+      detail: "Meta reporting is still unavailable, so spend and delivery metrics cannot populate yet.",
       tone: "critical",
     });
   } else if (!metaReportingReady) {
@@ -272,7 +212,7 @@ function buildAttentionItems({
   if (draftCampaigns.length) {
     items.push({
       title: `${draftCampaigns.length} draft campaign${draftCampaigns.length === 1 ? "" : "s"} not launched`,
-      detail: "Drafts are still waiting on launch, so they will not appear in delivery reporting yet.",
+      detail: "Draft campaigns are saved, but they are not live yet and do not contribute to performance reporting.",
       tone: "neutral",
     });
   }
@@ -282,7 +222,7 @@ function buildAttentionItems({
       title: "Sync issue detected",
       detail:
         leadSyncHealth?.lastWorkspaceSyncError ||
-        `${errorCampaigns.length} campaign${errorCampaigns.length === 1 ? "" : "s"} has a status sync issue.`,
+        `${errorCampaigns.length} campaign${errorCampaigns.length === 1 ? " has" : "s have"} a status sync issue.`,
       tone: "critical",
     });
   }
@@ -335,9 +275,7 @@ function ReportingBanner({
   tone?: MetricTone;
 }) {
   return (
-    <Card
-      className={`rounded-[28px] border-[var(--line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.95)_0%,rgba(246,248,255,0.92)_100%)] p-6 shadow-[0_10px_30px_rgba(15,23,42,0.04)] sm:p-7`}
-    >
+    <Card className="rounded-[28px] border-[var(--line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.95)_0%,rgba(246,248,255,0.92)_100%)] p-6 shadow-[0_10px_30px_rgba(15,23,42,0.04)] sm:p-7">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-3xl">
           <div className="flex items-center gap-2">
@@ -354,7 +292,9 @@ function ReportingBanner({
 
         <div className="flex flex-wrap gap-3">
           <Button asChild variant="outline">
-            <Link href={ctaSecondaryHref || "/workspace/settings?section=integrations"}>{ctaSecondaryLabel || "Open integrations"}</Link>
+            <Link href={ctaSecondaryHref || "/workspace/settings?section=integrations"}>
+              {ctaSecondaryLabel || "Open integrations"}
+            </Link>
           </Button>
           <Button asChild>
             <Link href={ctaHref}>{ctaLabel}</Link>
@@ -388,7 +328,7 @@ function EmptyChartState({
   );
 }
 
-function LeadVolumeChart({ buckets, totalLeads }: { buckets: LeadBucket[]; totalLeads: number }) {
+function LeadVolumeChart({ buckets, totalLeads }: { buckets: ReturnType<typeof buildLeadBuckets>; totalLeads: number }) {
   const maxValue = Math.max(...buckets.map((bucket) => bucket.total), 1);
   const width = 640;
   const height = 220;
@@ -470,16 +410,47 @@ function LeadVolumeChart({ buckets, totalLeads }: { buckets: LeadBucket[]; total
   );
 }
 
+function EmptyWorkspaceState() {
+  return (
+    <AppShell currentPath="/performance">
+      <div className="space-y-8">
+        <PageHeader
+          variant="plain"
+          badge="Performance"
+          title="Performance will appear after workspace setup"
+          description="Create a workspace first so SideKick can isolate campaign and lead reporting correctly."
+        />
+        <EmptyChartState
+          title="No workspace selected yet"
+          description="Create a workspace to unlock campaign launch, lead capture, CRM handoff reporting, and performance analytics."
+          ctaHref="/workspaces/new"
+          ctaLabel="Create workspace"
+        />
+      </div>
+    </AppShell>
+  );
+}
+
 export default async function PerformancePage() {
   const user = await requireUser();
   const admin = createSupabaseAdminClient();
-  const [activeWorkspaceId, snapshot, allLeadsRaw, metaIntegration] = await Promise.all([
+  const [activeWorkspaceId, snapshot, metaIntegration] = await Promise.all([
     getActiveWorkspaceIdForUser(user.id),
-    getDashboardSnapshot(user.id),
-    getLeads(user.id, "all"),
+    getDashboardSnapshot(user.id, { allowDemo: false }),
     getWorkspaceMetaIntegrationForUser(user.id),
   ]);
-  const allLeads = allLeadsRaw as LeadRecord[];
+
+  if (!activeWorkspaceId) {
+    return <EmptyWorkspaceState />;
+  }
+
+  let allLeads: LeadRecord[] = [];
+  let leadsLoadError = false;
+  try {
+    allLeads = (await getLeads(user.id, "all", { allowDemo: false })) as LeadRecord[];
+  } catch {
+    leadsLoadError = true;
+  }
 
   const metaConnected = Boolean(
     metaIntegration?.connection &&
@@ -487,18 +458,19 @@ export default async function PerformancePage() {
       metaIntegration.connection.status === "connected",
   );
   const selectedAdAccountId = metaIntegration?.selected.adAccountId || null;
-  const selectedAdAccount = selectedAdAccountId
-    ? metaIntegration?.assets.adAccounts.find((asset) => asset.asset_id === selectedAdAccountId) || null
-    : null;
+  const selectedAdAccount =
+    selectedAdAccountId
+      ? metaIntegration?.assets.adAccounts.find((asset) => asset.asset_id === selectedAdAccountId) || null
+      : null;
   const reportingReady = metaConnected && Boolean(selectedAdAccountId);
 
   const tokenContext =
-    admin && activeWorkspaceId && metaConnected
+    admin && metaConnected
       ? await getWorkspaceMetaAccessToken({ admin, workspaceId: activeWorkspaceId }).catch(() => null)
       : null;
 
-  const [leadSyncHealth, adAccountDetails, metaInsights] = await Promise.all([
-    admin && activeWorkspaceId
+  const [leadSyncHealth, adAccountDetails, metaInsights, crmState] = await Promise.all([
+    admin
       ? getWorkspaceLeadSyncHealth({ admin, workspaceId: activeWorkspaceId }).catch(() => null)
       : Promise.resolve(null),
     tokenContext && selectedAdAccountId
@@ -507,13 +479,15 @@ export default async function PerformancePage() {
     tokenContext && selectedAdAccountId
       ? fetchMetaAdAccountInsights(tokenContext.accessToken, selectedAdAccountId).catch(() => null)
       : Promise.resolve(null),
+    admin
+      ? getWorkspaceCrmState({ admin, workspaceId: activeWorkspaceId }).catch(() => null)
+      : Promise.resolve(null),
   ]);
 
-  const campaigns = (snapshot.campaigns as CampaignRecord[])
+  const campaigns = snapshot.campaigns
     .slice()
     .sort((left, right) => +new Date(right.updated_at) - +new Date(left.updated_at));
-
-  const activeCampaigns = campaigns.filter((campaign) => getCampaignLifecycleState(campaign) === "active");
+  const campaignSummary = summarizeCampaignLifecycles(campaigns);
   const pausedCampaigns = campaigns.filter((campaign) => getCampaignLifecycleState(campaign) === "paused");
   const draftCampaigns = campaigns.filter((campaign) => getCampaignLifecycleState(campaign) === "draft");
   const errorCampaigns = campaigns.filter(
@@ -523,12 +497,10 @@ export default async function PerformancePage() {
   const spend = parseMetricNumber(metaInsights?.spend);
   const impressions = parseMetricNumber(metaInsights?.impressions);
   const clicks = parseMetricNumber(metaInsights?.clicks);
-  const ctr = parseMetricNumber(metaInsights?.ctr);
-  const cpc = parseMetricNumber(metaInsights?.cpc);
-  const leads = allLeads.length;
-  const costPerLead = spend !== null && leads > 0 ? spend / leads : null;
   const currency = adAccountDetails?.currency || "USD";
-
+  const totalLeads = allLeads.length;
+  const newLeadsLast30Days = countLeadsInPastDays(allLeads, 30);
+  const costPerLead = spend !== null && totalLeads > 0 ? spend / totalLeads : null;
   const leadBuckets = buildLeadBuckets(allLeads);
   const campaignRows = buildCampaignRows(campaigns, allLeads);
   const attentionItems = buildAttentionItems({
@@ -539,16 +511,19 @@ export default async function PerformancePage() {
     errorCampaigns,
     leadSyncHealth,
   });
-  const leadQualityCounts = {
-    newCount: allLeads.filter((lead) => getCanonicalLeadStatus(lead.status) === "new").length,
-    contactedCount: allLeads.filter((lead) => getCanonicalLeadStatus(lead.status) === "contacted").length,
-    qualifiedCount: allLeads.filter((lead) => getCanonicalLeadStatus(lead.status) === "qualified").length,
-    closedCount: allLeads.filter((lead) => getCanonicalLeadStatus(lead.status) === "closed").length,
-  };
-  const qualifiedRate = leads ? Math.round((leadQualityCounts.qualifiedCount / leads) * 100) : 0;
-  const weeklyAverage = leadBuckets.some((bucket) => bucket.total > 0)
-    ? (leads / leadBuckets.filter((bucket) => bucket.total > 0).length).toFixed(1)
-    : "0.0";
+  const leadQualityCounts = countLeadsByStatus(allLeads);
+  const qualifiedRate = getSafePercentage(leadQualityCounts.qualifiedCount, totalLeads);
+  const activeLeadWeeks = leadBuckets.filter((bucket) => bucket.total > 0).length;
+  const weeklyAverage = getSafeAverage(totalLeads, activeLeadWeeks || 1);
+  const crmDelivered = crmState?.deliveryCounts.delivered || 0;
+  const crmFailed = crmState?.deliveryCounts.failed || 0;
+  const crmPending = (crmState?.deliveryCounts.pending || 0) + (crmState?.deliveryCounts.retrying || 0);
+  const crmAttemptedTerminal = crmDelivered + crmFailed;
+  const crmSuccessRate =
+    crmAttemptedTerminal > 0 ? getSafePercentage(crmDelivered, crmAttemptedTerminal, 0) : null;
+  const connectedCrmCount =
+    crmState?.connections.filter((connection) => connection.is_active && connection.status === "connected").length || 0;
+
   const metaBannerTitle = !metaConnected
     ? "Connect Meta to unlock reporting"
     : !reportingReady
@@ -558,26 +533,33 @@ export default async function PerformancePage() {
         : selectedAdAccount?.name
           ? `Reporting from ${selectedAdAccount.name}`
           : "Meta reporting is active";
+
   const metaBannerDescription = !metaConnected
-    ? "The performance page is ready to become a reporting workspace. Connect Meta to populate spend, impressions, clicks, CTR, and CPC."
+    ? "The performance page is ready to become a reporting workspace. Connect Meta to populate spend, impressions, clicks, and cost-based reporting."
     : !reportingReady
-      ? "Select an ad account so this page can pull live delivery metrics and turn the workspace into an analytics view."
+      ? "Select an ad account so this page can pull live Meta delivery metrics for the current workspace."
       : metaInsights
-        ? "Live Meta delivery data is flowing in. The summary cards below are now grounded in account reporting instead of generic workspace stats."
-        : "Meta is connected, but recent delivery data is not available yet. Once campaigns spend and Meta returns account insights, these metrics will populate here.";
+        ? "Live Meta delivery data is flowing in. The summary cards below are grounded in account reporting plus real workspace lead and CRM delivery data."
+        : "Meta is connected, but recent delivery data is not available yet. Until Meta returns reporting, only workspace lead and CRM delivery metrics will populate here.";
 
   return (
     <AppShell currentPath="/performance">
       <div className="space-y-8">
+        {snapshot.loadError || leadsLoadError ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Some performance data is temporarily unavailable. The page is showing safe fallback states until reporting loads again.
+          </div>
+        ) : null}
+
         <PageHeader
           variant="plain"
           badge="Performance"
           title="Campaign reporting"
-          description="A focused view for campaign results, delivery trends, and lead quality. This page is built for analysis, not workspace navigation."
+          description="A launch-safe reporting view for lead volume, campaign progress, CRM delivery, and Meta account performance when available."
           actions={
             <>
               <Button asChild variant="outline">
-                <Link href="/templates">Open campaigns</Link>
+                <Link href="/campaigns">Open campaigns</Link>
               </Button>
               <Button asChild>
                 <Link href="/templates/new">Launch campaign</Link>
@@ -586,66 +568,86 @@ export default async function PerformancePage() {
           }
         />
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <ReportingBanner
+          title={metaBannerTitle}
+          description={metaBannerDescription}
+          ctaHref={metaConnected ? "/workspace/settings?section=integrations" : "/api/meta/connect?next=/performance"}
+          ctaLabel={metaConnected ? "Manage Meta" : "Connect Meta"}
+          ctaSecondaryHref="/workspace/settings?section=integrations"
+          ctaSecondaryLabel="Open integrations"
+          tone={metaConnected ? "emerald" : "brand"}
+        />
+
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <MetricCard
-            label="Spend"
-            value={formatCurrencyValue(spend, currency)}
-            helper={
-              metaConnected
-                ? "Last 30 days of Meta account delivery"
-                : "Connect Meta to unlock spend reporting"
-            }
-            icon={DollarSign}
-            tone="brand"
-          />
-          <MetricCard
-            label="Leads"
-            value={formatCompactNumber(leads)}
-            helper="Captured across the workspace"
+            label="Total Leads"
+            value={formatCompactNumber(totalLeads)}
+            helper="Across the current workspace"
             icon={UsersRound}
             tone="emerald"
           />
           <MetricCard
-            label="Cost per Lead"
-            value={formatCurrencyValue(costPerLead, currency)}
-            helper={spend !== null && leads > 0 ? "Spend divided by total leads" : "Needs live spend + lead volume"}
-            icon={Target}
-            tone="indigo"
+            label="New Leads"
+            value={formatCompactNumber(newLeadsLast30Days)}
+            helper="Captured in the last 30 days"
+            icon={TrendingUp}
+            tone="brand"
           />
           <MetricCard
             label="Active Campaigns"
-            value={formatCompactNumber(activeCampaigns.length)}
-            helper="Campaigns currently delivering"
+            value={formatCompactNumber(campaignSummary.active)}
+            helper="Currently delivering"
             icon={Activity}
             tone="emerald"
           />
           <MetricCard
+            label="CRM Success Rate"
+            value={crmSuccessRate === null ? "—" : `${crmSuccessRate}%`}
+            helper={crmSuccessRate === null ? "No completed CRM delivery attempts yet" : "Delivered vs failed CRM handoff attempts"}
+            icon={Target}
+            tone="indigo"
+          />
+          <MetricCard
+            label="CRM Failures"
+            value={formatCompactNumber(crmFailed)}
+            helper={crmFailed ? "Recent failed delivery attempts" : "No recent delivery failures"}
+            icon={AlertTriangle}
+            tone="amber"
+          />
+          <MetricCard
+            label="Connected CRMs"
+            value={formatCompactNumber(connectedCrmCount)}
+            helper={connectedCrmCount ? "All connected CRMs can receive eligible leads" : "No CRM connected yet"}
+            icon={RefreshCcw}
+            tone="slate"
+          />
+          <MetricCard
+            label="Spend"
+            value={formatCurrencyValue(spend, currency)}
+            helper={metaInsights ? "Last 30 days of Meta account delivery" : "Meta performance data not available yet"}
+            icon={DollarSign}
+            tone="brand"
+          />
+          <MetricCard
+            label="Cost per Lead"
+            value={formatCurrencyValue(costPerLead, currency)}
+            helper={spend !== null && totalLeads > 0 ? "Spend divided by total workspace leads" : "Needs live spend and at least one lead"}
+            icon={Gauge}
+            tone="amber"
+          />
+          <MetricCard
             label="Impressions"
             value={formatCompactNumber(impressions)}
-            helper={metaConnected ? "Meta delivery impressions" : "Not connected yet"}
+            helper={metaInsights ? "Meta delivery impressions" : "Meta performance data not available yet"}
             icon={BarChart3}
             tone="slate"
           />
           <MetricCard
             label="Clicks"
             value={formatCompactNumber(clicks)}
-            helper={metaConnected ? "Traffic generated by campaigns" : "Not connected yet"}
+            helper={metaInsights ? "Traffic generated by live campaigns" : "Meta performance data not available yet"}
             icon={MousePointerClick}
             tone="slate"
-          />
-          <MetricCard
-            label="CTR"
-            value={ctr === null ? "—" : `${formatDecimalNumber(ctr, 2)}%`}
-            helper={metaConnected ? "Click-through rate from Meta" : "Not connected yet"}
-            icon={TrendingUp}
-            tone="brand"
-          />
-          <MetricCard
-            label="CPC"
-            value={formatCurrencyValue(cpc, currency)}
-            helper={metaConnected ? "Cost per click from Meta" : "Not connected yet"}
-            icon={Gauge}
-            tone="amber"
           />
         </section>
 
@@ -658,17 +660,17 @@ export default async function PerformancePage() {
                   Leads over time
                 </h2>
                 <p className="mt-2 max-w-xl text-sm text-[var(--muted)]">
-                  A weekly reporting line for inbound leads. This is the clearest signal of campaign response inside the workspace.
+                  Weekly lead volume based on real captured leads in the current workspace.
                 </p>
               </div>
               <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-right">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Last 8 weeks</p>
-                <p className="mt-1 text-sm font-medium text-[var(--ink)]">{leads} total leads</p>
+                <p className="mt-1 text-sm font-medium text-[var(--ink)]">{totalLeads} total leads</p>
               </div>
             </div>
 
             <div className="mt-6">
-              <LeadVolumeChart buckets={leadBuckets} totalLeads={leads} />
+              <LeadVolumeChart buckets={leadBuckets} totalLeads={totalLeads} />
             </div>
           </Card>
 
@@ -679,7 +681,7 @@ export default async function PerformancePage() {
             </div>
             <h2 className="mt-3 text-xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Lead quality flow</h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              A compact view of how leads are moving from new to qualified and closed.
+              A compact view of how real captured leads are moving from new to qualified.
             </p>
 
             <div className="mt-6 space-y-4">
@@ -689,7 +691,7 @@ export default async function PerformancePage() {
                 { label: "Qualified", value: leadQualityCounts.qualifiedCount, tone: "bg-[#dcfce7]" },
                 { label: "Closed", value: leadQualityCounts.closedCount, tone: "bg-[#fee2e2]" },
               ].map((segment) => {
-                const width = `${Math.max((segment.value / Math.max(leads, 1)) * 100, segment.value ? 10 : 4)}%`;
+                const width = `${Math.max((segment.value / Math.max(totalLeads, 1)) * 100, segment.value ? 10 : 4)}%`;
 
                 return (
                   <div key={segment.label} className="space-y-2">
@@ -712,8 +714,8 @@ export default async function PerformancePage() {
                   <p className="mt-1 text-lg font-semibold tracking-[-0.03em] text-[var(--ink)]">{qualifiedRate}%</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Average per week</p>
-                  <p className="mt-1 text-lg font-semibold tracking-[-0.03em] text-[var(--ink)]">{weeklyAverage}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Average per active week</p>
+                  <p className="mt-1 text-lg font-semibold tracking-[-0.03em] text-[var(--ink)]">{formatDecimalNumber(weeklyAverage, 1)}</p>
                 </div>
               </div>
             </div>
@@ -723,11 +725,11 @@ export default async function PerformancePage() {
         <section className="space-y-4">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Campaign performance</p>
-              <h2 className="mt-1 text-xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Campaign reporting table</h2>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Campaign reporting</p>
+              <h2 className="mt-1 text-xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Campaign performance table</h2>
             </div>
             <Button asChild variant="outline">
-              <Link href="/templates">
+              <Link href="/campaigns">
                 View all campaigns
                 <ArrowUpRight className="ml-2 h-4 w-4" />
               </Link>
@@ -737,16 +739,14 @@ export default async function PerformancePage() {
           {campaignRows.length ? (
             <Card className="overflow-hidden rounded-[28px] border-[var(--line)] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
               <div className="overflow-x-auto">
-                <div className="min-w-[76rem]">
-                  <div className="grid grid-cols-[2.2fr_0.9fr_0.95fr_0.9fr_0.95fr_0.95fr_0.85fr_0.8fr_1fr_0.8fr] border-b border-[var(--line)] px-6 py-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                <div className="min-w-[70rem]">
+                  <div className="grid grid-cols-[2.3fr_1fr_0.8fr_0.8fr_0.9fr_1fr_1fr_0.9fr] border-b border-[var(--line)] px-6 py-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
                     <div>Campaign Name</div>
                     <div>Status</div>
-                    <div>Spend</div>
                     <div>Leads</div>
-                    <div>Cost per Lead</div>
-                    <div>Impressions</div>
-                    <div>Clicks</div>
-                    <div>CTR</div>
+                    <div>New</div>
+                    <div>Qualified</div>
+                    <div>Last Lead</div>
                     <div>Updated</div>
                     <div>Actions</div>
                   </div>
@@ -755,14 +755,14 @@ export default async function PerformancePage() {
                     {campaignRows.slice(0, 10).map((campaign) => (
                       <div
                         key={campaign.id}
-                        className="grid grid-cols-[2.2fr_0.9fr_0.95fr_0.9fr_0.95fr_0.95fr_0.85fr_0.8fr_1fr_0.8fr] items-center px-6 py-5 transition-colors hover:bg-[var(--surface)]"
+                        className="grid grid-cols-[2.3fr_1fr_0.8fr_0.8fr_0.9fr_1fr_1fr_0.9fr] items-center px-6 py-5 transition-colors hover:bg-[var(--surface)]"
                       >
                         <div className="min-w-0 pr-4">
                           <Link href={`/campaigns/${campaign.id}`} className="block">
                             <p className="truncate text-base font-semibold tracking-[-0.03em] text-[var(--ink)]">{campaign.name}</p>
                           </Link>
                           <p className="mt-1 text-sm text-[var(--muted)]">
-                            {campaign.leads} lead{campaign.leads === 1 ? "" : "s"} recorded
+                            Real workspace lead totals only
                           </p>
                         </div>
 
@@ -776,13 +776,11 @@ export default async function PerformancePage() {
                           </span>
                         </div>
 
-                        <div className="text-sm font-medium text-[var(--ink)]">{campaign.spend}</div>
-                        <div className="text-sm font-medium text-[var(--ink)]">{formatCompactNumber(campaign.leads)}</div>
-                        <div className="text-sm font-medium text-[var(--ink)]">{campaign.cpl}</div>
-                        <div className="text-sm font-medium text-[var(--ink)]">{campaign.impressions}</div>
-                        <div className="text-sm font-medium text-[var(--ink)]">{campaign.clicks}</div>
-                        <div className="text-sm font-medium text-[var(--ink)]">{campaign.ctr}</div>
-                        <div className="text-sm text-[var(--muted)]">{formatDate(campaign.updatedAt)}</div>
+                        <div className="text-sm font-medium text-[var(--ink)]">{formatCompactNumber(campaign.totalLeads)}</div>
+                        <div className="text-sm font-medium text-[var(--ink)]">{formatCompactNumber(campaign.newLeads)}</div>
+                        <div className="text-sm font-medium text-[var(--ink)]">{formatCompactNumber(campaign.qualifiedLeads)}</div>
+                        <div className="text-sm text-[var(--muted)]">{formatMetricDate(campaign.lastLeadAt)}</div>
+                        <div className="text-sm text-[var(--muted)]">{formatMetricDate(campaign.updatedAt)}</div>
                         <div>
                           {campaign.lifecycleState === "draft" ? (
                             <form action={deleteDraftCampaignAction}>
@@ -813,7 +811,7 @@ export default async function PerformancePage() {
                 <div>
                   <h3 className="text-lg font-semibold tracking-[-0.03em] text-[var(--ink)]">No campaigns yet</h3>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-                    Launch a campaign and the table will start reporting row-by-row campaign results here.
+                    Launch a campaign and this table will start showing lead-backed campaign results.
                   </p>
                   <div className="mt-5">
                     <Button asChild>
@@ -826,49 +824,71 @@ export default async function PerformancePage() {
           )}
         </section>
 
-        <section className="space-y-4">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Reporting status</p>
-              <h2 className="mt-1 text-xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Meta and sync readiness</h2>
+        <section className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+          <Card className="rounded-[28px] border-[var(--line)] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.04)] sm:p-7">
+            <div className="flex items-center gap-2">
+              <RefreshCcw className="h-4.5 w-4.5 text-[var(--brand)]" />
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">CRM delivery</p>
             </div>
-          </div>
+            <h2 className="mt-3 text-xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Delivery health</h2>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              Recent CRM handoff status for this workspace. Each provider attempt is tracked independently.
+            </p>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Delivered</p>
+                <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">{crmDelivered}</p>
+              </div>
+              <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Failed</p>
+                <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">{crmFailed}</p>
+              </div>
+              <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Pending / retrying</p>
+                <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">{crmPending}</p>
+              </div>
+              <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Connected CRMs</p>
+                <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">{connectedCrmCount}</p>
+              </div>
+            </div>
+          </Card>
 
           <Card className="rounded-[28px] border-[var(--line)] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.04)] sm:p-7">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Meta connection</p>
-                <p className="mt-2 text-sm font-medium text-[var(--ink)]">
-                  {metaConnected ? "Connected" : "Not connected"}
-                </p>
-                <p className="mt-1 text-sm text-[var(--muted)]">
-                  {metaConnected
-                    ? "Delivery metrics can be pulled into the performance view."
-                    : "Connect Meta to populate spend, impressions, clicks, CTR, and CPC."}
-                </p>
-              </div>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4.5 w-4.5 text-[var(--brand)]" />
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Attention</p>
+            </div>
+            <h2 className="mt-3 text-xl font-semibold tracking-[-0.04em] text-[var(--ink)]">What needs review</h2>
+            <div className="mt-6 space-y-3">
+              {attentionItems.length ? (
+                attentionItems.map((item) => {
+                  const toneClass =
+                    item.tone === "critical"
+                      ? "border-rose-200 bg-rose-50 text-rose-700"
+                      : item.tone === "warning"
+                        ? "border-amber-200 bg-amber-50 text-amber-700"
+                        : "border-[var(--line)] bg-[var(--surface)] text-[var(--muted-strong)]";
 
-              <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Selected ad account</p>
-                <p className="mt-2 text-sm font-medium text-[var(--ink)]">{selectedAdAccount?.name || adAccountDetails?.name || "None selected"}</p>
-                <p className="mt-1 text-sm text-[var(--muted)]">
-                  {selectedAdAccountId ? selectedAdAccountId : "Choose an ad account in integrations."}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Lead sync</p>
-                <p className="mt-2 text-sm font-medium text-[var(--ink)]">
-                  {leadSyncHealth?.canReadLeads ? "Healthy" : metaConnected ? "Needs attention" : "Unavailable"}
-                </p>
-                <p className="mt-1 text-sm text-[var(--muted)]">
-                  {leadSyncHealth?.lastWorkspaceSyncError
-                    ? leadSyncHealth.lastWorkspaceSyncError
-                    : leadSyncHealth?.lastWorkspaceSyncAt
-                      ? `Last synced ${formatDate(leadSyncHealth.lastWorkspaceSyncAt)}`
-                      : "Sync status will appear once Meta leads are active."}
-                </p>
-              </div>
+                  return (
+                    <div
+                      key={`${item.title}-${item.detail}`}
+                      className={`rounded-[22px] border px-4 py-4 ${toneClass}`}
+                    >
+                      <p className="text-sm font-semibold">{item.title}</p>
+                      <p className="mt-1 text-sm leading-6">{item.detail}</p>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="rounded-[24px] border border-dashed border-[var(--line)] px-5 py-10 text-center">
+                  <p className="text-base font-medium text-[var(--ink)]">No major issues right now</p>
+                  <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
+                    Campaigns, lead capture, and reporting look healthy for this workspace.
+                  </p>
+                </div>
+              )}
             </div>
           </Card>
         </section>
