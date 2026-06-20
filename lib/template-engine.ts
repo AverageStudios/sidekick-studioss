@@ -11,7 +11,7 @@ function fillPlaceholders(input: string, values: TemplateSetupValues) {
     regularPrice: values.regularPrice || "",
   });
 
-  return replacePlaceholdersInString(input, resolvedPlaceholderValues);
+  return replacePlaceholdersInString(input, resolvedPlaceholderValues, { preserveMissing: true });
 }
 
 function resolveTemplatePrimaryAdText(template: TemplateSeed) {

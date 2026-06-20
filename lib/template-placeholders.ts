@@ -1,6 +1,17 @@
 import { TemplatePlaceholderField, TemplateSeed } from "@/types";
 
 const PLACEHOLDER_PATTERN = /\{\{\s*([^{}]+?)\s*\}\}/g;
+const SYSTEM_PLACEHOLDER_KEYS = new Set([
+  "business",
+  "businessname",
+  "business_name",
+  "city",
+  "location",
+  "cta",
+  "ctatext",
+  "phone",
+  "email",
+]);
 const PLACEHOLDER_ALIAS_MAP: Record<string, string[]> = {
   price: ["offerPrice", "regularPrice", "monthlyRate", "joinFee"],
   amount: ["offerPrice", "regularPrice", "monthlyRate", "joinFee"],
@@ -24,6 +35,10 @@ const PLACEHOLDER_ALIAS_MAP: Record<string, string[]> = {
 
 function normalizePlaceholderLookupKey(key: string) {
   return key.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function isSystemPlaceholderKey(key: string) {
+  return SYSTEM_PLACEHOLDER_KEYS.has(normalizePlaceholderLookupKey(key));
 }
 
 function isFilledPlaceholderValue(value: unknown): value is string {
@@ -71,6 +86,10 @@ export function extractTemplatePlaceholderFields(template: TemplateSeed): Templa
 
   const fields = new Map<string, TemplatePlaceholderField>();
   for (const key of keys) {
+    if (isSystemPlaceholderKey(key)) {
+      continue;
+    }
+
     if (!fields.has(key)) {
       fields.set(key, {
         id: key,
@@ -82,6 +101,10 @@ export function extractTemplatePlaceholderFields(template: TemplateSeed): Templa
   }
 
   for (const field of template.placeholderFields || []) {
+    if (isSystemPlaceholderKey(field.id)) {
+      continue;
+    }
+
     if (!fields.has(field.id)) {
       fields.set(field.id, {
         ...field,
