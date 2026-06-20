@@ -107,6 +107,7 @@ export const crmProviderMetadataList: CrmProviderMetadata[] = [
     label: "Close CRM",
     shortDescription: "Create Close leads with contact details from SideKick.",
     shortCode: "C",
+    logoPath: "/crm-logos/close-crm.svg",
     accentClassName: "text-slate-700",
     surfaceClassName: "bg-slate-100",
     connectPath: "/api/integrations/close/connect",
