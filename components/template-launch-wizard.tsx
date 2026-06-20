@@ -1583,10 +1583,14 @@ export function TemplateLaunchWizard({
                         normalizeCampaignLaunchState(
                           {
                             ...current,
+                            stepId: "template",
                             selection: {
                               ...current.selection,
                               industry,
                               category: "",
+                              offerType: "",
+                              templateSlug:
+                                selectedTemplate?.industry === industry ? selectedTemplate.slug : "",
                             },
                           },
                           selectedTemplate || templates[0],
@@ -1603,22 +1607,9 @@ export function TemplateLaunchWizard({
                 );
               })}
             </div>
-
-            {launchState.selection.industry ? (
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm font-semibold text-[var(--ink)]">Choose a template</p>
-                  <p className="mt-1 text-sm text-[var(--muted)]">
-                    Click anywhere on a template to start customizing it for {launchState.selection.industry}.
-                  </p>
-                </div>
-                {renderTemplateSelectionGrid()}
-              </div>
-            ) : (
-              <div className="rounded-[24px] border border-dashed border-[var(--line)] bg-white px-6 py-10 text-center text-sm text-[var(--muted-strong)]">
-                Pick an industry to browse the matching campaign templates.
-              </div>
-            )}
+            <div className="rounded-[24px] border border-dashed border-[var(--line)] bg-white px-6 py-10 text-center text-sm text-[var(--muted-strong)]">
+              Choose your industry to open the matching campaign templates.
+            </div>
           </div>
         );
       case "template":
@@ -3053,9 +3044,11 @@ export function TemplateLaunchWizard({
                 Back
               </Button>
               {launchState.stepId !== "review-launch" ? (
-                launchState.stepId === "industry" ? (
+                launchState.stepId === "industry" || launchState.stepId === "template" ? (
                   <div className="text-right text-sm text-[var(--muted)]">
-                    Choose a template card to continue.
+                    {launchState.stepId === "industry"
+                      ? "Choose your industry to continue."
+                      : "Choose a template card to continue."}
                   </div>
                 ) : (
                   <Button

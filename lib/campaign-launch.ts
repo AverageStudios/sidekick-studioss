@@ -146,11 +146,11 @@ const stepDefinitions: Record<CampaignWizardStepId, CampaignStepDefinition> = {
 };
 
 const adTypeStepFlow: Record<CampaignAdType, CampaignWizardStepId[]> = {
-  lead_form: ["industry", "ad-type", "campaign-basics", "location", "destination-setup", "placeholders", "review-launch"],
-  landing_page: ["industry", "ad-type", "campaign-basics", "location", "destination-setup", "placeholders", "review-launch"],
-  call_now: ["industry", "ad-type", "campaign-basics", "location", "destination-setup", "placeholders", "review-launch"],
-  messenger_leads: ["industry", "ad-type", "campaign-basics", "location", "destination-setup", "placeholders", "review-launch"],
-  messenger_engagement: ["industry", "ad-type", "campaign-basics", "location", "destination-setup", "placeholders", "review-launch"],
+  lead_form: ["industry", "template", "ad-type", "campaign-basics", "location", "destination-setup", "placeholders", "review-launch"],
+  landing_page: ["industry", "template", "ad-type", "campaign-basics", "location", "destination-setup", "placeholders", "review-launch"],
+  call_now: ["industry", "template", "ad-type", "campaign-basics", "location", "destination-setup", "placeholders", "review-launch"],
+  messenger_leads: ["industry", "template", "ad-type", "campaign-basics", "location", "destination-setup", "placeholders", "review-launch"],
+  messenger_engagement: ["industry", "template", "ad-type", "campaign-basics", "location", "destination-setup", "placeholders", "review-launch"],
 };
 
 export const campaignGoalOptions: Array<{
