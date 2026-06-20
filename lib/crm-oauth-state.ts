@@ -115,7 +115,7 @@ export function parseCrmOAuthState(value: string | null | undefined): CrmOAuthSt
     nonce: candidate.nonce,
     provider,
     workspaceId: candidate.workspaceId,
-    next: candidate.next.startsWith("/") ? candidate.next : "/integrations",
+    next: candidate.next.startsWith("/") ? candidate.next : "/workspace/settings?section=integrations",
     issuedAt: candidate.issuedAt,
   };
 }

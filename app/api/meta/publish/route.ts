@@ -14,49 +14,6 @@ import {
   runMetaPreflightAndCreateJob,
 } from "@/lib/meta-launch";
 
-const optionalCampaignColumns = new Set([
-  "external_ids_json",
-  "external_publish_status",
-  "meta_campaign_id",
-  "meta_adset_id",
-  "meta_ad_id",
-  "meta_lead_form_id",
-  "meta_creative_id",
-  "meta_effective_status",
-  "meta_configured_status",
-  "meta_status_synced_at",
-  "management_sync_state",
-  "archived_at",
-]);
-
-function getMissingCampaignSchemaColumn(message?: string) {
-  if (!message) return null;
-  const match = message.match(/Could not find the '([^']+)' column of 'campaigns'/i);
-  return match?.[1] || null;
-}
-
-async function updateCampaignWithSchemaFallback(
-  admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
-  campaignId: string,
-  payload: Record<string, unknown>,
-) {
-  const nextPayload = { ...payload };
-
-  while (Object.keys(nextPayload).length) {
-    const { error } = await admin.from("campaigns").update(nextPayload).eq("id", campaignId);
-    if (!error) {
-      return;
-    }
-
-    const missingColumn = getMissingCampaignSchemaColumn(error.message);
-    if (!missingColumn || !optionalCampaignColumns.has(missingColumn) || !(missingColumn in nextPayload)) {
-      throw new Error(error.message);
-    }
-
-    delete nextPayload[missingColumn];
-  }
-}
-
 const publishRequestSchema = z.object({
   campaignId: z.string().uuid(),
   templateSlug: z.string().trim().min(1).max(160).optional(),
@@ -173,30 +130,6 @@ export async function POST(request: Request) {
       externalIds: publishResult.externalIds,
       warnings: publishResult.warnings,
     });
-
-    if (parsed.data.mode === "live") {
-      const persistedIds = {
-        meta_campaign_id:
-          typeof publishResult.externalIds?.campaign_id === "string" ? publishResult.externalIds.campaign_id : null,
-        meta_adset_id:
-          typeof publishResult.externalIds?.adset_id === "string" ? publishResult.externalIds.adset_id : null,
-        meta_ad_id:
-          typeof publishResult.externalIds?.ad_id === "string" ? publishResult.externalIds.ad_id : null,
-        meta_lead_form_id:
-          typeof publishResult.externalIds?.lead_form_id === "string" ? publishResult.externalIds.lead_form_id : null,
-        meta_creative_id:
-          typeof publishResult.externalIds?.creative_id === "string" ? publishResult.externalIds.creative_id : null,
-      };
-      await updateCampaignWithSchemaFallback(admin, campaignId, {
-          status: "published",
-          ...persistedIds,
-      });
-
-      console.info("[meta publish] campaign record updated after publish", {
-        campaignId,
-        persistedIds,
-      });
-    }
 
     return NextResponse.json({
       jobId,

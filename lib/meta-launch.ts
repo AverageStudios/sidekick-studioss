@@ -57,6 +57,7 @@ const optionalCampaignColumns = new Set([
   "workspace_id",
   "external_ids_json",
   "external_publish_status",
+  "published_at",
   "meta_campaign_id",
   "meta_adset_id",
   "meta_ad_id",
@@ -245,10 +246,6 @@ function resolveAdSetDestinationType(adType: CampaignAdType): "ON_AD" | "WEBSITE
 
 function adTypeRequiresPhone(adType: CampaignAdType) {
   return adType === "call_now";
-}
-
-function adTypeUsesMessengerSetup(adType: CampaignAdType) {
-  return adType === "messenger_leads" || adType === "messenger_engagement";
 }
 
 function mapAdTypeToCta(adType: CampaignAdType) {
@@ -2094,6 +2091,7 @@ export async function publishMetaFromPreflight({
   try {
     await updateCampaignWithSchemaFallback(admin, campaignId, {
       status: mode === "live" ? "published" : "draft",
+      published_at: mode === "live" ? now : null,
       external_publish_status: finalStatus,
       external_ids_json: mergedExternalIds,
       ...persistedMetaIds,

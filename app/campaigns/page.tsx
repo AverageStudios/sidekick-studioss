@@ -62,7 +62,7 @@ export default async function CampaignsPage() {
 
           <div className="flex gap-3">
             <Button asChild variant="outline" className="rounded-[18px] px-5">
-              <Link href="/integrations">Review CRM handoff</Link>
+              <Link href="/workspace/settings?section=integrations">Review CRM handoff</Link>
             </Button>
             <Button asChild className="rounded-[18px] px-5">
               <Link href="/templates/new">New Campaign</Link>

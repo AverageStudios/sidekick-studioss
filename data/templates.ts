@@ -8,6 +8,13 @@ import {
 } from "@/data/template-taxonomy";
 import { extractTemplatePlaceholderFields } from "@/lib/template-placeholders";
 
+const liveTemplateDisplayNameOverrides: Record<string, string> = {
+  "premium-exterior-detailing": "Premium Exterior Detail",
+  "minimal-exterior-detailing": "Quick Exterior Detail",
+  "winter-detailing-special": "Winter Detail Special",
+  "winter-ready-detailing": "Winter-Ready Detail",
+};
+
 // Dev fallback only. The real source of truth for customer-facing template browsing
 // should be the Supabase `templates` table.
 export const templateFallbackCatalog: TemplateSeed[] = [
@@ -19,6 +26,8 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     category: "Full Details",
     industry: "Car Detailing",
     offerType: "Service Booking",
+    supportedAdTypes: ["lead_form", "landing_page", "call_now", "messenger_leads", "messenger_engagement"],
+    defaultAdType: "lead_form",
     positioning: "Best for shops pushing a flagship full detail with a clean entry offer.",
     previewImage: "/placeholders/full-detail.jpg",
     ctaDefault: "Claim My Detail",
@@ -84,6 +93,8 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     category: "Interior Only",
     industry: "Car Detailing",
     offerType: "Quote Request",
+    supportedAdTypes: ["lead_form", "landing_page", "call_now", "messenger_leads", "messenger_engagement"],
+    defaultAdType: "lead_form",
     positioning: "Best for shops booking family vehicles, work trucks, or rideshare interiors.",
     previewImage: "/placeholders/interior-detail.jpg",
     ctaDefault: "Get Interior Pricing",
@@ -149,6 +160,8 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     category: "Paint Correction & Protection",
     industry: "Car Detailing",
     offerType: "High-Ticket Offer",
+    supportedAdTypes: ["lead_form", "landing_page", "call_now", "messenger_leads", "messenger_engagement"],
+    defaultAdType: "lead_form",
     positioning: "Best for detailers selling higher-ticket paint protection with a premium brand feel.",
     previewImage: "/placeholders/ceramic.jpg",
     ctaDefault: "Request Coating Quote",
@@ -214,6 +227,8 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     category: "Paint Correction & Protection",
     industry: "Car Detailing",
     offerType: "Inspection",
+    supportedAdTypes: ["lead_form", "landing_page", "call_now", "messenger_leads", "messenger_engagement"],
+    defaultAdType: "lead_form",
     positioning: "Best for detailers selling transformation-focused correction work.",
     previewImage: "/placeholders/paint-correction.jpg",
     ctaDefault: "See Correction Options",
@@ -279,6 +294,8 @@ export const templateFallbackCatalog: TemplateSeed[] = [
     category: "Maintenance / Membership",
     industry: "Car Detailing",
     offerType: "Recurring Maintenance",
+    supportedAdTypes: ["lead_form", "landing_page", "call_now", "messenger_leads", "messenger_engagement"],
+    defaultAdType: "lead_form",
     positioning: "Best for detailers wanting steadier repeat business with a lightweight offer.",
     previewImage: "/placeholders/maintenance.jpg",
     ctaDefault: "Join The Wash Plan",
@@ -346,17 +363,110 @@ export function getTemplateById(id: string) {
   return templateFallbackCatalog.find((template) => template.id === id);
 }
 
+function getFirstNonEmptyString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "";
+}
+
+function normalizeStringArray(values: unknown[]): string[] {
+  return values
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter(Boolean);
+}
+
 export function hydrateTemplateRecord(record: TemplateRecord): TemplateSeed {
   const fallback = getTemplateById(record.id) || getTemplateBySlug(record.slug);
+  const displayName = liveTemplateDisplayNameOverrides[record.slug] || record.name;
   const config = record.config_json || {};
+  const configCreative = (config as {
+    creative?: {
+      adType?: string | null;
+      headline?: string | null;
+      primaryText?: string | null;
+      formHeadline?: string | null;
+      formDescription?: string | null;
+      creativeAngle?: string | null;
+      imageText?: string | null;
+      thankYouHeadline?: string | null;
+      thankYouDescription?: string | null;
+      linkDescription?: string | null;
+      cta?: string | null;
+    } | null;
+  }).creative;
+  const configTemplate = (config as {
+    template?: {
+      name?: string | null;
+      slug?: string | null;
+      goal?: string | null;
+      description?: string | null;
+      categoryLabel?: string | null;
+      recommendedAdType?: string | null;
+      internalDescription?: string | null;
+      linkDescription?: string | null;
+    } | null;
+  }).template;
+  const configIndustry = (config as {
+    industry?: { name?: string | null } | string | null;
+  }).industry;
+  const configMediaGuidance = (config as {
+    mediaGuidance?: {
+      imageNotes?: string | null;
+      creativeStyle?: string | null;
+      recommendedSize?: string | null;
+      recommendedFormat?: string | null;
+    } | null;
+  }).mediaGuidance;
+  const configCreativeAssets = (config as {
+    creativeAssets?: {
+      imageUrls?: string[];
+      videoUrls?: string[];
+      primaryImageUrl?: string | null;
+      creativeStyle?: string | null;
+      recommendedSize?: string | null;
+      recommendedFormat?: string | null;
+    } | null;
+  }).creativeAssets;
   const explicitLinkDescription =
     ((config as { linkDescription?: string | null }).linkDescription || "").trim() ||
-    (((config as { creative?: { linkDescription?: string | null } | null }).creative?.linkDescription || "").trim()) ||
-    (((config as { template?: { linkDescription?: string | null } | null }).template?.linkDescription || "").trim()) ||
+    ((configCreative?.linkDescription || "").trim()) ||
+    ((configTemplate?.linkDescription || "").trim()) ||
     "";
-  const industry = normalizeIndustryLabel(record.industry || config.industry || fallback?.industry || record.category) as TemplateIndustry;
-  const category = (record.category || config.category || fallback?.category || industry || "Uncategorized").trim();
+  const industry = normalizeIndustryLabel(
+    getFirstNonEmptyString(
+      record.industry,
+      typeof configIndustry === "string" ? configIndustry : configIndustry?.name,
+      fallback?.industry,
+      record.category,
+    ),
+  ) as TemplateIndustry;
+  const category = getFirstNonEmptyString(
+    record.category,
+    (config as { category?: string | null }).category,
+    configTemplate?.categoryLabel,
+    fallback?.category,
+    industry,
+    "Uncategorized",
+  );
   const offerType = normalizeOfferTypeLabel(record.offer_type || config.offerType || fallback?.offerType || "") as TemplateOfferType;
+  const supportedAdTypes = normalizeStringArray([
+    ...(((config as { supportedAdTypes?: unknown[] }).supportedAdTypes as unknown[]) || []),
+    configCreative?.adType || "",
+    configTemplate?.recommendedAdType || "",
+    ...(fallback?.supportedAdTypes || []),
+  ]);
+  const normalizedSupportedAdTypes = supportedAdTypes.length ? Array.from(new Set(supportedAdTypes)) : ["lead_form"];
+  const defaultAdType = getFirstNonEmptyString(
+    (config as { defaultAdType?: string | null }).defaultAdType,
+    configCreative?.adType,
+    configTemplate?.recommendedAdType,
+    fallback?.defaultAdType,
+    normalizedSupportedAdTypes[0],
+    "lead_form",
+  );
   const resolvedCtaType =
     normalizeTemplateCtaType(
       config.ctaType ||
@@ -374,31 +484,112 @@ export function hydrateTemplateRecord(record: TemplateRecord): TemplateSeed {
     config.ctaLabel ||
     ((config as { ctaPolicy?: { displayLabel?: string | null } | null }).ctaPolicy?.displayLabel || "") ||
     formatTemplateCtaLabel(resolvedCtaType || config.ctaDefault || fallback?.ctaDefault || undefined, "Learn more");
+  const derivedCreativeGuidance = normalizeStringArray([
+    configMediaGuidance?.creativeStyle || "",
+    configMediaGuidance?.imageNotes || "",
+    configCreativeAssets?.creativeStyle || "",
+    getFirstNonEmptyString(
+      configMediaGuidance?.recommendedSize,
+      configCreativeAssets?.recommendedSize,
+    )
+      ? `Recommended size: ${getFirstNonEmptyString(
+          configMediaGuidance?.recommendedSize,
+          configCreativeAssets?.recommendedSize,
+        )}`
+      : "",
+    getFirstNonEmptyString(
+      configMediaGuidance?.recommendedFormat,
+      configCreativeAssets?.recommendedFormat,
+    )
+      ? `Recommended format: ${getFirstNonEmptyString(
+          configMediaGuidance?.recommendedFormat,
+          configCreativeAssets?.recommendedFormat,
+        )}`
+      : "",
+  ]);
+  const fallbackAdCopy = fallback?.adCopy || {
+    primary: "",
+    headlines: [],
+    descriptions: [],
+    targeting: "",
+    budget: "",
+    creativeGuidance: [],
+  };
+  const configAdCopy = (config.adCopy || {}) as Partial<TemplateSeed["adCopy"]>;
+  const mergedDescriptions = Array.isArray(configAdCopy.descriptions)
+    ? [...configAdCopy.descriptions]
+    : normalizeStringArray([
+        explicitLinkDescription,
+        configCreative?.linkDescription || "",
+        configCreative?.formDescription || "",
+        configTemplate?.internalDescription || "",
+        configTemplate?.description || "",
+        fallbackAdCopy.descriptions?.[0] || "",
+      ]);
+
+  if (explicitLinkDescription) {
+    if (mergedDescriptions.length > 0) {
+      mergedDescriptions[0] = explicitLinkDescription;
+    } else {
+      mergedDescriptions.push(explicitLinkDescription);
+    }
+  }
+
+  const fallbackWhyChooseUs = (fallback?.funnel?.whyChooseUs || []).filter(Boolean);
+  const derivedWhyChooseUs = normalizeStringArray([
+    configCreative?.formDescription || "",
+    configTemplate?.goal || "",
+    configTemplate?.internalDescription || "",
+    configMediaGuidance?.imageNotes || "",
+  ]);
   const hydratedSeed: TemplateSeed = {
     id: record.id,
     slug: record.slug,
-    name: record.name,
+    name: displayName,
     description: record.description,
     category,
     industry: industry || "Car Detailing",
     offerType: offerType || fallback?.offerType || "Quote Request",
-    supportedAdTypes: config.supportedAdTypes || fallback?.supportedAdTypes || ["lead_form"],
-    defaultAdType: config.defaultAdType || fallback?.defaultAdType || (config.supportedAdTypes || fallback?.supportedAdTypes || ["lead_form"])[0] || "lead_form",
-    positioning: config.positioning || fallback?.positioning || record.description,
+    supportedAdTypes: normalizedSupportedAdTypes as TemplateSeed["supportedAdTypes"],
+    defaultAdType: defaultAdType as TemplateSeed["defaultAdType"],
+    positioning:
+      getFirstNonEmptyString(
+        config.positioning,
+        configTemplate?.goal,
+        configTemplate?.internalDescription,
+        configCreative?.creativeAngle,
+        fallback?.positioning,
+        record.description,
+      ) || record.description,
     previewImage: record.preview_image_url || fallback?.previewImage || "/placeholders/template.jpg",
     creativeAssets: {
-      imageUrls:
-        (config.creativeAssets as { imageUrls?: string[] } | undefined)?.imageUrls ||
-        (record.preview_image_url ? [record.preview_image_url] : fallback?.creativeAssets?.imageUrls || []),
-      videoUrls: (config.creativeAssets as { videoUrls?: string[] } | undefined)?.videoUrls || fallback?.creativeAssets?.videoUrls || [],
+      imageUrls: normalizeStringArray([
+        ...((configCreativeAssets?.imageUrls || []) as string[]),
+        record.preview_image_url || "",
+        configCreativeAssets?.primaryImageUrl || "",
+        ...(fallback?.creativeAssets?.imageUrls || []),
+      ]).filter((value) => !value.includes("PASTE_PUBLIC_IMAGE_URL_HERE")),
+      videoUrls: (configCreativeAssets?.videoUrls || fallback?.creativeAssets?.videoUrls || []) as string[],
     },
     launchCategory: resolveTemplateLaunchCategory({
       slug: record.slug,
-      name: record.name,
+      name: displayName,
       description: record.description,
-      positioning: config.positioning || fallback?.positioning || record.description,
+      positioning:
+        getFirstNonEmptyString(
+          config.positioning,
+          configTemplate?.goal,
+          configTemplate?.internalDescription,
+          fallback?.positioning,
+          record.description,
+        ) || record.description,
       category: record.category,
-      industry: record.industry || config.industry || fallback?.industry || null,
+      industry:
+        getFirstNonEmptyString(
+          record.industry,
+          typeof configIndustry === "string" ? configIndustry : configIndustry?.name,
+          fallback?.industry,
+        ) || null,
       config_json: {
         launchCategory: (config as { launchCategory?: string | null }).launchCategory || undefined,
         template: (config as { template?: { category?: string | null; categoryLabel?: string | null; slug?: string | null } | null }).template || null,
@@ -407,50 +598,82 @@ export function hydrateTemplateRecord(record: TemplateRecord): TemplateSeed {
     ctaType: resolvedCtaType,
     ctaLabel: resolvedCtaLabel,
     ctaDefault: resolvedCtaLabel,
-    promoDetails: config.promoDetails || fallback?.promoDetails || "",
+    promoDetails:
+      getFirstNonEmptyString(
+        config.promoDetails,
+        explicitLinkDescription,
+        configCreative?.linkDescription,
+        configCreative?.formDescription,
+        fallback?.promoDetails,
+      ) || "",
     offerStructure: config.offerStructure || fallback?.offerStructure || [],
     benefits: config.benefits || fallback?.benefits || [],
     faq: config.faq || fallback?.faq || [],
-    adCopy: (() => {
-      const fallbackAdCopy = fallback?.adCopy || {
-        primary: "",
-        headlines: [],
-        descriptions: [],
-        targeting: "",
-        budget: "",
-        creativeGuidance: [],
-      };
-      const configAdCopy = (config.adCopy || {}) as Partial<TemplateSeed["adCopy"]>;
-      const mergedDescriptions = Array.isArray(configAdCopy.descriptions)
-        ? [...configAdCopy.descriptions]
-        : [...(fallbackAdCopy.descriptions || [])];
-
-      if (explicitLinkDescription) {
-        if (mergedDescriptions.length > 0) {
-          mergedDescriptions[0] = explicitLinkDescription;
-        } else {
-          mergedDescriptions.push(explicitLinkDescription);
-        }
-      }
-
-      return {
-        primary: configAdCopy.primary || fallbackAdCopy.primary || "",
-        headlines: Array.isArray(configAdCopy.headlines) ? configAdCopy.headlines : fallbackAdCopy.headlines || [],
-        descriptions: mergedDescriptions,
-        targeting: configAdCopy.targeting || fallbackAdCopy.targeting || "",
-        budget: configAdCopy.budget || fallbackAdCopy.budget || "",
-        creativeGuidance: Array.isArray(configAdCopy.creativeGuidance)
+    adCopy: {
+      primary:
+        getFirstNonEmptyString(
+          configAdCopy.primary,
+          configCreative?.primaryText,
+          configTemplate?.description,
+          fallbackAdCopy.primary,
+          record.description,
+        ) || record.description,
+      headlines: Array.isArray(configAdCopy.headlines) && configAdCopy.headlines.length
+        ? configAdCopy.headlines
+        : normalizeStringArray([
+            configCreative?.headline || "",
+            configCreative?.formHeadline || "",
+            configTemplate?.name || "",
+            fallbackAdCopy.headlines?.[0] || "",
+            displayName,
+          ]).slice(0, 3),
+      descriptions: mergedDescriptions.length ? mergedDescriptions : [record.description],
+      targeting:
+        getFirstNonEmptyString(
+          configAdCopy.targeting,
+          fallbackAdCopy.targeting,
+          "Target local drivers in your service area who match the campaign offer and are ready to request a quote.",
+        ) || "",
+      budget:
+        getFirstNonEmptyString(
+          configAdCopy.budget,
+          fallbackAdCopy.budget,
+          "Start with a modest daily test budget, verify lead quality, then scale the best-performing ad set.",
+        ) || "",
+      creativeGuidance:
+        Array.isArray(configAdCopy.creativeGuidance) && configAdCopy.creativeGuidance.length
           ? configAdCopy.creativeGuidance
-          : fallbackAdCopy.creativeGuidance || [],
-        objective: configAdCopy.objective || fallbackAdCopy.objective,
-      };
-    })(),
+          : derivedCreativeGuidance.length
+            ? derivedCreativeGuidance
+            : fallbackAdCopy.creativeGuidance || [],
+      objective: configAdCopy.objective || fallbackAdCopy.objective,
+    },
     funnel: config.funnel || fallback?.funnel || {
-      heroHeadline: record.name,
-      heroSubheadline: record.description,
-      offerLabel: record.name,
-      whyChooseUs: [],
-      finalCta: "Get Started",
+      heroHeadline:
+        getFirstNonEmptyString(
+          configCreative?.formHeadline,
+          configCreative?.headline,
+          configTemplate?.name,
+          displayName,
+        ) || displayName,
+      heroSubheadline:
+        getFirstNonEmptyString(
+          configCreative?.formDescription,
+          configTemplate?.description,
+          record.description,
+        ) || record.description,
+      offerLabel:
+        getFirstNonEmptyString(
+          configTemplate?.categoryLabel,
+          configCreative?.headline,
+          displayName,
+        ) || displayName,
+      whyChooseUs: derivedWhyChooseUs.length
+        ? derivedWhyChooseUs.slice(0, 3)
+        : fallbackWhyChooseUs.length
+          ? fallbackWhyChooseUs
+          : ["Fast follow-up", "Clear offer positioning", "Built for mobile lead capture"],
+      finalCta: getFirstNonEmptyString(resolvedCtaLabel, "Get Started") || "Get Started",
     },
     adTypeConfig: config.adTypeConfig || fallback?.adTypeConfig || {},
   };
@@ -477,7 +700,28 @@ export function hydrateTemplateRecord(record: TemplateRecord): TemplateSeed {
 
   return {
     ...hydratedSeed,
-    placeholderFields: config.placeholderFields || fallback?.placeholderFields || extractTemplatePlaceholderFields(hydratedSeed),
+    placeholderFields:
+      config.placeholderFields ||
+      ((config as {
+        placeholders?: Array<{
+          key?: string | null;
+          label?: string | null;
+          default?: string | null;
+          required?: boolean | null;
+          type?: "text" | "currency" | "number" | null;
+        }>;
+      }).placeholders || []).map((field) => ({
+        id: field.key || "",
+        label: field.label || field.key || "Field",
+        defaultValue: field.default || undefined,
+        required: Boolean(field.required),
+        inputType:
+          field.type === "currency" || field.type === "number" || field.type === "text"
+            ? field.type
+            : "text",
+      })).filter((field) => field.id) ||
+      fallback?.placeholderFields ||
+      extractTemplatePlaceholderFields(hydratedSeed),
   };
 }
 
