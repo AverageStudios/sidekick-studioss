@@ -20,22 +20,18 @@ Regular workspace members can see CRM connection status but cannot trigger test 
 
 ## Supported providers
 
-Current test-delivery support:
+Current launch-visible test-delivery support:
 
-- GoHighLevel
 - Pipedrive
-- HubSpot
-- Salesforce
 - Zoho CRM
-- Freshsales / Freshworks CRM
 - Monday CRM
 - Keap
 - Close CRM
-- Follow Up Boss
 
 Not available yet:
 
 - future CRM providers until a provider-specific helper is implemented
+- additional hidden providers that are not part of the public launch picker yet
 
 ## Test lead payload
 
@@ -49,16 +45,6 @@ All supported providers use the same test lead details:
 
 ## What gets created
 
-### GoHighLevel
-
-Creates or updates:
-
-- Contact
-
-Success message:
-
-- `Test contact sent to GoHighLevel.`
-
 ### Pipedrive
 
 Creates:
@@ -69,25 +55,6 @@ Creates:
 Success message:
 
 - `Test lead sent to Pipedrive Leads Inbox.`
-
-### HubSpot
-
-Creates or updates:
-
-- Contact
-
-Required HubSpot scope:
-
-- `crm.objects.contacts.write`
-
-Success message:
-
-- `Test contact sent to HubSpot.`
-
-Connection requirement:
-
-- HubSpot must be connected through OAuth
-- older manual private-token connections should be reconnected
 
 ### Zoho CRM
 
@@ -105,42 +72,6 @@ Required Zoho scopes:
 Success message:
 
 - `Test lead sent to Zoho CRM.`
-
-### Salesforce
-
-Creates:
-
-- Lead
-
-Required Salesforce scopes:
-
-- `api`
-- `refresh_token`
-
-Success message:
-
-- `Test lead sent to Salesforce.`
-
-### Freshsales / Freshworks CRM
-
-Creates:
-
-- Contact
-
-Required Freshsales scopes:
-
-- `freshsales.contacts.create`
-- `freshsales.contacts.edit`
-- `freshsales.contacts.view`
-
-Success message:
-
-- `Test contact sent to Freshsales.`
-
-Connection requirement:
-
-- Freshsales must be connected through OAuth
-- SideKick currently sends the test record as a Contact because the current official Freshsales CRM API documents the Contacts flow clearly for OAuth-backed API access
 
 ### Monday CRM
 
@@ -204,32 +135,6 @@ Connection requirement:
 - Close CRM must be connected through OAuth
 - SideKick stores and refreshes Close OAuth tokens server-side
 
-### Follow Up Boss
-
-Creates:
-
-- Lead-style event through the Follow Up Boss Events API
-
-Delivery path:
-
-- `POST /v1/events`
-
-Required setup:
-
-- Follow Up Boss must be connected through OAuth
-- SideKick must have `FOLLOWUPBOSS_SYSTEM_NAME`
-- SideKick must have `FOLLOWUPBOSS_SYSTEM_KEY`
-
-Success message:
-
-- `Test lead sent to Follow Up Boss.`
-
-Connection requirement:
-
-- Follow Up Boss must be connected through OAuth
-- SideKick stores and refreshes Follow Up Boss OAuth tokens server-side
-- SideKick uses the Events API instead of `/people` so Follow Up Boss can treat the record like a new incoming lead
-
 ## Security notes
 
 - CRM access tokens stay server-side only
@@ -257,10 +162,6 @@ If test delivery fails:
 4. Confirm you are a workspace owner/admin or a global admin
 5. Retry after a minute if the provider recently refreshed tokens
 
-HubSpot-specific note:
-
-- if the saved token is invalid, expired, or missing `crm.objects.contacts.write`, reconnect HubSpot with a valid contact-write token
-
 If the provider is connected but the UI does not show a test button:
 
 1. Confirm the provider supports test delivery
@@ -269,6 +170,16 @@ If the provider is connected but the UI does not show a test button:
 If the provider is unsupported:
 
 - the UI should say `Test delivery is not available yet`
+
+For launch, the public CRM picker only shows:
+
+- Pipedrive
+- Zoho CRM
+- Monday CRM
+- Keap
+- Close CRM
+
+Additional CRMs like HubSpot, GoHighLevel, Salesforce, Follow Up Boss, Freshsales, and Nutshell can be requested or added later.
 
 ## Future expansion
 

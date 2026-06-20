@@ -31,17 +31,20 @@ The CRM provider page shows cards for:
 - Zoho CRM
 - Monday CRM
 - Keap
-- Salesforce
 - Close CRM
-- Follow Up Boss
 
 Hidden from the current selection UI for now:
 
 - GoHighLevel
 - HubSpot
 - Freshsales / Freshworks CRM
+- Follow Up Boss
+- Salesforce
+- Nutshell
 
 Those providers still exist in the backend and existing workspace connections are preserved.
+
+Additional CRMs like HubSpot, GoHighLevel, Salesforce, Follow Up Boss, Freshsales, and Nutshell can be requested or added later.
 
 Each card includes:
 

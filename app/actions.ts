@@ -3619,10 +3619,6 @@ export async function saveCrmConnectionAction(formData: FormData) {
     redirect("/workspace/settings?section=integrations&error=Connect%20Salesforce%20through%20the%20OAuth%20flow.");
   }
 
-  if (provider === "followupboss") {
-    redirect("/workspace/settings?section=integrations&error=Connect%20Follow%20Up%20Boss%20through%20the%20OAuth%20flow.");
-  }
-
   if (!provider || !accessToken) {
     redirect("/workspace/settings?section=integrations&error=Provider%20and%20access%20token%20are%20required.");
   }
@@ -3632,7 +3628,7 @@ export async function saveCrmConnectionAction(formData: FormData) {
       admin,
       workspaceId,
       userId: user.id,
-      provider: provider as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce" | "zoho" | "freshsales" | "monday" | "keap" | "close" | "followupboss",
+      provider: provider as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce" | "zoho" | "freshsales" | "monday" | "keap" | "close",
       accessToken,
       metadata: locationId ? { locationId } : {},
     });
@@ -3681,7 +3677,7 @@ export async function disconnectCrmConnectionAction(formData: FormData) {
     await disconnectWorkspaceCrmProvider({
       admin,
       workspaceId,
-      provider: provider as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce" | "zoho" | "freshsales" | "monday" | "keap" | "close" | "followupboss",
+      provider: provider as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce" | "zoho" | "freshsales" | "monday" | "keap" | "close",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not disconnect CRM.";
@@ -3700,13 +3696,13 @@ export async function testCrmDeliveryAction(formData: FormData) {
 
   const workspaceId = String(formData.get("workspaceId") || "").trim();
   const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=integrations");
-  const provider = String(formData.get("provider") || "").trim() as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce" | "zoho" | "freshsales" | "monday" | "keap" | "close" | "followupboss";
+  const provider = String(formData.get("provider") || "").trim() as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce" | "zoho" | "freshsales" | "monday" | "keap" | "close";
 
   if (!workspaceId) {
     redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect your CRM or try again."));
   }
 
-  if (!provider || !["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho", "freshsales", "monday", "keap", "close", "followupboss"].includes(provider)) {
+  if (!provider || !["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho", "freshsales", "monday", "keap", "close"].includes(provider)) {
     redirect(appendQueryParam(redirectTo, "error", "Test not available yet."));
   }
 

@@ -10,7 +10,6 @@ import { buildMondayAuthorizationUrl } from "@/lib/integrations/monday";
 import { buildSalesforceAuthorizationUrl } from "@/lib/integrations/salesforce";
 import { buildZohoAuthorizationUrl } from "@/lib/integrations/zoho";
 import { buildCloseAuthorizationUrl } from "@/lib/integrations/close";
-import { buildFollowUpBossAuthorizationUrl } from "@/lib/integrations/followupboss";
 import { CrmProvider } from "@/types";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 import { logRouteError } from "@/lib/api-security";
@@ -38,7 +37,6 @@ function resolveProvider(value: string | null): CrmProvider | null {
     case "monday":
     case "keap":
     case "close":
-    case "followupboss":
       return value;
     default:
       return null;
@@ -69,8 +67,6 @@ function getProviderConnectUrl(provider: CrmProvider, state: string) {
       return buildSalesforceAuthorizationUrl(state);
     case "close":
       return buildCloseAuthorizationUrl(state);
-    case "followupboss":
-      return buildFollowUpBossAuthorizationUrl(state);
     default:
       throw new Error(`${provider} connect flow is not implemented yet.`);
   }
@@ -82,10 +78,6 @@ function getFreshsalesCallbackUrl(request: NextRequest) {
 
 function getCloseCallbackUrl(request: NextRequest) {
   return new URL("/api/integrations/close/callback", getAppOrigin(request)).toString();
-}
-
-function getFollowUpBossCallbackUrl(request: NextRequest) {
-  return new URL("/api/integrations/followupboss/callback", getAppOrigin(request)).toString();
 }
 
 export async function GET(request: NextRequest) {
@@ -156,8 +148,6 @@ export async function GET(request: NextRequest) {
         ? buildFreshsalesAuthorizationUrl(state, getFreshsalesCallbackUrl(request))
         : provider === "close"
           ? buildCloseAuthorizationUrl(state, getCloseCallbackUrl(request))
-          : provider === "followupboss"
-            ? buildFollowUpBossAuthorizationUrl(state, getFollowUpBossCallbackUrl(request))
           : getProviderConnectUrl(provider, state);
     if (provider === "freshsales") {
       const debug = getFreshsalesOAuthDebugInfo(getFreshsalesCallbackUrl(request));

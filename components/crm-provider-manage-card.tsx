@@ -136,6 +136,7 @@ export function CrmProviderManageCard({
         : !envConfigured
           ? "OAuth setup is not configured yet."
           : null;
+  const showExpandedPanel = isSelected && isConnected;
 
   return (
     <div
@@ -189,13 +190,13 @@ export function CrmProviderManageCard({
         ) : null}
       </div>
 
-      {isSelected && isConnected ? (
+      {showExpandedPanel ? (
         <div className="mt-5 rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] p-4 sm:p-5">
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline" disabled={!envConfigured}>
               <Link href={buildCrmProviderConnectHref(provider.key, redirectTo)}>Reconnect</Link>
             </Button>
-            {canSendCrmTests && isCrmTestDeliverySupported(provider.key) ? (
+            {isConnected && canSendCrmTests && isCrmTestDeliverySupported(provider.key) ? (
               <form action={testCrmDeliveryAction}>
                 <input type="hidden" name="workspaceId" value={workspaceId} />
                 <input type="hidden" name="provider" value={provider.key} />
@@ -212,7 +213,7 @@ export function CrmProviderManageCard({
             <form action={disconnectCrmConnectionAction}>
               <input type="hidden" name="provider" value={provider.key} />
               <input type="hidden" name="redirectTo" value={basePath} />
-              <Button type="submit" variant="outline">Disconnect</Button>
+              <Button type="submit" variant="outline" disabled={!isConnected}>Disconnect</Button>
             </form>
           </div>
 

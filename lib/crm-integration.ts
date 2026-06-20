@@ -5,7 +5,6 @@ import {
   isCrmProviderDebugEnabled,
   isCloseConfigured,
   isFreshsalesConfigured,
-  isFollowUpBossConfigured,
   isGhlConfigured,
   isHubSpotConfigured,
   isKeapConfigured,
@@ -74,13 +73,6 @@ import {
   getCloseTokenMetadata,
   refreshCloseAccessToken,
 } from "@/lib/integrations/close";
-import {
-  createFollowUpBossTestLeadEvent,
-  exchangeFollowUpBossCodeForTokens,
-  getFollowUpBossIdentity,
-  getFollowUpBossTokenMetadata,
-  refreshFollowUpBossAccessToken,
-} from "@/lib/integrations/followupboss";
 import {
   CampaignRecord,
   CrmConnectionStatus,
@@ -333,19 +325,7 @@ type CloseMetadata = {
   organizationId?: string | null;
   userId?: string | null;
 };
-
-type FollowUpBossMetadata = {
-  tokenType?: string | null;
-  refreshToken?: string | null;
-  expiresIn?: number | string | null;
-  scope?: string | string[] | null;
-  redirectUri?: string | null;
-  accountId?: string | null;
-  accountName?: string | null;
-  userId?: string | null;
-};
-
-const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho", "freshsales", "monday", "keap", "close", "followupboss"];
+const CRM_PROVIDERS: CrmProvider[] = ["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho", "freshsales", "monday", "keap", "close"];
 const CRM_TEST_PROVIDER_LABELS: Record<CrmProvider, string> = {
   gohighlevel: "GoHighLevel",
   hubspot: "HubSpot",
@@ -356,7 +336,6 @@ const CRM_TEST_PROVIDER_LABELS: Record<CrmProvider, string> = {
   monday: "Monday CRM",
   keap: "Keap",
   close: "Close CRM",
-  followupboss: "Follow Up Boss",
 };
 
 const CRM_TEST_LEAD = {
@@ -387,8 +366,7 @@ export function isCrmTestDeliverySupported(provider: CrmProvider) {
     provider === "freshsales" ||
     provider === "monday" ||
     provider === "keap" ||
-    provider === "close" ||
-    provider === "followupboss"
+    provider === "close"
   );
 }
 
@@ -454,11 +432,11 @@ function normalizeCrmDatabaseError(error: { message?: string | null } | null | u
   const message = error?.message || "";
 
   if (message.includes("workspace_provider_connections_provider_check")) {
-    return "CRM providers are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/032_close_crm_provider_support.sql, then try connecting again.";
+    return "CRM providers are not enabled in this database yet. Apply the latest CRM provider migrations, then try connecting again.";
   }
 
   if (message.includes("workspace_provider_assets_provider_check")) {
-    return "CRM provider assets are not enabled in this database yet. Apply the latest CRM provider migrations, including supabase/migrations/032_close_crm_provider_support.sql, then try again.";
+    return "CRM provider assets are not enabled in this database yet. Apply the latest CRM provider migrations, then try again.";
   }
 
   if (message.includes("workspace_provider_assets_type_check")) {
@@ -648,20 +626,6 @@ export function getCrmTestDeliveryFailureMessage({
       diagnostic.safeCategory === "INVALID_SCOPE"
     ) {
       return "Close CRM rejected the test lead because SideKick does not have the required API permissions.";
-    }
-  }
-
-  if (provider === "followupboss") {
-    const diagnostic = getCrmDiagnostic(error);
-    if (diagnostic.safeCategory === "INVALID_SETUP") {
-      return "Follow Up Boss requires additional integration setup before SideKick can send leads.";
-    }
-
-    if (
-      diagnostic.safeCategory === "REQUIRED_FIELD_MISSING" ||
-      diagnostic.safeCategory === "VALIDATION_FAILED"
-    ) {
-      return "Follow Up Boss rejected the test lead event because a required field is missing.";
     }
   }
 
@@ -1270,103 +1234,6 @@ async function validateCloseConnection({
   }
 }
 
-async function validateFollowUpBossConnection({
-  accessToken,
-  metadata,
-}: {
-  accessToken: string;
-  metadata?: FollowUpBossMetadata;
-}): Promise<ValidatedConnection> {
-  const fallbackAccountId = getFirstString(metadata?.accountId) || "followupboss-account";
-  const fallbackAccountName = getFirstString(metadata?.accountName) || "Follow Up Boss";
-  const fallbackScopes = getScopeList(metadata?.scope);
-  const fallback = {
-    providerUserId: getFirstString(metadata?.userId, metadata?.accountId) || fallbackAccountId,
-    providerUserName: fallbackAccountName,
-    tokenType: getFirstString(metadata?.tokenType) || "Bearer",
-    tokenExpiresAt: buildTokenExpiry(
-      typeof metadata?.expiresIn === "number"
-        ? metadata.expiresIn
-        : typeof metadata?.expiresIn === "string"
-          ? Number(metadata.expiresIn)
-          : undefined,
-    ),
-    refreshToken: getFirstString(metadata?.refreshToken),
-    scopes: fallbackScopes,
-    metadata: {
-      validated_at: new Date().toISOString(),
-      auth_type: "oauth",
-      redirect_uri: getFirstString(metadata?.redirectUri, env.followUpBossRedirectUri) || null,
-      account_id: fallbackAccountId,
-      account_name: fallbackAccountName,
-      user_id: getFirstString(metadata?.userId) || null,
-      identity_fetch_status: "skipped_or_failed",
-      system_name: env.followUpBossSystemName || null,
-    },
-    destinations: [
-      {
-        assetId: "events",
-        name: "Follow Up Boss events",
-        metadata: {
-          destinationType: "events",
-          objectType: "event",
-        },
-        selected: true,
-      },
-    ],
-  } satisfies ValidatedConnection;
-
-  try {
-    const identity = await getFollowUpBossIdentity(accessToken);
-    return {
-      providerUserId: getFirstString(identity.userId, identity.accountId) || fallbackAccountId,
-      providerUserName: getFirstString(identity.userName, identity.email, identity.accountName) || fallbackAccountName,
-      tokenType: getFirstString(metadata?.tokenType) || "Bearer",
-      tokenExpiresAt: buildTokenExpiry(
-        typeof metadata?.expiresIn === "number"
-          ? metadata.expiresIn
-          : typeof metadata?.expiresIn === "string"
-            ? Number(metadata.expiresIn)
-            : undefined,
-      ),
-      refreshToken: getFirstString(metadata?.refreshToken),
-      scopes: fallbackScopes,
-      metadata: {
-        validated_at: new Date().toISOString(),
-        auth_type: "oauth",
-        redirect_uri: getFirstString(metadata?.redirectUri, env.followUpBossRedirectUri) || null,
-        account_id: getFirstString(identity.accountId, metadata?.accountId) || fallbackAccountId,
-        account_name: getFirstString(identity.accountName, metadata?.accountName) || fallbackAccountName,
-        user_id: getFirstString(identity.userId, metadata?.userId) || null,
-        user_name: getFirstString(identity.userName) || null,
-        user_email: getFirstString(identity.email) || null,
-        identity_fetch_status: "succeeded",
-        system_name: env.followUpBossSystemName || null,
-      },
-      destinations: [
-        {
-          assetId: "events",
-          name: "Follow Up Boss events",
-          metadata: {
-            destinationType: "events",
-            objectType: "event",
-          },
-          selected: true,
-        },
-      ],
-    };
-  } catch (error) {
-    const diagnostic = getCrmDiagnostic(error);
-    if (diagnostic.status === 401) {
-      throw new Error("Follow Up Boss token is invalid or expired. Reconnect Follow Up Boss.");
-    }
-    if (diagnostic.status === 403) {
-      throw new Error("Follow Up Boss access is missing required API permissions. Reconnect Follow Up Boss.");
-    }
-    return fallback;
-  }
-}
-
 async function validateCrmConnection(input: {
   provider: CrmProvider;
   accessToken: string;
@@ -1440,11 +1307,6 @@ async function validateCrmConnection(input: {
       return validateCloseConnection({
         accessToken: input.accessToken,
         metadata: input.metadata as CloseMetadata | undefined,
-      });
-    case "followupboss":
-      return validateFollowUpBossConnection({
-        accessToken: input.accessToken,
-        metadata: input.metadata as FollowUpBossMetadata | undefined,
       });
     default:
       throw new Error(`${input.provider} is not available in this first CRM pass yet.`);
@@ -2395,39 +2257,6 @@ export async function connectWorkspaceCloseOAuthProvider({
   }
 }
 
-export async function connectWorkspaceFollowUpBossOAuthProvider({
-  admin,
-  workspaceId,
-  userId,
-  code,
-  redirectUri,
-}: {
-  admin: SupabaseAdmin;
-  workspaceId: string;
-  userId: string;
-  code: string;
-  redirectUri?: string | null;
-}) {
-  const token = await exchangeFollowUpBossCodeForTokens(code, redirectUri);
-  const tokenMetadata = getFollowUpBossTokenMetadata(token);
-
-  return connectWorkspaceCrmProvider({
-    admin,
-    workspaceId,
-    userId,
-    provider: "followupboss",
-    accessToken: normalizeAccessToken(token.access_token || ""),
-    metadata: {
-      authType: "oauth",
-      scope: token.scope || tokenMetadata.scopes,
-      refreshToken: tokenMetadata.refreshToken,
-      expiresIn: tokenMetadata.expiresIn,
-      tokenType: tokenMetadata.tokenType,
-      redirectUri: redirectUri || env.followUpBossRedirectUri || null,
-    },
-  });
-}
-
 export async function disconnectWorkspaceCrmProvider({
   admin,
   workspaceId,
@@ -3213,106 +3042,6 @@ async function getCloseAccessToken({
   }).catch(() => {
     throw Object.assign(new Error("Close token is invalid or expired. Reconnect Close CRM."), {
       provider: "close" as const,
-      step: "token_refresh",
-      safeCategory: "REFRESH_FAILED",
-    } satisfies Partial<CrmDiagnosticError>);
-  });
-}
-
-async function refreshFollowUpBossToken({
-  admin,
-  connection,
-  refreshToken,
-}: {
-  admin: SupabaseAdmin;
-  connection: WorkspaceCrmConnectionRow;
-  refreshToken: string;
-}) {
-  if (!isFollowUpBossConfigured()) {
-    throw new Error("Follow Up Boss OAuth env vars are missing.");
-  }
-
-  const refreshed = await refreshFollowUpBossAccessToken(refreshToken);
-  const metadata = getFollowUpBossTokenMetadata(refreshed);
-  const accessPayload = encryptCrmSecret(refreshed.access_token || "");
-  const nextRefreshToken = metadata.refreshToken || refreshToken;
-  const refreshPayload = nextRefreshToken ? encryptCrmSecret(nextRefreshToken) : null;
-
-  const { error } = await admin
-    .from("workspace_provider_connections")
-    .update({
-      token_ciphertext: accessPayload.ciphertext,
-      token_iv: accessPayload.iv,
-      token_tag: accessPayload.tag,
-      refresh_token_ciphertext: refreshPayload?.ciphertext || null,
-      refresh_token_iv: refreshPayload?.iv || null,
-      refresh_token_tag: refreshPayload?.tag || null,
-      token_type: metadata.tokenType || connection.token_type || "Bearer",
-      token_expires_at: buildTokenExpiry(
-        typeof metadata.expiresIn === "number" ? metadata.expiresIn : undefined,
-      ),
-      scopes: metadata.scopes.length ? metadata.scopes : connection.scopes,
-      metadata_json: {
-        ...connection.metadata_json,
-        auth_type: "oauth",
-      },
-      last_synced_at: new Date().toISOString(),
-      status: "connected",
-      disconnected_at: null,
-      is_active: true,
-    })
-    .eq("id", connection.id);
-
-  if (error) throw new Error(error.message);
-
-  return refreshed.access_token || "";
-}
-
-async function getFollowUpBossAccessToken({
-  admin,
-  connection,
-}: {
-  admin: SupabaseAdmin;
-  connection: WorkspaceCrmConnectionRow;
-}) {
-  const accessToken = decryptCrmSecret(connection);
-  if (!accessToken) {
-    throw Object.assign(new Error("Follow Up Boss token is unavailable."), {
-      provider: "followupboss" as const,
-      step: "token_load",
-      safeCategory: "AUTH_FAILED",
-    } satisfies Partial<CrmDiagnosticError>);
-  }
-
-  const expiresAt = connection.token_expires_at ? new Date(connection.token_expires_at).getTime() : null;
-  const expiresSoon =
-    typeof expiresAt === "number" && Number.isFinite(expiresAt) && expiresAt <= Date.now() + 60_000;
-
-  if (!expiresSoon) {
-    return accessToken;
-  }
-
-  const refreshToken = decryptEncryptedSecret({
-    ciphertext: connection.refresh_token_ciphertext,
-    iv: connection.refresh_token_iv,
-    tag: connection.refresh_token_tag,
-  });
-
-  if (!refreshToken) {
-    throw Object.assign(new Error("Follow Up Boss refresh token is missing. Reconnect Follow Up Boss."), {
-      provider: "followupboss" as const,
-      step: "token_refresh",
-      safeCategory: "REFRESH_FAILED",
-    } satisfies Partial<CrmDiagnosticError>);
-  }
-
-  return refreshFollowUpBossToken({
-    admin,
-    connection,
-    refreshToken,
-  }).catch(() => {
-    throw Object.assign(new Error("Follow Up Boss token is invalid or expired. Reconnect Follow Up Boss."), {
-      provider: "followupboss" as const,
       step: "token_refresh",
       safeCategory: "REFRESH_FAILED",
     } satisfies Partial<CrmDiagnosticError>);
@@ -4221,59 +3950,6 @@ export async function sendWorkspaceCloseTestLead({
   } satisfies CrmTestDeliveryResult;
 }
 
-export async function sendWorkspaceFollowUpBossTestLead({
-  admin,
-  workspaceId,
-}: {
-  admin: SupabaseAdmin;
-  workspaceId: string;
-}) {
-  const connections = await listCrmConnections(admin, workspaceId);
-  const connection =
-    connections.find(
-      (entry) => entry.provider === "followupboss" && entry.is_active && entry.status === "connected",
-    ) || null;
-
-  if (!connection) {
-    throw new Error("Follow Up Boss is not connected for this workspace.");
-  }
-
-  const accessToken = await getFollowUpBossAccessToken({
-    admin,
-    connection,
-  });
-
-  const result = await createFollowUpBossTestLeadEvent({
-    accessToken,
-  }).catch((error) => {
-    const diagnostic = getCrmDiagnostic(error);
-    throw Object.assign(
-      new Error(error instanceof Error ? error.message : "Follow Up Boss event delivery failed."),
-      {
-        provider: "followupboss" as const,
-        step: diagnostic.step || "create_event",
-        status: diagnostic.status ?? undefined,
-        category: diagnostic.category,
-        code: diagnostic.code,
-        safeCategory: diagnostic.safeCategory || "UNKNOWN_PROVIDER_ERROR",
-      } satisfies Partial<CrmDiagnosticError>,
-    );
-  });
-
-  return {
-    success: true,
-    provider: "followupboss",
-    providerName: "Follow Up Boss",
-    message: "Test lead sent to Follow Up Boss.",
-    messageKey: "crm_test_delivery_followupboss_success",
-    safeMessage: "Test lead sent to Follow Up Boss.",
-    createdObjectType: "lead",
-    providerRecordIds: {
-      personId: result.personId,
-    },
-  } satisfies CrmTestDeliveryResult;
-}
-
 export async function sendWorkspaceCrmTestLead({
   admin,
   workspaceId,
@@ -4302,8 +3978,6 @@ export async function sendWorkspaceCrmTestLead({
       return sendWorkspaceKeapTestLead({ admin, workspaceId });
     case "close":
       return sendWorkspaceCloseTestLead({ admin, workspaceId });
-    case "followupboss":
-      return sendWorkspaceFollowUpBossTestLead({ admin, workspaceId });
     default:
       throw new Error(`${getCrmProviderLabel(provider)} test delivery is not available yet.`);
   }

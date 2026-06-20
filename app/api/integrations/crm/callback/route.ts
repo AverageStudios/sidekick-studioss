@@ -3,7 +3,6 @@ import { getCurrentUser } from "@/lib/auth";
 import { parseCrmOAuthState } from "@/lib/crm-oauth-state";
 import {
   connectWorkspaceFreshsalesOAuthProvider,
-  connectWorkspaceFollowUpBossOAuthProvider,
   connectWorkspaceGoHighLevelOAuthProvider,
   connectWorkspaceHubSpotOAuthProvider,
   connectWorkspaceKeapOAuthProvider,
@@ -34,10 +33,6 @@ function getFreshsalesCallbackUrl(request: NextRequest) {
 
 function getCloseCallbackUrl(request: NextRequest) {
   return new URL("/api/integrations/close/callback", getAppOrigin(request)).toString();
-}
-
-function getFollowUpBossCallbackUrl(request: NextRequest) {
-  return new URL("/api/integrations/followupboss/callback", getAppOrigin(request)).toString();
 }
 
 function clearOauthCookies(response: NextResponse) {
@@ -315,15 +310,6 @@ export async function GET(request: NextRequest) {
           },
         });
         break;
-      case "followupboss":
-        await connectWorkspaceFollowUpBossOAuthProvider({
-          admin,
-          workspaceId,
-          userId: user.id,
-          code,
-          redirectUri: getFollowUpBossCallbackUrl(request),
-        });
-        break;
       default:
         throw new Error(`${statePayload.provider} callback handling is not implemented yet.`);
     }
@@ -432,38 +418,6 @@ export async function GET(request: NextRequest) {
                 ? "Close CRM connected, but SideKick could not save the connection. Please try again."
                 : "CRM connection failed. Please try again.";
       integrationsUrl.searchParams.set("error", closeMessage);
-    } else if (statePayload.provider === "followupboss") {
-      const diagnosticError = error as Error & {
-        status?: number;
-        category?: string | null;
-        code?: string | null;
-        safeCategory?: string | null;
-      };
-      console.error(
-        "[followupboss-oauth]",
-        JSON.stringify({
-          provider: "followupboss",
-          stage:
-            error instanceof Error && error.message.includes("workspace_provider_connections")
-              ? "storage_failed"
-              : "token_exchange_failed",
-          workspaceId,
-          userId: user.id,
-          status: typeof diagnosticError.status === "number" ? diagnosticError.status : null,
-          category: typeof diagnosticError.category === "string" ? diagnosticError.category : null,
-          code: typeof diagnosticError.code === "string" ? diagnosticError.code : null,
-          safeCategory:
-            typeof diagnosticError.safeCategory === "string" ? diagnosticError.safeCategory : null,
-        }),
-      );
-      const message =
-        error instanceof Error &&
-        (error.message.includes("invalid_client") ||
-          error.message.includes("invalid_grant") ||
-          error.message.includes("token exchange"))
-          ? "Follow Up Boss connection failed. Please check your app credentials and redirect URL."
-          : "Follow Up Boss connection failed. Please try again.";
-      integrationsUrl.searchParams.set("error", message);
     } else {
       integrationsUrl.searchParams.set("error", "CRM connection failed. Please try again.");
     }

@@ -80,12 +80,6 @@ export const env = {
   closeClientSecret: readEnv("CLOSE_CLIENT_SECRET"),
   closeRedirectUri: readEnv("CLOSE_REDIRECT_URI"),
   closeScopes: readEnv("CLOSE_SCOPES") || "all.full_access offline_access",
-  followUpBossClientId: readEnv("FOLLOWUPBOSS_CLIENT_ID"),
-  followUpBossClientSecret: readEnv("FOLLOWUPBOSS_CLIENT_SECRET"),
-  followUpBossRedirectUri: readEnv("FOLLOWUPBOSS_REDIRECT_URI"),
-  followUpBossScopes: readEnv("FOLLOWUPBOSS_SCOPES"),
-  followUpBossSystemName: readEnv("FOLLOWUPBOSS_SYSTEM_NAME"),
-  followUpBossSystemKey: readEnv("FOLLOWUPBOSS_SYSTEM_KEY"),
 } as const;
 
 export function getSupabasePublicEnvStatus() {
@@ -227,20 +221,6 @@ export function getCloseEnvStatus() {
   };
 }
 
-export function getFollowUpBossEnvStatus() {
-  const missingKeys = missing([
-    "FOLLOWUPBOSS_CLIENT_ID",
-    "FOLLOWUPBOSS_CLIENT_SECRET",
-    "FOLLOWUPBOSS_REDIRECT_URI",
-    "FOLLOWUPBOSS_SYSTEM_NAME",
-    "FOLLOWUPBOSS_SYSTEM_KEY",
-  ]);
-  return {
-    configured: missingKeys.length === 0,
-    missingKeys,
-  };
-}
-
 export function isSupabasePublicConfigured() {
   return getSupabasePublicEnvStatus().configured;
 }
@@ -300,10 +280,6 @@ export function isSalesforceConfigured() {
 
 export function isCloseConfigured() {
   return getCloseEnvStatus().configured;
-}
-
-export function isFollowUpBossConfigured() {
-  return getFollowUpBossEnvStatus().configured;
 }
 
 export function isCrmProviderDebugEnabled() {

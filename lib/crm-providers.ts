@@ -97,6 +97,7 @@ export const crmProviderMetadataList: CrmProviderMetadata[] = [
     shortDescription: "Create new Salesforce leads from SideKick.",
     shortCode: "SF",
     logoPath: "/crm-logos/salesforce.ico",
+    visibleInSelection: false,
     accentClassName: "text-blue-700",
     surfaceClassName: "bg-blue-100",
     connectPath: "/api/integrations/salesforce/connect",
@@ -109,16 +110,6 @@ export const crmProviderMetadataList: CrmProviderMetadata[] = [
     accentClassName: "text-slate-700",
     surfaceClassName: "bg-slate-100",
     connectPath: "/api/integrations/close/connect",
-  },
-  {
-    key: "followupboss",
-    label: "Follow Up Boss",
-    shortDescription: "Send new lead events into Follow Up Boss for routing and follow-up.",
-    shortCode: "FUB",
-    visibleInSelection: true,
-    accentClassName: "text-violet-700",
-    surfaceClassName: "bg-violet-100",
-    connectPath: "/api/integrations/followupboss/connect",
   },
 ];
 
