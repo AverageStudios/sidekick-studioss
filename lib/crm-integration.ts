@@ -2191,7 +2191,7 @@ export async function connectWorkspaceCloseOAuthProvider({
       redirectUriHasTrailingSlash: debug.redirectUriHasTrailingSlash,
       closeAuthUrl: debug.closeAuthUrl,
       closeTokenUrl: debug.closeTokenUrl,
-      includesRedirectUriOnFirstAttempt: false,
+      includesRedirectUriOnFirstAttempt: true,
       supportsRedirectUriRetry: true,
       supportsBasicAuthRetry: true,
     }),

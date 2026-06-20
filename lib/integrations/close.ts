@@ -349,10 +349,8 @@ export async function exchangeCloseCodeForTokens(
   redirectUriOverride?: string | null,
 ): Promise<CloseTokenExchangeResult> {
   const attempts: Array<Pick<CloseTokenExchangeAttemptResult, "attempt" | "authStyle" | "includesRedirectUri">> = [
-    { attempt: 1, authStyle: "form_body", includesRedirectUri: false },
-    { attempt: 2, authStyle: "form_body", includesRedirectUri: true },
-    { attempt: 3, authStyle: "basic_auth", includesRedirectUri: false },
-    { attempt: 4, authStyle: "basic_auth", includesRedirectUri: true },
+    { attempt: 1, authStyle: "form_body", includesRedirectUri: true },
+    { attempt: 2, authStyle: "basic_auth", includesRedirectUri: true },
   ];
 
   const results: CloseTokenExchangeAttemptResult[] = [];
@@ -467,6 +465,23 @@ export async function exchangeCloseCodeForTokens(
           basicAuthRetryAttempted: results.some((entry) => entry.authStyle === "basic_auth"),
           redirectUriRetryAttempted: results.some((entry) => entry.includesRedirectUri),
           possibleCodeConsumption: providerError.code === "invalid_grant",
+        });
+      }
+
+      if (providerError.code !== "invalid_client" && providerError.status !== 401) {
+        throw createCloseProviderError(providerError.message, {
+          status: providerError.status,
+          category: providerError.category,
+          code: providerError.code,
+          errorDescription: providerError.errorDescription || diagnostic.message || null,
+          safeCategory: providerError.safeCategory,
+          attemptDebug: results,
+          usedAttemptNumber: result.attempt,
+          usedAuthStyle: result.authStyle,
+          usedIncludesRedirectUri: result.includesRedirectUri,
+          basicAuthRetryAttempted: results.some((entry) => entry.authStyle === "basic_auth"),
+          redirectUriRetryAttempted: results.some((entry) => entry.includesRedirectUri),
+          possibleCodeConsumption: false,
         });
       }
     }
