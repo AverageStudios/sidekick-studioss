@@ -214,7 +214,6 @@ export function getCloseEnvStatus() {
     "CLOSE_CLIENT_ID",
     "CLOSE_CLIENT_SECRET",
     "CLOSE_REDIRECT_URI",
-    "CLOSE_SCOPES",
   ]);
   return {
     configured: missingKeys.length === 0,

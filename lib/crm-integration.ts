@@ -1124,6 +1124,46 @@ async function validateCloseConnection({
   accessToken: string;
   metadata?: CloseMetadata;
 }): Promise<ValidatedConnection> {
+  const fallbackOrganizationId = getFirstString(metadata?.organizationId) || "close-org";
+  const fallbackOrganizationName = `Close org ${fallbackOrganizationId}`;
+  const fallbackScopes = getScopeList(metadata?.scope).length
+    ? getScopeList(metadata?.scope)
+    : ["all.full_access", "offline_access"];
+  const fallbackValidatedConnection = {
+    providerUserId: getFirstString(metadata?.userId, metadata?.organizationId) || fallbackOrganizationId,
+    providerUserName: fallbackOrganizationName,
+    tokenType: getFirstString(metadata?.tokenType) || "Bearer",
+    tokenExpiresAt: buildTokenExpiry(
+      typeof metadata?.expiresIn === "number"
+        ? metadata.expiresIn
+        : typeof metadata?.expiresIn === "string"
+          ? Number(metadata.expiresIn)
+          : undefined,
+    ),
+    refreshToken: getFirstString(metadata?.refreshToken),
+    scopes: fallbackScopes,
+    metadata: {
+      validated_at: new Date().toISOString(),
+      auth_type: "oauth",
+      redirect_uri: getFirstString(metadata?.redirectUri, env.closeRedirectUri) || null,
+      organization_id: fallbackOrganizationId,
+      organization_name: fallbackOrganizationName,
+      user_id: getFirstString(metadata?.userId) || null,
+      metadata_fetch_status: "skipped_or_failed",
+    },
+    destinations: [
+      {
+        assetId: "leads",
+        name: "Close leads",
+        metadata: {
+          destinationType: "leads",
+          objectType: "lead",
+        },
+        selected: true,
+      },
+    ],
+  } satisfies ValidatedConnection;
+
   try {
     const account = await getCloseAccountInfo(accessToken);
     const organizationId = getFirstString(metadata?.organizationId, account.organizationId) || "close-org";
@@ -1160,6 +1200,7 @@ async function validateCloseConnection({
         organization_name: organizationName,
         user_id: getFirstString(account.userId) || null,
         user_email: getFirstString(account.email) || null,
+        metadata_fetch_status: "succeeded",
       },
       destinations: [
         {
@@ -1181,7 +1222,17 @@ async function validateCloseConnection({
     if (diagnostic.status === 403) {
       throw new Error("Close CRM access is missing required API permissions. Reconnect Close CRM.");
     }
-    throw new Error(diagnostic.message || "Close CRM verification could not be completed.");
+    console.warn(
+      "[close-oauth]",
+      JSON.stringify({
+        provider: "close",
+        stage: "metadata_fetch_failed",
+        status: diagnostic.status,
+        code: diagnostic.code,
+        safeCategory: diagnostic.safeCategory,
+      }),
+    );
+    return fallbackValidatedConnection;
   }
 }
 
@@ -2081,14 +2132,45 @@ export async function connectWorkspaceCloseOAuthProvider({
   userId,
   code,
   redirectUri,
+  callbackContext,
 }: {
   admin: SupabaseAdmin;
   workspaceId: string;
   userId: string;
   code: string;
   redirectUri?: string | null;
+  callbackContext?: {
+    hasState?: boolean;
+    requestHost?: string | null;
+  };
 }) {
   const debug = getCloseOAuthDebugInfo(redirectUri);
+  const summary = {
+    provider: "close" as const,
+    stage: "summary",
+    workspaceId,
+    userId,
+    hasCode: Boolean(code),
+    hasState: Boolean(callbackContext?.hasState),
+    stateParsed: true,
+    tokenExchangeSucceeded: false,
+    tokenStatus: null as number | null,
+    hasAccessToken: false,
+    hasRefreshToken: false,
+    metadataFetchSucceeded: false,
+    storageSucceeded: false,
+    failureStage: null as string | null,
+    safeErrorCode: null as string | null,
+    safeErrorDescription: null as string | null,
+    requestHost: callbackContext?.requestHost || null,
+    redirectOrigin: (() => {
+      try {
+        return new URL(debug.redirectUri).origin;
+      } catch {
+        return null;
+      }
+    })(),
+  };
   console.info(
     "[close-oauth]",
     JSON.stringify({
@@ -2108,26 +2190,64 @@ export async function connectWorkspaceCloseOAuthProvider({
     }),
   );
 
-  const token = await exchangeCloseCodeForTokens(code, redirectUri);
-  const tokenMetadata = getCloseTokenMetadata(token);
+  try {
+    const token = await exchangeCloseCodeForTokens(code, redirectUri);
+    const tokenMetadata = getCloseTokenMetadata(token);
+    summary.tokenExchangeSucceeded = true;
+    summary.hasAccessToken = Boolean(token.access_token);
+    summary.hasRefreshToken = Boolean(tokenMetadata.refreshToken);
+    summary.metadataFetchSucceeded = Boolean(tokenMetadata.organizationId || tokenMetadata.userId);
+    console.info(
+      "[close-oauth]",
+      JSON.stringify({
+        provider: "close",
+        stage: "token_exchange_succeeded",
+        workspaceId,
+        userId,
+        hasAccessToken: summary.hasAccessToken,
+        hasRefreshToken: summary.hasRefreshToken,
+        tokenExpiresIn: tokenMetadata.expiresIn,
+        tokenType: tokenMetadata.tokenType,
+      }),
+    );
 
-  return connectWorkspaceCrmProvider({
-    admin,
-    workspaceId,
-    userId,
-    provider: "close",
-    accessToken: normalizeAccessToken(token.access_token || ""),
-    metadata: {
-      authType: "oauth",
-      scope: token.scope || tokenMetadata.scopes,
-      refreshToken: tokenMetadata.refreshToken,
-      expiresIn: tokenMetadata.expiresIn,
-      tokenType: tokenMetadata.tokenType,
-      organizationId: tokenMetadata.organizationId,
-      userId: tokenMetadata.userId,
-      redirectUri: redirectUri || env.closeRedirectUri || null,
-    },
-  });
+    const savedConnection = await connectWorkspaceCrmProvider({
+      admin,
+      workspaceId,
+      userId,
+      provider: "close",
+      accessToken: normalizeAccessToken(token.access_token || ""),
+      metadata: {
+        authType: "oauth",
+        scope: token.scope || tokenMetadata.scopes,
+        refreshToken: tokenMetadata.refreshToken,
+        expiresIn: tokenMetadata.expiresIn,
+        tokenType: tokenMetadata.tokenType,
+        organizationId: tokenMetadata.organizationId,
+        userId: tokenMetadata.userId,
+        redirectUri: redirectUri || env.closeRedirectUri || null,
+      },
+    });
+
+    summary.storageSucceeded = true;
+    summary.metadataFetchSucceeded =
+      getFirstString(savedConnection.metadata_json.metadata_fetch_status) === "succeeded";
+    console.info("[close-oauth]", JSON.stringify(summary));
+  } catch (error) {
+    const diagnostic = getCrmDiagnostic(error);
+    summary.tokenStatus = diagnostic.status;
+    summary.safeErrorCode = diagnostic.code;
+    summary.safeErrorDescription =
+      error instanceof Error && error.message.trim().length > 0 ? error.message : "unknown_error";
+    summary.failureStage =
+      summary.tokenExchangeSucceeded
+        ? summary.storageSucceeded
+          ? null
+          : "store_connection"
+        : "token_exchange";
+    console.error("[close-oauth]", JSON.stringify(summary));
+    throw error;
+  }
 }
 
 export async function disconnectWorkspaceCrmProvider({
@@ -3773,8 +3893,9 @@ export async function sendWorkspaceCloseTestLead({
     throw new Error("Close CRM is not connected for this workspace.");
   }
 
+  const effectiveScopes = connection.scopes.length ? connection.scopes : ["all.full_access", "offline_access"];
   const requiredScopes = ["all.full_access"];
-  const missingScopes = requiredScopes.filter((scope) => !connection.scopes.includes(scope));
+  const missingScopes = requiredScopes.filter((scope) => !effectiveScopes.includes(scope));
   if (missingScopes.length) {
     throw Object.assign(new Error("Close CRM connection is missing required API permissions."), {
       provider: "close" as const,

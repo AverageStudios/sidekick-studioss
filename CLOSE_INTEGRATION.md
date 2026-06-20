@@ -22,6 +22,8 @@ CLOSE_REDIRECT_URI=
 CLOSE_SCOPES=all.full_access offline_access
 ```
 
+`CLOSE_SCOPES` is optional in practice. SideKick does not send a `scope` parameter on the Close authorization URL because Close grants app scopes automatically, but keeping the env var documented helps diagnostics stay consistent.
+
 Recommended redirect URIs:
 
 - local: `http://localhost:3000/api/integrations/close/callback`
@@ -71,7 +73,10 @@ Flow:
 3. user approves the Close organization
 4. Close redirects back to SideKick
 5. SideKick exchanges the code server-side
-6. encrypted tokens are saved to the current workspace
+6. SideKick attempts a lightweight account lookup for nicer labels
+7. encrypted tokens are saved to the current workspace
+
+If the token exchange succeeds but the Close account lookup fails, SideKick now keeps the connection and stores minimal workspace-scoped metadata instead of failing the whole OAuth flow.
 
 ## Lead and contact model
 
@@ -80,7 +85,7 @@ Close treats Leads as the primary CRM object and contacts live under the lead.
 For v1, SideKick test delivery creates:
 
 - one Lead
-- one nested Contact on that Lead
+- one Contact linked to that Lead
 
 ## Send Test Lead
 

@@ -1,5 +1,7 @@
 import { env, isCloseConfigured } from "@/lib/env";
 
+const DEFAULT_CLOSE_SCOPES = "all.full_access offline_access";
+
 export type CloseOAuthTokenResponse = {
   access_token?: string;
   refresh_token?: string;
@@ -29,6 +31,11 @@ type CloseMeResponse = {
 type CloseLeadCreateResponse = {
   id?: string;
   contact_ids?: string[];
+};
+
+type CloseContactCreateResponse = {
+  id?: string;
+  lead_id?: string | null;
 };
 
 type CloseErrorPayload = {
@@ -74,11 +81,8 @@ function getRequiredRedirectUri() {
   return env.closeRedirectUri;
 }
 
-function getRequiredScopes() {
-  if (!isCloseConfigured() || !env.closeScopes) {
-    throw new Error("Close OAuth env vars are missing.");
-  }
-  return env.closeScopes;
+function getConfiguredScopes() {
+  return env.closeScopes || DEFAULT_CLOSE_SCOPES;
 }
 
 function getScopeList(value: unknown) {
@@ -203,7 +207,7 @@ function getCloseTokenExchangeDebug(error: unknown) {
 
 export function getCloseOAuthDebugInfo(redirectUriOverride?: string | null) {
   const authUrl = buildCloseAuthorizationUrl("STATE", redirectUriOverride);
-  const scopeString = getRequiredScopes();
+  const scopeString = getConfiguredScopes();
   const scopes = getScopeList(scopeString);
 
   return {
@@ -321,7 +325,7 @@ export function getCloseTokenMetadata(token: CloseOAuthTokenResponse) {
     tokenType: token.token_type || "Bearer",
     refreshToken: token.refresh_token || null,
     expiresIn: typeof token.expires_in === "number" ? token.expires_in : null,
-    scopes: getScopeList(token.scope || env.closeScopes),
+    scopes: getScopeList(token.scope || getConfiguredScopes()),
     organizationId: typeof token.organization_id === "string" ? token.organization_id : null,
     userId: typeof token.user_id === "string" ? token.user_id : null,
   };
@@ -358,7 +362,7 @@ export async function createCloseTestLead({
 }: {
   accessToken: string;
 }) {
-  const payload = await requestJson<CloseLeadCreateResponse>({
+  const leadPayload = await requestJson<CloseLeadCreateResponse>({
     url: "https://api.close.com/api/v1/lead/",
     method: "POST",
     headers: {
@@ -369,31 +373,41 @@ export async function createCloseTestLead({
     body: JSON.stringify({
       name: "SideKick Studioss Test",
       description: "Created by SideKick Studioss to verify the CRM integration.",
-      contacts: [
-        {
-          name: "SideKick Test Lead",
-          emails: [
-            {
-              email: "test+sidekick@sidekickstudioss.com",
-              type: "office",
-            },
-          ],
-          phones: [
-            {
-              phone: "555-010-2026",
-              type: "office",
-            },
-          ],
-        },
-      ],
     }),
     errorPrefix: "Close lead creation failed",
   });
 
+  const leadId = typeof leadPayload.id === "string" ? leadPayload.id : null;
+
+  const contactPayload = await requestJson<CloseContactCreateResponse>({
+    url: "https://api.close.com/api/v1/contact/",
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      ...(leadId ? { lead_id: leadId } : {}),
+      name: "SideKick Test Lead",
+      emails: [
+        {
+          email: "test+sidekick@sidekickstudioss.com",
+          type: "office",
+        },
+      ],
+      phones: [
+        {
+          phone: "555-010-2026",
+          type: "office",
+        },
+      ],
+    }),
+    errorPrefix: "Close contact creation failed",
+  });
+
   return {
-    leadId: typeof payload.id === "string" ? payload.id : null,
-    contactId: Array.isArray(payload.contact_ids) && typeof payload.contact_ids[0] === "string"
-      ? payload.contact_ids[0]
-      : null,
+    leadId: leadId || (typeof contactPayload.lead_id === "string" ? contactPayload.lead_id : null),
+    contactId: typeof contactPayload.id === "string" ? contactPayload.id : null,
   };
 }

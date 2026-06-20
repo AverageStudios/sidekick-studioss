@@ -328,6 +328,10 @@ export async function GET(request: NextRequest) {
           userId: user.id,
           code,
           redirectUri: new URL("/api/integrations/close/callback", getAppOrigin(request)).toString(),
+          callbackContext: {
+            hasState: Boolean(state),
+            requestHost: request.nextUrl.host,
+          },
         });
         break;
       default:
@@ -385,22 +389,22 @@ export async function GET(request: NextRequest) {
       const debug = getCloseOAuthDebugInfo(
         getCloseCallbackUrl(request),
       );
-      const messageText = error instanceof Error ? error.message : "unknown_error";
-      const inferredStage =
-        messageText.includes("state")
+      const closeErrorMessage = error instanceof Error ? error.message : "";
+      const closeLogStage =
+        closeErrorMessage.includes("state")
           ? "state_validation"
-          : messageText.includes("token exchange") || messageText.includes("access token")
+          : closeErrorMessage.includes("token exchange") || closeErrorMessage.includes("access token")
             ? "token_exchange"
-            : messageText.includes("account lookup") || messageText.includes("verification")
+            : closeErrorMessage.includes("account lookup") || closeErrorMessage.includes("verification")
               ? "metadata_fetch"
-              : messageText.includes("workspace_provider_connections") || messageText.includes("database")
+              : closeErrorMessage.includes("workspace_provider_connections") || closeErrorMessage.includes("database")
                 ? "store_connection"
                 : "callback_failed";
       console.error(
         "[close-oauth]",
         JSON.stringify({
           provider: "close",
-          stage: inferredStage,
+          stage: closeLogStage,
           workspaceId,
           userId: user.id,
           status: typeof diagnosticError.status === "number" ? diagnosticError.status : null,
@@ -416,7 +420,34 @@ export async function GET(request: NextRequest) {
           sendsScopeParam: debug.sendsScopeParam,
         }),
       );
-      integrationsUrl.searchParams.set("error", "CRM connection failed. Please try again.");
+      const closeUiStage =
+        closeErrorMessage.includes("canceled")
+          ? "canceled"
+          : closeErrorMessage.includes("expired")
+            ? "state_validation"
+            : closeErrorMessage.includes("token exchange") ||
+                closeErrorMessage.includes("access token") ||
+                closeErrorMessage.includes("credentials") ||
+                closeErrorMessage.includes("redirect URL")
+              ? "token_exchange"
+              : closeErrorMessage.includes("save") ||
+                  closeErrorMessage.includes("workspace_provider_connections") ||
+                  closeErrorMessage.includes("database")
+                ? "store_connection"
+                : closeErrorMessage.includes("account lookup") || closeErrorMessage.includes("verification")
+                  ? "metadata_fetch"
+                  : "callback_failed";
+      const closeMessage =
+        closeUiStage === "canceled"
+          ? "CRM connection was canceled. Please try again."
+          : closeUiStage === "state_validation"
+            ? "CRM connection expired. Please start the connection again from SideKick."
+            : closeUiStage === "token_exchange"
+              ? "Close CRM connection failed. Please check your Close app credentials and redirect URL."
+              : closeUiStage === "store_connection"
+                ? "Close CRM connected, but SideKick could not save the connection. Please try again."
+                : "CRM connection failed. Please try again.";
+      integrationsUrl.searchParams.set("error", closeMessage);
     } else {
       integrationsUrl.searchParams.set("error", "CRM connection failed. Please try again.");
     }
