@@ -2185,15 +2185,24 @@ export async function connectWorkspaceCloseOAuthProvider({
       scopeCount: debug.scopeCount,
       sendsScopeParam: debug.sendsScopeParam,
       hasClientId: debug.hasClientId,
+      hasClientSecret: debug.hasClientSecret,
+      clientIdLength: debug.clientIdLength,
+      clientSecretLength: debug.clientSecretLength,
+      redirectUriHasTrailingSlash: debug.redirectUriHasTrailingSlash,
+      closeAuthUrl: debug.closeAuthUrl,
+      closeTokenUrl: debug.closeTokenUrl,
       includesRedirectUriOnFirstAttempt: false,
       supportsRedirectUriRetry: true,
+      supportsBasicAuthRetry: true,
     }),
   );
 
   try {
-    const token = await exchangeCloseCodeForTokens(code, redirectUri);
+    const exchange = await exchangeCloseCodeForTokens(code, redirectUri);
+    const token = exchange.token;
     const tokenMetadata = getCloseTokenMetadata(token);
     summary.tokenExchangeSucceeded = true;
+    summary.tokenStatus = exchange.usedAttempt.status;
     summary.hasAccessToken = Boolean(token.access_token);
     summary.hasRefreshToken = Boolean(tokenMetadata.refreshToken);
     summary.metadataFetchSucceeded = Boolean(tokenMetadata.organizationId || tokenMetadata.userId);
@@ -2208,6 +2217,12 @@ export async function connectWorkspaceCloseOAuthProvider({
         hasRefreshToken: summary.hasRefreshToken,
         tokenExpiresIn: tokenMetadata.expiresIn,
         tokenType: tokenMetadata.tokenType,
+        usedAttemptNumber: exchange.usedAttempt.attempt,
+        usedAuthStyle: exchange.usedAttempt.authStyle,
+        usedIncludesRedirectUri: exchange.usedAttempt.includesRedirectUri,
+        basicAuthRetryAttempted: exchange.basicAuthRetryAttempted,
+        redirectUriRetryAttempted: exchange.redirectUriRetryAttempted,
+        possibleCodeConsumption: exchange.possibleCodeConsumption,
       }),
     );
 
@@ -2235,17 +2250,48 @@ export async function connectWorkspaceCloseOAuthProvider({
     console.info("[close-oauth]", JSON.stringify(summary));
   } catch (error) {
     const diagnostic = getCrmDiagnostic(error);
+    const closeError = error as Error & {
+      errorDescription?: string | null;
+      attemptDebug?: Array<Record<string, unknown>> | null;
+      usedAttemptNumber?: number | null;
+      usedAuthStyle?: string | null;
+      usedIncludesRedirectUri?: boolean | null;
+      basicAuthRetryAttempted?: boolean;
+      redirectUriRetryAttempted?: boolean;
+      possibleCodeConsumption?: boolean;
+    };
     summary.tokenStatus = diagnostic.status;
     summary.safeErrorCode = diagnostic.code;
     summary.safeErrorDescription =
-      error instanceof Error && error.message.trim().length > 0 ? error.message : "unknown_error";
+      typeof closeError.errorDescription === "string" && closeError.errorDescription.trim().length > 0
+        ? closeError.errorDescription
+        : error instanceof Error && error.message.trim().length > 0
+          ? error.message
+          : "unknown_error";
     summary.failureStage =
       summary.tokenExchangeSucceeded
         ? summary.storageSucceeded
           ? null
           : "store_connection"
         : "token_exchange";
-    console.error("[close-oauth]", JSON.stringify(summary));
+    console.error(
+      "[close-oauth]",
+      JSON.stringify({
+        ...summary,
+        usedAttemptNumber:
+          typeof closeError.usedAttemptNumber === "number" ? closeError.usedAttemptNumber : null,
+        usedAuthStyle:
+          typeof closeError.usedAuthStyle === "string" ? closeError.usedAuthStyle : null,
+        usedIncludesRedirectUri:
+          typeof closeError.usedIncludesRedirectUri === "boolean"
+            ? closeError.usedIncludesRedirectUri
+            : null,
+        basicAuthRetryAttempted: Boolean(closeError.basicAuthRetryAttempted),
+        redirectUriRetryAttempted: Boolean(closeError.redirectUriRetryAttempted),
+        possibleCodeConsumption: Boolean(closeError.possibleCodeConsumption),
+        attempts: Array.isArray(closeError.attemptDebug) ? closeError.attemptDebug : [],
+      }),
+    );
     throw error;
   }
 }

@@ -51,11 +51,56 @@ export type CloseProviderError = Error & {
   category?: string | null;
   code?: string | null;
   safeCategory?: string | null;
+  errorDescription?: string | null;
+  attemptDebug?: CloseTokenExchangeAttemptResult[] | null;
+  usedAttemptNumber?: number | null;
+  usedAuthStyle?: "form_body" | "basic_auth" | null;
+  usedIncludesRedirectUri?: boolean | null;
+  basicAuthRetryAttempted?: boolean;
+  redirectUriRetryAttempted?: boolean;
+  possibleCodeConsumption?: boolean;
+};
+
+export type CloseTokenExchangeAttemptResult = {
+  attempt: number;
+  authStyle: "form_body" | "basic_auth";
+  includesRedirectUri: boolean;
+  status: number | null;
+  error: string | null;
+  errorDescription: string | null;
+  safeCategory: string | null;
+  tokenReturned: boolean;
+  refreshTokenReturned: boolean;
+};
+
+export type CloseTokenExchangeResult = {
+  token: CloseOAuthTokenResponse;
+  attempts: CloseTokenExchangeAttemptResult[];
+  usedAttempt: CloseTokenExchangeAttemptResult;
+  basicAuthRetryAttempted: boolean;
+  redirectUriRetryAttempted: boolean;
+  possibleCodeConsumption: boolean;
 };
 
 function createCloseProviderError(
   message: string,
-  fields: Partial<Pick<CloseProviderError, "status" | "category" | "code" | "safeCategory">>,
+  fields: Partial<
+    Pick<
+      CloseProviderError,
+      | "status"
+      | "category"
+      | "code"
+      | "safeCategory"
+      | "errorDescription"
+      | "attemptDebug"
+      | "usedAttemptNumber"
+      | "usedAuthStyle"
+      | "usedIncludesRedirectUri"
+      | "basicAuthRetryAttempted"
+      | "redirectUriRetryAttempted"
+      | "possibleCodeConsumption"
+    >
+  >,
 ) {
   return Object.assign(new Error(message), fields) as CloseProviderError;
 }
@@ -165,6 +210,12 @@ async function requestJson<T>({
       status: response.status,
       category: "http",
       code: typeof payload.error === "string" ? payload.error : null,
+      errorDescription:
+        typeof payload.error_description === "string"
+          ? payload.error_description
+          : typeof payload.message === "string"
+            ? payload.message
+            : null,
       safeCategory: classifyCloseError(response.status, payload),
     });
   }
@@ -209,17 +260,26 @@ export function getCloseOAuthDebugInfo(redirectUriOverride?: string | null) {
   const authUrl = buildCloseAuthorizationUrl("STATE", redirectUriOverride);
   const scopeString = getConfiguredScopes();
   const scopes = getScopeList(scopeString);
+  const clientId = getRequiredClientId();
+  const clientSecret = getRequiredClientSecret();
+  const redirectUri = resolveRedirectUri(redirectUriOverride);
 
   return {
     provider: "close" as const,
     authHost: authUrl.host,
     authPath: authUrl.pathname,
-    redirectUri: resolveRedirectUri(redirectUriOverride),
+    redirectUri,
     scopeString,
     scopeCount: scopes.length,
     scopes,
     sendsScopeParam: authUrl.searchParams.has("scope"),
-    hasClientId: Boolean(getRequiredClientId()),
+    hasClientId: Boolean(clientId),
+    hasClientSecret: Boolean(clientSecret),
+    clientIdLength: clientId.length,
+    clientSecretLength: clientSecret.length,
+    redirectUriHasTrailingSlash: redirectUri.endsWith("/"),
+    closeAuthUrl: "https://app.close.com/oauth2/authorize/",
+    closeTokenUrl: "https://api.close.com/oauth2/token/",
   };
 }
 
@@ -227,73 +287,206 @@ async function exchangeCloseCodeForTokensOnce({
   code,
   includeRedirectUri,
   redirectUriOverride,
+  authStyle,
 }: {
   code: string;
   includeRedirectUri: boolean;
   redirectUriOverride?: string | null;
+  authStyle: "form_body" | "basic_auth";
 }) {
+  const clientId = getRequiredClientId();
+  const clientSecret = getRequiredClientSecret();
   const body = new URLSearchParams({
-    client_id: getRequiredClientId(),
-    client_secret: getRequiredClientSecret(),
     grant_type: "authorization_code",
     code,
   });
+
+  if (authStyle === "form_body") {
+    body.set("client_id", clientId);
+    body.set("client_secret", clientSecret);
+  }
 
   if (includeRedirectUri) {
     body.set("redirect_uri", resolveRedirectUri(redirectUriOverride));
   }
 
+  const headers: HeadersInit = {
+    Accept: "application/json",
+    "Content-Type": "application/x-www-form-urlencoded",
+  };
+
+  if (authStyle === "basic_auth") {
+    headers.Authorization = `Basic ${Buffer.from(`${clientId}:${clientSecret}`, "utf8").toString("base64")}`;
+  }
+
   return requestJson<CloseOAuthTokenResponse>({
     url: "https://api.close.com/oauth2/token/",
     method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
+    headers,
     body: body.toString(),
     errorPrefix: "Close token exchange failed",
   });
 }
 
-export async function exchangeCloseCodeForTokens(code: string, redirectUriOverride?: string | null) {
-  try {
-    const payload = await exchangeCloseCodeForTokensOnce({
-      code,
-      includeRedirectUri: false,
-      redirectUriOverride,
-    });
+function shouldStopCloseTokenAttempts({
+  attempt,
+  error,
+}: {
+  attempt: CloseTokenExchangeAttemptResult;
+  error: CloseProviderError;
+}) {
+  if (attempt.tokenReturned) return true;
 
-    if (!payload.access_token) {
-      throw new Error("Close did not return an access token.");
+  if (error.code === "invalid_grant") {
+    return true;
+  }
+
+  return false;
+}
+
+export async function exchangeCloseCodeForTokens(
+  code: string,
+  redirectUriOverride?: string | null,
+): Promise<CloseTokenExchangeResult> {
+  const attempts: Array<Pick<CloseTokenExchangeAttemptResult, "attempt" | "authStyle" | "includesRedirectUri">> = [
+    { attempt: 1, authStyle: "form_body", includesRedirectUri: false },
+    { attempt: 2, authStyle: "form_body", includesRedirectUri: true },
+    { attempt: 3, authStyle: "basic_auth", includesRedirectUri: false },
+    { attempt: 4, authStyle: "basic_auth", includesRedirectUri: true },
+  ];
+
+  const results: CloseTokenExchangeAttemptResult[] = [];
+  let sawInvalidGrant = false;
+
+  for (const attempt of attempts) {
+    if (sawInvalidGrant) {
+      break;
     }
 
-    return payload;
-  } catch (error) {
-    const diagnostic = getCloseTokenExchangeDebug(error);
-    const shouldRetryWithRedirectUri =
-      diagnostic.status === 400 &&
-      (
-        diagnostic.code === "invalid_grant" ||
-        diagnostic.code === "invalid_request" ||
-        diagnostic.message.toLowerCase().includes("redirect")
+    try {
+      const token = await exchangeCloseCodeForTokensOnce({
+        code,
+        includeRedirectUri: attempt.includesRedirectUri,
+        redirectUriOverride,
+        authStyle: attempt.authStyle,
+      });
+
+      const result: CloseTokenExchangeAttemptResult = {
+        ...attempt,
+        status: 200,
+        error: null,
+        errorDescription: null,
+        safeCategory: null,
+        tokenReturned: Boolean(token.access_token),
+        refreshTokenReturned: Boolean(token.refresh_token),
+      };
+      results.push(result);
+
+      if (!token.access_token) {
+        throw createCloseProviderError("Close did not return an access token.", {
+          status: 200,
+          category: "response",
+          code: "missing_access_token",
+          safeCategory: "UNKNOWN_PROVIDER_ERROR",
+          attemptDebug: results,
+          usedAttemptNumber: attempt.attempt,
+          usedAuthStyle: attempt.authStyle,
+          usedIncludesRedirectUri: attempt.includesRedirectUri,
+        });
+      }
+
+      console.info(
+        "[close-oauth]",
+        JSON.stringify({
+          provider: "close",
+          stage: "token_exchange_attempt",
+          attempt: result.attempt,
+          authStyle: result.authStyle,
+          includesRedirectUri: result.includesRedirectUri,
+          status: result.status,
+          error: result.error,
+          errorDescription: result.errorDescription,
+          tokenReturned: result.tokenReturned,
+          refreshTokenReturned: result.refreshTokenReturned,
+        }),
       );
 
-    if (!shouldRetryWithRedirectUri) {
-      throw error;
+      return {
+        token,
+        attempts: results,
+        usedAttempt: result,
+        basicAuthRetryAttempted: results.some((entry) => entry.authStyle === "basic_auth"),
+        redirectUriRetryAttempted: results.some((entry) => entry.includesRedirectUri),
+        possibleCodeConsumption: results.some((entry) => entry.error === "invalid_grant"),
+      };
+    } catch (error) {
+      const diagnostic = getCloseTokenExchangeDebug(error);
+      const providerError = error as CloseProviderError;
+      const result: CloseTokenExchangeAttemptResult = {
+        ...attempt,
+        status: diagnostic.status,
+        error: diagnostic.code,
+        errorDescription: providerError.errorDescription || diagnostic.message || null,
+        safeCategory: diagnostic.safeCategory,
+        tokenReturned: false,
+        refreshTokenReturned: false,
+      };
+      results.push(result);
+
+      console.error(
+        "[close-oauth]",
+        JSON.stringify({
+          provider: "close",
+          stage: "token_exchange_attempt",
+          attempt: result.attempt,
+          authStyle: result.authStyle,
+          includesRedirectUri: result.includesRedirectUri,
+          status: result.status,
+          error: result.error,
+          errorDescription: result.errorDescription,
+          tokenReturned: result.tokenReturned,
+          refreshTokenReturned: result.refreshTokenReturned,
+        }),
+      );
+
+      if (providerError.code === "invalid_grant") {
+        sawInvalidGrant = true;
+      }
+
+      if (shouldStopCloseTokenAttempts({ attempt: result, error: providerError })) {
+        throw createCloseProviderError(providerError.message, {
+          status: providerError.status,
+          category: providerError.category,
+          code: providerError.code,
+          errorDescription: providerError.errorDescription || diagnostic.message || null,
+          safeCategory: providerError.safeCategory,
+          attemptDebug: results,
+          usedAttemptNumber: result.attempt,
+          usedAuthStyle: result.authStyle,
+          usedIncludesRedirectUri: result.includesRedirectUri,
+          basicAuthRetryAttempted: results.some((entry) => entry.authStyle === "basic_auth"),
+          redirectUriRetryAttempted: results.some((entry) => entry.includesRedirectUri),
+          possibleCodeConsumption: providerError.code === "invalid_grant",
+        });
+      }
     }
-
-    const payload = await exchangeCloseCodeForTokensOnce({
-      code,
-      includeRedirectUri: true,
-      redirectUriOverride,
-    });
-
-    if (!payload.access_token) {
-      throw new Error("Close did not return an access token.");
-    }
-
-    return payload;
   }
+
+  const last = results[results.length - 1] || null;
+  throw createCloseProviderError("Close token exchange failed.", {
+    status: typeof last?.status === "number" ? last.status : undefined,
+    category: "http",
+    code: last?.error ?? null,
+    errorDescription: last?.errorDescription ?? null,
+    safeCategory: last?.safeCategory ?? null,
+    attemptDebug: results,
+    usedAttemptNumber: last?.attempt ?? null,
+    usedAuthStyle: last?.authStyle ?? null,
+    usedIncludesRedirectUri: last?.includesRedirectUri ?? null,
+    basicAuthRetryAttempted: results.some((entry) => entry.authStyle === "basic_auth"),
+    redirectUriRetryAttempted: results.some((entry) => entry.includesRedirectUri),
+    possibleCodeConsumption: sawInvalidGrant,
+  });
 }
 
 export async function refreshCloseAccessToken(refreshToken: string) {

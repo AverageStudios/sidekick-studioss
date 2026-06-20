@@ -136,6 +136,7 @@ If Close does not connect:
 2. confirm `CLOSE_CLIENT_SECRET`
 3. confirm `CLOSE_REDIRECT_URI`
 4. confirm the redirect URI is registered in the Close OAuth app
+5. confirm the Close user authorizing the app belongs to the same Close organization that created the OAuth app if the app is still private
 
 If the test lead fails:
 
