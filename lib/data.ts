@@ -16,6 +16,37 @@ type DashboardSnapshotOptions = {
   allowDemo?: boolean;
 };
 
+function isMissingColumnError(message?: string) {
+  return (
+    typeof message === "string" &&
+    (/Could not find the '([^']+)' column/i.test(message) ||
+      /column\s+.+\s+does not exist/i.test(message))
+  );
+}
+
+async function loadDashboardLeadCountRows(
+  supabase: NonNullable<ReturnType<typeof createSupabaseAdminClient>>,
+  workspaceId: string,
+) {
+  const primaryResult = await supabase
+    .from("leads")
+    .select("id, status, created_at, meta_created_time")
+    .eq("workspace_id", workspaceId);
+
+  if (!primaryResult.error) {
+    return primaryResult;
+  }
+
+  if (!isMissingColumnError(primaryResult.error.message)) {
+    return primaryResult;
+  }
+
+  return supabase
+    .from("leads")
+    .select("id, status, created_at")
+    .eq("workspace_id", workspaceId);
+}
+
 export type DashboardSnapshot = {
   liveFunnels: number;
   totalLeads: number;
@@ -125,10 +156,7 @@ export const getDashboardSnapshot = cache(async (userId: string, options?: Dashb
   try {
     const [funnelsResult, leadCountsResult, recentLeadsResult, campaignsResult] = await Promise.all([
       supabase.from("funnels").select("*").eq("workspace_id", activeWorkspaceId),
-      supabase
-        .from("leads")
-        .select("id, status, created_at, meta_created_time")
-        .eq("workspace_id", activeWorkspaceId),
+      loadDashboardLeadCountRows(supabase, activeWorkspaceId),
       supabase
         .from("leads")
         .select("*")
