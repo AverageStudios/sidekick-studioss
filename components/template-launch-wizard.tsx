@@ -133,6 +133,8 @@ type BudgetGuidanceResponse = {
 
 type MetaPublishErrorResponse = {
   error?: string;
+  details?: string[];
+  preflight?: LaunchPreflightResponse;
   metaError?: {
     message?: string;
     stage?: string | null;
@@ -1453,19 +1455,36 @@ export function TemplateLaunchWizard({
     });
 
     const payload = (await response.json().catch(() => null)) as
-      | (MetaPublishErrorResponse & { preflight?: LaunchPreflightResponse })
+      | MetaPublishErrorResponse
       | null;
 
     setIsPublishing(false);
     if (!response.ok) {
-      if (payload?.preflight) {
-        setPreflight(payload.preflight);
+      const responsePreflight =
+        payload?.preflight ||
+        (payload && "blockingIssues" in payload && Array.isArray(payload.blockingIssues)
+          ? (payload as unknown as LaunchPreflightResponse)
+          : null);
+      if (responsePreflight) {
+        setPreflight(responsePreflight);
+        if (responsePreflight.blockingIssues.length) {
+          setPreflightError(
+            responsePreflight.blockingIssues[0]?.message ||
+              "Preflight found blocking issues. Resolve them before publishing.",
+          );
+        }
       }
-      setPublishError(payload?.error || "Campaign launch failed.");
+      setPublishError(
+        payload?.error ||
+          responsePreflight?.blockingIssues[0]?.message ||
+          "Campaign launch failed.",
+      );
       setPublishErrorDetails(
-        payload?.metaError
-          ? JSON.stringify(payload.metaError, null, 2)
-          : null,
+        payload?.details?.length
+          ? payload.details.join("\n")
+          : payload?.metaError
+            ? JSON.stringify(payload.metaError, null, 2)
+            : null,
       );
       return;
     }

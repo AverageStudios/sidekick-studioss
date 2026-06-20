@@ -96,6 +96,7 @@ export async function POST(request: Request) {
           preflight,
           jobId,
           error: "Preflight has blocking issues.",
+          details: preflight.blockingIssues.map((issue) => issue.message),
         },
         { status: 400 },
       );
@@ -175,6 +176,13 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: message,
+        details: [
+          metaDetail && metaDetail !== message ? metaDetail : null,
+          blameField ? `Field: ${blameField}` : null,
+          metaError.stage ? `Stage: ${metaError.stage}` : null,
+          metaError.traceId ? `Trace ID: ${metaError.traceId}` : null,
+        ].filter(Boolean),
+        preflight,
       },
       { status: 400 },
     );
