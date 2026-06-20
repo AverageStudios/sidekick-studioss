@@ -39,7 +39,8 @@ export type CrmProvider =
   | "freshsales"
   | "monday"
   | "keap"
-  | "close";
+  | "close"
+  | "followupboss";
 export type CrmConnectionStatus = "connected" | "expired" | "revoked" | "disconnected" | "error";
 export type CrmDeliveryState = "pending" | "delivered" | "failed" | "retrying" | "skipped";
 export type LeadStatus =

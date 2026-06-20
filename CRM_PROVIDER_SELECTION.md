@@ -33,6 +33,7 @@ The CRM provider page shows cards for:
 - Keap
 - Salesforce
 - Close CRM
+- Follow Up Boss
 
 Hidden from the current selection UI for now:
 

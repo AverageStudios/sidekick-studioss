@@ -31,6 +31,7 @@ Current test-delivery support:
 - Monday CRM
 - Keap
 - Close CRM
+- Follow Up Boss
 
 Not available yet:
 
@@ -202,6 +203,32 @@ Connection requirement:
 
 - Close CRM must be connected through OAuth
 - SideKick stores and refreshes Close OAuth tokens server-side
+
+### Follow Up Boss
+
+Creates:
+
+- Lead-style event through the Follow Up Boss Events API
+
+Delivery path:
+
+- `POST /v1/events`
+
+Required setup:
+
+- Follow Up Boss must be connected through OAuth
+- SideKick must have `FOLLOWUPBOSS_SYSTEM_NAME`
+- SideKick must have `FOLLOWUPBOSS_SYSTEM_KEY`
+
+Success message:
+
+- `Test lead sent to Follow Up Boss.`
+
+Connection requirement:
+
+- Follow Up Boss must be connected through OAuth
+- SideKick stores and refreshes Follow Up Boss OAuth tokens server-side
+- SideKick uses the Events API instead of `/people` so Follow Up Boss can treat the record like a new incoming lead
 
 ## Security notes
 

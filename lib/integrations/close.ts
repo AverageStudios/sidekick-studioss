@@ -393,22 +393,6 @@ export async function exchangeCloseCodeForTokens(
         });
       }
 
-      console.info(
-        "[close-oauth]",
-        JSON.stringify({
-          provider: "close",
-          stage: "token_exchange_attempt",
-          attempt: result.attempt,
-          authStyle: result.authStyle,
-          includesRedirectUri: result.includesRedirectUri,
-          status: result.status,
-          error: result.error,
-          errorDescription: result.errorDescription,
-          tokenReturned: result.tokenReturned,
-          refreshTokenReturned: result.refreshTokenReturned,
-        }),
-      );
-
       return {
         token,
         attempts: results,

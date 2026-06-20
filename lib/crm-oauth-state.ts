@@ -46,6 +46,7 @@ function normalizeProvider(provider: string | null | undefined): CrmProvider | n
     case "monday":
     case "keap":
     case "close":
+    case "followupboss":
       return provider;
     default:
       return null;

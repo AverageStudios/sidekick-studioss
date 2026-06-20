@@ -110,6 +110,16 @@ export const crmProviderMetadataList: CrmProviderMetadata[] = [
     surfaceClassName: "bg-slate-100",
     connectPath: "/api/integrations/close/connect",
   },
+  {
+    key: "followupboss",
+    label: "Follow Up Boss",
+    shortDescription: "Send new lead events into Follow Up Boss for routing and follow-up.",
+    shortCode: "FUB",
+    visibleInSelection: true,
+    accentClassName: "text-violet-700",
+    surfaceClassName: "bg-violet-100",
+    connectPath: "/api/integrations/followupboss/connect",
+  },
 ];
 
 export function getCrmProviderMetadata(provider: CrmProvider) {

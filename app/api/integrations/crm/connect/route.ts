@@ -9,7 +9,8 @@ import { buildKeapAuthorizationUrl } from "@/lib/integrations/keap";
 import { buildMondayAuthorizationUrl } from "@/lib/integrations/monday";
 import { buildSalesforceAuthorizationUrl } from "@/lib/integrations/salesforce";
 import { buildZohoAuthorizationUrl } from "@/lib/integrations/zoho";
-import { buildCloseAuthorizationUrl, getCloseOAuthDebugInfo } from "@/lib/integrations/close";
+import { buildCloseAuthorizationUrl } from "@/lib/integrations/close";
+import { buildFollowUpBossAuthorizationUrl } from "@/lib/integrations/followupboss";
 import { CrmProvider } from "@/types";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 import { logRouteError } from "@/lib/api-security";
@@ -37,6 +38,7 @@ function resolveProvider(value: string | null): CrmProvider | null {
     case "monday":
     case "keap":
     case "close":
+    case "followupboss":
       return value;
     default:
       return null;
@@ -67,6 +69,8 @@ function getProviderConnectUrl(provider: CrmProvider, state: string) {
       return buildSalesforceAuthorizationUrl(state);
     case "close":
       return buildCloseAuthorizationUrl(state);
+    case "followupboss":
+      return buildFollowUpBossAuthorizationUrl(state);
     default:
       throw new Error(`${provider} connect flow is not implemented yet.`);
   }
@@ -78,6 +82,10 @@ function getFreshsalesCallbackUrl(request: NextRequest) {
 
 function getCloseCallbackUrl(request: NextRequest) {
   return new URL("/api/integrations/close/callback", getAppOrigin(request)).toString();
+}
+
+function getFollowUpBossCallbackUrl(request: NextRequest) {
+  return new URL("/api/integrations/followupboss/callback", getAppOrigin(request)).toString();
 }
 
 export async function GET(request: NextRequest) {
@@ -148,6 +156,8 @@ export async function GET(request: NextRequest) {
         ? buildFreshsalesAuthorizationUrl(state, getFreshsalesCallbackUrl(request))
         : provider === "close"
           ? buildCloseAuthorizationUrl(state, getCloseCallbackUrl(request))
+          : provider === "followupboss"
+            ? buildFollowUpBossAuthorizationUrl(state, getFollowUpBossCallbackUrl(request))
           : getProviderConnectUrl(provider, state);
     if (provider === "freshsales") {
       const debug = getFreshsalesOAuthDebugInfo(getFreshsalesCallbackUrl(request));
@@ -169,45 +179,6 @@ export async function GET(request: NextRequest) {
           hasClientId: Boolean(oauthUrl.searchParams.get("client_id")),
           responseType: oauthUrl.searchParams.get("response_type"),
           hasState: Boolean(oauthUrl.searchParams.get("state")),
-        }),
-      );
-    }
-    if (provider === "close") {
-      const debug = getCloseOAuthDebugInfo(getCloseCallbackUrl(request));
-      const requestOrigin = getAppOrigin(request);
-      const configuredRedirectOrigin = env.closeRedirectUri
-        ? new URL(env.closeRedirectUri).origin
-        : null;
-      if (configuredRedirectOrigin && requestOrigin !== configuredRedirectOrigin) {
-        console.warn(
-          "[close-oauth]",
-          JSON.stringify({
-            provider: "close",
-            stage: "origin_mismatch",
-            requestOrigin,
-            redirectOrigin: configuredRedirectOrigin,
-          }),
-        );
-      }
-      console.info(
-        "[close-oauth]",
-        JSON.stringify({
-          provider: "close",
-          stage: "connect_redirect",
-          workspaceId,
-          userId: user.id,
-          authHost: debug.authHost,
-          authPath: debug.authPath,
-          redirectUri: debug.redirectUri,
-          scopeString: debug.scopeString,
-          scopeCount: debug.scopeCount,
-          sendsScopeParam: debug.sendsScopeParam,
-          hasClientId: debug.hasClientId,
-          hasState: Boolean(oauthUrl.searchParams.get("state")),
-          responseType: oauthUrl.searchParams.get("response_type"),
-          secureCookieMode: request.nextUrl.protocol === "https:",
-          sameSite: "lax",
-          cookiePath: "/",
         }),
       );
     }
@@ -257,27 +228,6 @@ export async function GET(request: NextRequest) {
           redirectUri: debug.redirectUri,
           scopeString: debug.scopeString,
           scopeCount: debug.scopes.length,
-        }),
-      );
-    }
-    if (provider === "close") {
-      const debug = getCloseOAuthDebugInfo(getCloseCallbackUrl(request));
-      console.error(
-        "[close-oauth]",
-        JSON.stringify({
-          provider: "close",
-          stage: "connect_failed",
-          workspaceId,
-          userId: user.id,
-          authHost: debug.authHost,
-          authPath: debug.authPath,
-          redirectUri: debug.redirectUri,
-          scopeString: debug.scopeString,
-          scopeCount: debug.scopeCount,
-          sendsScopeParam: debug.sendsScopeParam,
-          secureCookieMode: request.nextUrl.protocol === "https:",
-          sameSite: "lax",
-          cookiePath: "/",
         }),
       );
     }

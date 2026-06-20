@@ -12,6 +12,7 @@ import { crmProviderMetadataList, getVisibleCrmProviderMetadataList } from "@/li
 import { getWorkspaceCrmState } from "@/lib/crm-integration";
 import {
   getFreshsalesEnvStatus,
+  getFollowUpBossEnvStatus,
   getGhlEnvStatus,
   getHubSpotEnvStatus,
   getKeapEnvStatus,
@@ -79,6 +80,7 @@ export default async function WorkspaceCrmSelectionPage({
     keap: getKeapEnvStatus(),
     salesforce: getSalesforceEnvStatus(),
     close: getCloseEnvStatus(),
+    followupboss: getFollowUpBossEnvStatus(),
   } as const;
   const canSendCrmTests =
     currentRole === "admin" || workspaceRole === "owner" || workspaceRole === "admin";

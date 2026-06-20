@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { parseCrmOAuthState } from "@/lib/crm-oauth-state";
 import {
   connectWorkspaceFreshsalesOAuthProvider,
+  connectWorkspaceFollowUpBossOAuthProvider,
   connectWorkspaceGoHighLevelOAuthProvider,
   connectWorkspaceHubSpotOAuthProvider,
   connectWorkspaceKeapOAuthProvider,
@@ -35,6 +36,10 @@ function getCloseCallbackUrl(request: NextRequest) {
   return new URL("/api/integrations/close/callback", getAppOrigin(request)).toString();
 }
 
+function getFollowUpBossCallbackUrl(request: NextRequest) {
+  return new URL("/api/integrations/followupboss/callback", getAppOrigin(request)).toString();
+}
+
 function clearOauthCookies(response: NextResponse) {
   response.cookies.delete("crm_oauth_state");
   response.cookies.delete("crm_oauth_next");
@@ -50,6 +55,7 @@ export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const providerError = request.nextUrl.searchParams.get("error");
   const providerErrorDescription = request.nextUrl.searchParams.get("error_description");
+  const providerResponse = request.nextUrl.searchParams.get("response");
   if (providerError) {
     if (request.cookies.get("crm_oauth_provider")?.value === "close") {
       const debug = getCloseOAuthDebugInfo(getCloseCallbackUrl(request));
@@ -82,6 +88,12 @@ export async function GET(request: NextRequest) {
         ? "CRM connection was canceled before it finished."
         : "CRM connection could not be completed.",
     );
+    const response = NextResponse.redirect(integrationsUrl);
+    clearOauthCookies(response);
+    return response;
+  }
+  if (providerResponse === "denied") {
+    integrationsUrl.searchParams.set("error", "CRM connection was canceled before it finished.");
     const response = NextResponse.redirect(integrationsUrl);
     clearOauthCookies(response);
     return response;
@@ -120,37 +132,6 @@ export async function GET(request: NextRequest) {
       }),
     );
   }
-  if (statePayload?.provider === "close" || providerCookie === "close") {
-    const debug = getCloseOAuthDebugInfo(getCloseCallbackUrl(request));
-    console.info(
-      "[close-oauth]",
-      JSON.stringify({
-        provider: "close",
-        stage: "callback_received",
-        workspaceId: statePayload?.workspaceId || workspaceCookie || null,
-        callbackHasCode: Boolean(code),
-        callbackStateValid: stateValid,
-        providerError: providerError || null,
-        providerErrorDescription:
-          typeof providerErrorDescription === "string" && providerErrorDescription.trim()
-            ? providerErrorDescription
-            : null,
-        authHost: debug.authHost,
-        authPath: debug.authPath,
-        redirectUri: debug.redirectUri,
-        scopeString: debug.scopeString,
-        scopeCount: debug.scopeCount,
-        sendsScopeParam: debug.sendsScopeParam,
-        callbackPath: request.nextUrl.pathname,
-        requestHost: request.nextUrl.host,
-        secureCookieMode: request.nextUrl.protocol === "https:",
-        sameSite: "lax",
-        hasStateParam: Boolean(state),
-        hasStateCookie: Boolean(stateCookie),
-      }),
-    );
-  }
-
   if (
     !code ||
     !statePayload ||
@@ -334,6 +315,15 @@ export async function GET(request: NextRequest) {
           },
         });
         break;
+      case "followupboss":
+        await connectWorkspaceFollowUpBossOAuthProvider({
+          admin,
+          workspaceId,
+          userId: user.id,
+          code,
+          redirectUri: getFollowUpBossCallbackUrl(request),
+        });
+        break;
       default:
         throw new Error(`${statePayload.provider} callback handling is not implemented yet.`);
     }
@@ -391,15 +381,9 @@ export async function GET(request: NextRequest) {
       );
       const closeErrorMessage = error instanceof Error ? error.message : "";
       const closeLogStage =
-        closeErrorMessage.includes("state")
-          ? "state_validation"
-          : closeErrorMessage.includes("token exchange") || closeErrorMessage.includes("access token")
-            ? "token_exchange"
-            : closeErrorMessage.includes("account lookup") || closeErrorMessage.includes("verification")
-              ? "metadata_fetch"
-              : closeErrorMessage.includes("workspace_provider_connections") || closeErrorMessage.includes("database")
-                ? "store_connection"
-                : "callback_failed";
+        closeErrorMessage.includes("workspace_provider_connections") || closeErrorMessage.includes("database")
+          ? "storage_failed"
+          : "token_exchange_failed";
       console.error(
         "[close-oauth]",
         JSON.stringify({
@@ -448,6 +432,38 @@ export async function GET(request: NextRequest) {
                 ? "Close CRM connected, but SideKick could not save the connection. Please try again."
                 : "CRM connection failed. Please try again.";
       integrationsUrl.searchParams.set("error", closeMessage);
+    } else if (statePayload.provider === "followupboss") {
+      const diagnosticError = error as Error & {
+        status?: number;
+        category?: string | null;
+        code?: string | null;
+        safeCategory?: string | null;
+      };
+      console.error(
+        "[followupboss-oauth]",
+        JSON.stringify({
+          provider: "followupboss",
+          stage:
+            error instanceof Error && error.message.includes("workspace_provider_connections")
+              ? "storage_failed"
+              : "token_exchange_failed",
+          workspaceId,
+          userId: user.id,
+          status: typeof diagnosticError.status === "number" ? diagnosticError.status : null,
+          category: typeof diagnosticError.category === "string" ? diagnosticError.category : null,
+          code: typeof diagnosticError.code === "string" ? diagnosticError.code : null,
+          safeCategory:
+            typeof diagnosticError.safeCategory === "string" ? diagnosticError.safeCategory : null,
+        }),
+      );
+      const message =
+        error instanceof Error &&
+        (error.message.includes("invalid_client") ||
+          error.message.includes("invalid_grant") ||
+          error.message.includes("token exchange"))
+          ? "Follow Up Boss connection failed. Please check your app credentials and redirect URL."
+          : "Follow Up Boss connection failed. Please try again.";
+      integrationsUrl.searchParams.set("error", message);
     } else {
       integrationsUrl.searchParams.set("error", "CRM connection failed. Please try again.");
     }
