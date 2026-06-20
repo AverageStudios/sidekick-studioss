@@ -180,6 +180,7 @@ export async function GET(request: NextRequest) {
           redirectUri: debug.redirectUri,
           scopeString: debug.scopeString,
           scopeCount: debug.scopeCount,
+          sendsScopeParam: debug.sendsScopeParam,
           hasClientId: debug.hasClientId,
           hasState: Boolean(oauthUrl.searchParams.get("state")),
           responseType: oauthUrl.searchParams.get("response_type"),
@@ -249,6 +250,7 @@ export async function GET(request: NextRequest) {
           redirectUri: debug.redirectUri,
           scopeString: debug.scopeString,
           scopeCount: debug.scopeCount,
+          sendsScopeParam: debug.sendsScopeParam,
         }),
       );
     }

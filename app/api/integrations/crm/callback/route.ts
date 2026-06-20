@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
           redirectUri: debug.redirectUri,
           scopeString: debug.scopeString,
           scopeCount: debug.scopeCount,
+          sendsScopeParam: debug.sendsScopeParam,
         }),
       );
     }
@@ -131,6 +132,7 @@ export async function GET(request: NextRequest) {
         redirectUri: debug.redirectUri,
         scopeString: debug.scopeString,
         scopeCount: debug.scopeCount,
+        sendsScopeParam: debug.sendsScopeParam,
       }),
     );
   }
@@ -385,6 +387,7 @@ export async function GET(request: NextRequest) {
           redirectUri: debug.redirectUri,
           scopeString: debug.scopeString,
           scopeCount: debug.scopeCount,
+          sendsScopeParam: debug.sendsScopeParam,
         }),
       );
       integrationsUrl.searchParams.set("error", "CRM connection failed. Please try again.");

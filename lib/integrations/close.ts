@@ -173,7 +173,6 @@ export function buildCloseAuthorizationUrl(state: string, redirectUriOverride?: 
   url.searchParams.set("client_id", getRequiredClientId());
   url.searchParams.set("response_type", "code");
   url.searchParams.set("redirect_uri", resolveRedirectUri(redirectUriOverride));
-  url.searchParams.set("scope", getRequiredScopes());
   url.searchParams.set("state", state);
   return url;
 }
@@ -215,6 +214,7 @@ export function getCloseOAuthDebugInfo(redirectUriOverride?: string | null) {
     scopeString,
     scopeCount: scopes.length,
     scopes,
+    sendsScopeParam: authUrl.searchParams.has("scope"),
     hasClientId: Boolean(getRequiredClientId()),
   };
 }

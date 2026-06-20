@@ -2101,6 +2101,7 @@ export async function connectWorkspaceCloseOAuthProvider({
       redirectUri: debug.redirectUri,
       scopeString: debug.scopeString,
       scopeCount: debug.scopeCount,
+      sendsScopeParam: debug.sendsScopeParam,
       hasClientId: debug.hasClientId,
       includesRedirectUriOnFirstAttempt: false,
       supportsRedirectUriRetry: true,

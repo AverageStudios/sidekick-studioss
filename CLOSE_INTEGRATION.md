@@ -54,6 +54,8 @@ That is the official Close OAuth model today. SideKick uses that access only for
 - creating nested contact details inside those leads
 - refreshing the workspace token when needed
 
+Close scopes are granted by the app itself. SideKick does not need to send a `scope` query parameter on the authorization URL.
+
 ## OAuth flow
 
 SideKick routes:
