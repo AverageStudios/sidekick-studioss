@@ -9,7 +9,7 @@ import { publicProductItems } from "@/data/public-product-pages";
 export const metadata: Metadata = {
   title: "Product | SideKick Studioss",
   description:
-    "Templates, campaign launch, lead capture, lead management, outreach, and CRM handoff: the SideKick platform for local businesses.",
+    "Templates, campaign launch, lead capture, lead management, outreach, and CRM delivery: the SideKick platform for small businesses.",
 };
 
 export default function ProductPage() {

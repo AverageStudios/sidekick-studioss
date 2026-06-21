@@ -192,7 +192,7 @@ function PinnedSequence() {
       <div className="sticky top-0 flex h-screen flex-col justify-center overflow-hidden">
         <div className="site-container w-full">
           <div className="max-w-2xl">
-            <h2 className="site-h2">From industry to live campaign</h2>
+            <h2 className="site-h2">From offer to live campaign to booked lead</h2>
           </div>
 
           <div className="relative mt-12 h-[26rem]">
@@ -217,7 +217,7 @@ function StackedSequence() {
   return (
     <div className="site-container py-20 sm:py-24">
       <Reveal className="max-w-2xl">
-        <h2 className="site-h2">From industry to live campaign</h2>
+        <h2 className="site-h2">From offer to live campaign to booked lead</h2>
       </Reveal>
 
       <div className="mt-12 space-y-14">

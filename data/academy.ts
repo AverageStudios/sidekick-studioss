@@ -73,8 +73,8 @@ export const academySections: Array<{
   },
   {
     key: "crm-handoff",
-    title: "CRM Handoff",
-    description: "How Meta Lead Form submissions are delivered to connected CRMs.",
+    title: "Sending Leads to Your CRM",
+    description: "How SideKick sends new Meta Lead Form submissions to your connected CRM.",
   },
   {
     key: "billing-account-settings",
@@ -100,20 +100,21 @@ export const academyArticles: AcademyArticle[] = [
     section: "getting-started",
     summary: "Start here to understand the product model, navigation, and where key work happens.",
     description:
-      "SideKick is a campaign platform for launching and managing marketing activity, while external CRMs handle long-term lead management.",
+      "SideKick is a campaign and lead-response workspace. It helps you launch campaigns, capture new leads, track simple statuses, and send leads to a connected CRM when you need deeper pipeline management.",
     readTime: "5 min read",
     updatedLabel: "Updated June 2026",
     blocks: [
       {
         heading: "What SideKick is built for",
         body: [
-          "SideKick helps businesses move faster from idea to live campaign. The product is focused on campaign setup, launch, previewing, performance tracking, and integrations that keep the workflow connected.",
-          "SideKick is not designed to replace a full CRM. Instead, it handles campaign operations and hands leads off to connected CRM systems such as GoHighLevel or HubSpot.",
+          "SideKick helps small businesses move faster from idea to live campaign. The product covers campaign setup, launch, previewing, performance tracking, lead capture, and the integrations that keep the workflow connected.",
+          "SideKick is not a heavy CRM replacement. It gives you simple lead management — capture, status tracking, and follow-up — and can send leads to connected CRMs like GoHighLevel or HubSpot when you need deeper pipeline management.",
         ],
         bullets: [
           "Create and manage campaigns",
           "Start from ready-to-use templates",
           "Launch Meta campaign flows faster",
+          "Capture and track new leads",
           "Track campaign performance",
           "Send Meta Lead Form submissions to connected CRMs",
         ],
@@ -123,15 +124,15 @@ export const academyArticles: AcademyArticle[] = [
         body: [
           "Home shows a broad view of launch activity and current workspace health.",
           "Campaigns is where you see drafts, live campaigns, and day-to-day campaign activity.",
-          "Performance keeps reporting separate from lead handling, so you can review outcomes without turning SideKick into a CRM inbox.",
+          "Performance keeps reporting focused on campaign outcomes, separate from the day-to-day lead handling you do in your lead list.",
           "Workspace Settings is where you manage workspace identity, branding, integrations, and other setup details.",
         ],
       },
       {
         heading: "What happens to leads",
         body: [
-          "For Meta Lead Form campaigns, SideKick captures the form submission, normalizes the data, and delivers it to the connected CRM destinations for that workspace.",
-          "That means SideKick stays focused on marketing operations while your CRM remains the place for pipeline stages, follow-up ownership, and long-term customer management.",
+          "For Meta Lead Form campaigns, SideKick captures the form submission, normalizes the data, keeps it in your workspace, and sends it to the connected CRM destinations for that workspace.",
+          "SideKick keeps simple lead management in the workspace, while your connected CRM remains the place for deeper pipeline stages, follow-up ownership, and long-term customer management when you need it.",
         ],
         note: "If multiple CRM providers are connected for a workspace, SideKick sends eligible leads to each connected provider and logs each delivery independently.",
       },
@@ -206,7 +207,7 @@ export const academyArticles: AcademyArticle[] = [
         heading: "How categories and industries affect template selection",
         body: [
           "Industries and categories help narrow the right campaign structure for the kind of business you are running. This keeps the template library easier to browse and makes it more likely that the starting point already fits the business.",
-          "A service business, local offer, and lead-generation flow should not look the same as a direct e-commerce promotion, so categories and industries help SideKick organize those differences clearly.",
+          "A cleaning business, a landscaping crew, and a fitness studio each need a different offer and lead flow, so categories and industries help SideKick organize those differences clearly.",
         ],
         bullets: [
           "Industry narrows the business context",
@@ -345,6 +346,7 @@ export const academyArticles: AcademyArticle[] = [
           "Paused: intentionally stopped without removing the campaign",
           "Archived: no longer part of the active operating set",
         ],
+        note: "For published campaigns, active and paused states should reflect the actual status from Meta. SideKick may also show local workflow states like draft or archived, but live campaign status should stay synced with Meta.",
       },
       {
         heading: "Pause and resume behavior",
@@ -451,11 +453,11 @@ export const academyArticles: AcademyArticle[] = [
   },
   {
     slug: "how-crm-handoff-works",
-    title: "How CRM handoff works for Meta Lead Form campaigns",
+    title: "How SideKick sends leads to your CRM",
     section: "crm-handoff",
-    summary: "See how SideKick captures, normalizes, and sends Meta Lead Form submissions to connected CRM providers.",
+    summary: "See how SideKick captures, normalizes, and sends Meta Lead Form submissions to your connected CRM.",
     description:
-      "For Meta Lead Form campaigns, SideKick captures new lead submissions, ties them to the correct workspace and campaign context, and delivers them to all connected CRM providers for that workspace.",
+      "For Meta Lead Form campaigns, SideKick saves the lead in your workspace, connects it to the right campaign, and can also send it to connected CRMs like GoHighLevel or HubSpot.",
     readTime: "7 min read",
     updatedLabel: "Updated June 2026",
     blocks: [
@@ -476,7 +478,7 @@ export const academyArticles: AcademyArticle[] = [
       {
         heading: "What lead data is included",
         body: [
-          "The internal delivery model is designed to keep enough context for safe delivery and troubleshooting without turning SideKick into a full CRM record system.",
+          "The internal delivery model keeps enough context for safe delivery and troubleshooting without adding unnecessary CRM complexity to the campaign workspace.",
         ],
         bullets: [
           "Workspace ID",
@@ -610,7 +612,7 @@ export const academyArticles: AcademyArticle[] = [
       {
         heading: "Does SideKick replace my CRM?",
         body: [
-          "No. SideKick is designed as a campaign platform. External CRMs such as GoHighLevel and HubSpot handle long-term lead management.",
+          "No. SideKick gives you simple lead management for your campaigns — capture, status tracking, and follow-up. For deeper pipeline management, connect a CRM like GoHighLevel or HubSpot and SideKick will send new leads there too.",
         ],
       },
       {

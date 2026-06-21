@@ -302,14 +302,14 @@ export function LeadsMockup() {
 export function FollowUpMockup() {
   const timeline = [
     { title: "Lead captured", detail: "Meta lead form · 2m ago", done: true },
-    { title: "Confirmation email sent", detail: "Automatic · just now", done: true },
-    { title: "Reminder scheduled", detail: "Tomorrow, 9:00 AM", done: false },
+    { title: "Follow-up needed", detail: "Marked new · just now", done: true },
+    { title: "Next step marked", detail: "Reach out today", done: false },
   ];
 
   return (
     <div
       role="img"
-      aria-label="SideKick follow-up screen: a lead's contact details next to an automatic follow-up timeline"
+      aria-label="SideKick follow-up screen: a lead's contact details next to a follow-up timeline"
       className="select-none [&_*]:pointer-events-none"
     >
       <div aria-hidden="true" className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[1fr_0.95fr] lg:gap-5">
@@ -358,7 +358,7 @@ export function FollowUpMockup() {
               <span className="relative flex h-4 w-7 items-center rounded-full bg-emerald-500 px-0.5">
                 <span className="ml-auto h-3 w-3 rounded-full bg-white" />
               </span>
-              Auto
+              Tracked
             </span>
           </div>
           <div className="mt-4 space-y-0">
@@ -383,7 +383,7 @@ export function FollowUpMockup() {
             ))}
           </div>
           <div className={cn("rounded-lg border border-dashed px-3 py-2 text-[10px]", hairline, mutedText)}>
-            Replies land here and in your inbox. Nothing waits in a queue you have to remember.
+            Keep the lead visible so your team can respond faster, before it goes cold.
           </div>
         </div>
       </div>

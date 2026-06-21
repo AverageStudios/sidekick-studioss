@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, Briefcase, Building2, Globe } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { createWorkspaceAction } from "@/app/actions";
+import { AsyncSubmitButton } from "@/components/ui/async-submit-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { requireUser } from "@/lib/auth";
@@ -191,9 +192,7 @@ export default async function NewWorkspacePage() {
                 <Button asChild variant="outline">
                   <Link href="/workspaces">Cancel</Link>
                 </Button>
-                <Button type="submit">
-                  Create workspace
-                </Button>
+                <AsyncSubmitButton label="Create workspace" pendingLabel="Creating..." />
               </div>
             </div>
           </div>

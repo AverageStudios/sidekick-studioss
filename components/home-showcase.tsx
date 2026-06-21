@@ -43,13 +43,13 @@ const tabs = [
   {
     id: "follow-up",
     label: "Follow-up",
-    title: "Follow-up that starts without you",
+    title: "Follow-up that keeps new leads from going cold",
     description:
-      "SideKick confirms each inquiry automatically and keeps the whole conversation tied to the lead.",
+      "SideKick keeps every new lead visible with a clear next step, so your team can respond faster.",
     bullets: [
-      "Automatic confirmation email on every inquiry",
-      "Scheduled reminders so leads don't go cold",
-      "Reply straight from the lead's timeline",
+      "New leads flagged the moment they arrive",
+      "Mark each lead's status and next step",
+      "Keep the lead tied to the campaign that produced it",
     ],
     href: "/product/outreach",
     cta: "See follow-up",

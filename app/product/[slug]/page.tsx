@@ -3,7 +3,12 @@ import { PublicProductDetailPage } from "@/components/public-product-detail-page
 import { publicProductItems, publicProductMap } from "@/data/public-product-pages";
 
 export function generateStaticParams() {
-  return publicProductItems.map((item) => ({ slug: item.slug }));
+  // "templates" has a dedicated static route (app/product/templates/page.tsx)
+  // that renders the live template library. Excluding it here avoids generating
+  // a duplicate, shadowed page for the same /product/templates URL.
+  return publicProductItems
+    .filter((item) => item.slug !== "templates")
+    .map((item) => ({ slug: item.slug }));
 }
 
 export default async function ProductDetailPage({

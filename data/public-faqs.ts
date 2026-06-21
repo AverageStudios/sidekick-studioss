@@ -20,9 +20,9 @@ export const publicFaqs = [
       "You get 14 days to explore the template library, test the launch flow, and see how lead management and follow-up work inside SideKick before billing starts.",
   },
   {
-    question: "Do I need to build pages from scratch?",
+    question: "Do I need to build campaigns from scratch?",
     answer:
-      "No. SideKick starts you from ready-to-go templates so you can customize the important details instead of building the whole campaign from zero.",
+      "No. SideKick starts you from ready-to-go campaign templates, so you can customize the important details instead of building the ad, offer, and lead flow from zero.",
   },
   {
     question: "Can I manage leads inside SideKick?",

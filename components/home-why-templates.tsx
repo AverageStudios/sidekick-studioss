@@ -10,7 +10,7 @@ const annotations = [
   {
     number: 1,
     title: "Copy written for your industry",
-    detail: "Primary text that has already sold this service. No blank text box.",
+    detail: "Primary text written around real small-business offers. No blank text box.",
     position: "top-[27%]",
   },
   {

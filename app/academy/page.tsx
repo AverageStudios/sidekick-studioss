@@ -8,7 +8,7 @@ import { academyArticles } from "@/data/academy";
 export const metadata: Metadata = {
   title: "Academy | SideKick Studioss",
   description:
-    "Learn how to use SideKick with clear documentation for workspaces, templates, campaign launch, integrations, CRM handoff, performance, and support.",
+    "Learn how to use SideKick with clear documentation for workspaces, templates, campaign launch, integrations, sending leads to your CRM, performance, and support.",
 };
 
 export default function AcademyPage() {
@@ -23,7 +23,7 @@ export default function AcademyPage() {
           <h1 className="site-h2 text-[clamp(2.2rem,1.4rem+3vw,3.4rem)]">SideKick Academy</h1>
           <p className="site-lead mx-auto mt-5">
             Short, practical guides for everything in SideKick: from workspace
-            setup to campaign launch, performance, and CRM handoff.
+            setup to campaign launch, performance, and sending leads to your CRM.
           </p>
           <p className="mt-4 text-sm text-[rgba(15,17,22,0.55)]">
             New here? Start with{" "}

@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import type { ReactNode } from "react";
 import { AlertTriangle, CreditCard, Trash2, X } from "lucide-react";
 import { cancelSubscriptionAction, deleteAccountAction } from "@/app/actions";
+import { AsyncSubmitButton } from "@/components/ui/async-submit-button";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -15,13 +16,7 @@ function ConfirmSubmitButton({
   label: string;
   pendingLabel: string;
 }) {
-  const { pending } = useFormStatus();
-
-  return (
-    <Button type="submit" className="rounded-[18px] px-5" disabled={pending}>
-      {pending ? pendingLabel : label}
-    </Button>
-  );
+  return <AsyncSubmitButton label={label} pendingLabel={pendingLabel} className="rounded-[18px] px-5" />;
 }
 
 function ConfirmationModal({

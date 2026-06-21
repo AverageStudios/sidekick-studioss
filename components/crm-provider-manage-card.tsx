@@ -3,7 +3,9 @@ import { AlertCircle, CheckCircle2, ChevronRight, Settings2 } from "lucide-react
 import { disconnectCrmConnectionAction, testCrmDeliveryAction } from "@/app/actions";
 import { MondayBoardPicker } from "@/components/monday-board-picker";
 import { CrmProviderMark } from "@/components/crm-provider-mark";
+import { AsyncSubmitButton } from "@/components/ui/async-submit-button";
 import { Button } from "@/components/ui/button";
+import { PendingLinkButton } from "@/components/ui/pending-link-button";
 import {
   buildCrmProviderConnectHref,
   buildCrmProviderManageHref,
@@ -171,14 +173,18 @@ export function CrmProviderManageCard({
         {state === "setup_required" ? (
           <Button disabled>Setup required</Button>
         ) : (
-          <Button asChild>
-            <Link href={primaryHref}>
-              {primaryLabel}
-              {(state === "connected" || (state === "needs_setup" && provider.key !== "hubspot")) ? (
-                <ChevronRight className="h-4 w-4" />
-              ) : null}
-            </Link>
-          </Button>
+          <PendingLinkButton
+            href={primaryHref}
+            label={primaryLabel}
+            pendingLabel={
+              primaryLabel === "Connect"
+                ? "Connecting..."
+                : primaryLabel === "Reconnect"
+                  ? "Reconnecting..."
+                  : "Opening..."
+            }
+            icon={(state === "connected" || (state === "needs_setup" && provider.key !== "hubspot")) ? <ChevronRight className="h-4 w-4" /> : undefined}
+          />
         )}
         {isConnected && state === "connected" && !isSelected ? (
           <Button asChild variant="outline">
@@ -193,27 +199,35 @@ export function CrmProviderManageCard({
       {showExpandedPanel ? (
         <div className="mt-5 rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] p-4 sm:p-5">
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline" disabled={!envConfigured}>
-              <Link href={buildCrmProviderConnectHref(provider.key, redirectTo)}>Reconnect</Link>
-            </Button>
+            <PendingLinkButton
+              href={buildCrmProviderConnectHref(provider.key, redirectTo)}
+              label="Reconnect"
+              pendingLabel="Reconnecting..."
+              variant="outline"
+              disabled={!envConfigured}
+            />
             {isConnected && canSendCrmTests && isCrmTestDeliverySupported(provider.key) ? (
               <form action={testCrmDeliveryAction}>
                 <input type="hidden" name="workspaceId" value={workspaceId} />
                 <input type="hidden" name="provider" value={provider.key} />
                 <input type="hidden" name="redirectTo" value={redirectTo} />
-                <Button
-                  type="submit"
+                <AsyncSubmitButton
+                  label="Send Test Lead"
+                  pendingLabel="Sending..."
                   variant="secondary"
                   disabled={provider.key === "monday" && !mondayBoardId}
-                >
-                  Send Test Lead
-                </Button>
+                />
               </form>
             ) : null}
             <form action={disconnectCrmConnectionAction}>
               <input type="hidden" name="provider" value={provider.key} />
               <input type="hidden" name="redirectTo" value={basePath} />
-              <Button type="submit" variant="outline" disabled={!isConnected}>Disconnect</Button>
+              <AsyncSubmitButton
+                label="Disconnect"
+                pendingLabel="Disconnecting..."
+                variant="outline"
+                disabled={!isConnected}
+              />
             </form>
           </div>
 

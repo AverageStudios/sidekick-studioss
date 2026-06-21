@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
+import { AsyncSubmitButton } from "@/components/ui/async-submit-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { deleteDraftCampaignAction } from "@/app/actions";
@@ -786,13 +787,12 @@ export default async function PerformancePage() {
                             <form action={deleteDraftCampaignAction}>
                               <input type="hidden" name="campaignId" value={campaign.id} />
                               <input type="hidden" name="redirectTo" value="/performance" />
-                              <Button
-                                type="submit"
+                              <AsyncSubmitButton
+                                label="Delete draft"
+                                pendingLabel="Deleting..."
                                 variant="outline"
                                 className="border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
-                              >
-                                Delete draft
-                              </Button>
+                              />
                             </form>
                           ) : (
                             <span className="text-sm text-[var(--muted)]">—</span>

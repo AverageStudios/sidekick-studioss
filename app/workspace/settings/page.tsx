@@ -20,8 +20,10 @@ import {
   updateWorkspaceGeneralAction,
   updateWorkspaceIconAction,
 } from "@/app/actions";
+import { AsyncSubmitButton } from "@/components/ui/async-submit-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PendingLinkButton } from "@/components/ui/pending-link-button";
 import { requireUser } from "@/lib/auth";
 import { getDashboardSnapshot } from "@/lib/data";
 import { cn } from "@/lib/utils";
@@ -95,7 +97,6 @@ export default async function WorkspaceSettingsPage({
 
   const section = getSection(rawSection);
   const workspaceName = workspaceContext?.activeWorkspace.name || "My Workspace";
-  const workspaceRole = workspaceContext?.activeWorkspace.role || null;
   const businessProfile = workspaceContext?.businessProfile;
   const workspaceId = workspaceContext?.activeWorkspace.id || null;
   const workspaceContextMissing = !workspaceContext && isSupabaseServerConfigured();
@@ -394,7 +395,7 @@ export default async function WorkspaceSettingsPage({
                     />
                   </div>
 
-                  <Button type="submit">Save general settings</Button>
+                  <AsyncSubmitButton label="Save general settings" pendingLabel="Saving..." />
                 </form>
               </section>
             ) : null}
@@ -427,7 +428,7 @@ export default async function WorkspaceSettingsPage({
                     />
                   </div>
 
-                  <Button type="submit">Save icon settings</Button>
+                  <AsyncSubmitButton label="Save icon settings" pendingLabel="Saving..." />
                 </form>
               </section>
             ) : null}
@@ -672,26 +673,29 @@ export default async function WorkspaceSettingsPage({
 
                         <div className="border-t border-[var(--line)] px-5 py-5">
                           <div className="flex flex-wrap gap-2">
-                            <Button asChild disabled={!isMetaConfigured() || !workspaceId}>
-                              <Link href={metaConnectHref}>{metaConnected ? "Reconnect" : "Connect"}</Link>
-                            </Button>
+                            <PendingLinkButton
+                              href={metaConnectHref}
+                              label={metaConnected ? "Reconnect" : "Connect"}
+                              pendingLabel={metaConnected ? "Reconnecting..." : "Connecting..."}
+                              disabled={!isMetaConfigured() || !workspaceId}
+                            />
                             {metaConnected ? (
                               <>
                                 <form action={refreshMetaIntegrationAssetsAction}>
-                                  <Button type="submit" variant="outline">Refresh</Button>
+                                  <AsyncSubmitButton label="Refresh" pendingLabel="Refreshing..." variant="outline" />
                                 </form>
                                 <form action={disconnectMetaIntegrationAction}>
-                                  <Button type="submit" variant="outline">Disconnect</Button>
+                                  <AsyncSubmitButton label="Disconnect" pendingLabel="Disconnecting..." variant="outline" />
                                 </form>
                                 <form action={syncMetaLeadsAction}>
                                   <input type="hidden" name="mode" value="incremental" />
                                   <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
-                                  <Button type="submit" variant="outline">Sync recent leads</Button>
+                                  <AsyncSubmitButton label="Sync recent leads" pendingLabel="Syncing..." variant="outline" />
                                 </form>
                                 <form action={syncMetaLeadsAction}>
                                   <input type="hidden" name="mode" value="backfill" />
                                   <input type="hidden" name="redirectTo" value="/workspace/settings?section=integrations" />
-                                  <Button type="submit" variant="outline">Backfill lead forms</Button>
+                                  <AsyncSubmitButton label="Backfill lead forms" pendingLabel="Backfilling..." variant="outline" />
                                 </form>
                               </>
                             ) : null}
@@ -750,7 +754,7 @@ export default async function WorkspaceSettingsPage({
                               ) : null}
 
                               <div className="flex flex-wrap items-center gap-3 pt-2">
-                                <Button type="submit">Save changes</Button>
+                                <AsyncSubmitButton label="Save changes" pendingLabel="Saving..." />
                                 {needsLeadFormReconnect ? (
                                   <p className="text-xs text-[var(--muted)]">
                                     Reconnect Meta to approve lead form permissions for the selected page.
@@ -770,9 +774,12 @@ export default async function WorkspaceSettingsPage({
                               Connect the CRMs SideKick should deliver leads into, then manage test delivery and provider-specific setup from one place.
                             </p>
                           </div>
-                          <Button asChild className="w-full sm:w-auto">
-                            <Link href="/workspace/settings/integrations/crm">Connect CRM</Link>
-                          </Button>
+                          <PendingLinkButton
+                            href="/workspace/settings/integrations/crm"
+                            label="Connect CRM"
+                            pendingLabel="Opening..."
+                            className="w-full sm:w-auto"
+                          />
                         </div>
 
                         {connectedCrmProviders.length ? (
@@ -800,9 +807,13 @@ export default async function WorkspaceSettingsPage({
                                   </div>
                                 </div>
                                 <div className="mt-4">
-                                  <Button asChild variant="outline" size="sm">
-                                    <Link href={buildCrmProviderManageHref(provider.key)}>Manage</Link>
-                                  </Button>
+                                  <PendingLinkButton
+                                    href={buildCrmProviderManageHref(provider.key)}
+                                    label="Manage"
+                                    pendingLabel="Opening..."
+                                    variant="outline"
+                                    size="sm"
+                                  />
                                 </div>
                               </div>
                             ))}
@@ -862,9 +873,7 @@ export default async function WorkspaceSettingsPage({
                           </span>
                           {crmState.deliveryCounts.failed ? (
                             <form action={retryFailedCrmDeliveriesAction}>
-                              <Button type="submit" size="sm" variant="outline">
-                                Retry failed
-                              </Button>
+                              <AsyncSubmitButton label="Retry failed" pendingLabel="Retrying..." size="sm" variant="outline" />
                             </form>
                           ) : null}
                         </div>
@@ -915,7 +924,7 @@ export default async function WorkspaceSettingsPage({
                                 {delivery.state === "failed" ? (
                                   <form action={retryCrmDeliveryAction}>
                                     <input type="hidden" name="deliveryId" value={delivery.id} />
-                                    <Button type="submit" size="sm" variant="outline">Retry</Button>
+                                    <AsyncSubmitButton label="Retry" pendingLabel="Retrying..." size="sm" variant="outline" />
                                   </form>
                                 ) : null}
                               </div>

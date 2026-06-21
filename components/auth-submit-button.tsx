@@ -1,7 +1,6 @@
 "use client";
 
-import { useFormStatus } from "react-dom";
-import { Button } from "@/components/ui/button";
+import { AsyncSubmitButton } from "@/components/ui/async-submit-button";
 
 export function AuthSubmitButton({
   label,
@@ -10,11 +9,5 @@ export function AuthSubmitButton({
   label: string;
   pendingLabel: string;
 }) {
-  const { pending } = useFormStatus();
-
-  return (
-    <Button type="submit" size="lg" className="w-full" disabled={pending}>
-      {pending ? pendingLabel : label}
-    </Button>
-  );
+  return <AsyncSubmitButton label={label} pendingLabel={pendingLabel} size="lg" className="w-full" />;
 }

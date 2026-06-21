@@ -38,8 +38,8 @@ export function PublicSiteFooter() {
         <div className="max-w-xs">
           <Logo tone="dark" />
           <p className="mt-4 text-sm leading-relaxed text-[rgba(15,17,22,0.62)]">
-            Template-driven Meta campaigns for local businesses. Pick a template,
-            launch, and keep every lead in one place.
+            Ready-to-launch Meta campaigns, lead capture, and simple follow-up
+            for small businesses.
           </p>
         </div>
 

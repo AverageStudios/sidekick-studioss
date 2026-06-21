@@ -1,5 +1,5 @@
 import { createCampaignAction } from "@/app/actions";
-import { Button } from "@/components/ui/button";
+import { AsyncSubmitButton } from "@/components/ui/async-submit-button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -142,12 +142,8 @@ export function TemplateSetupForm({
           <p className="mt-1 text-sm text-[var(--muted)]">This creates your own campaign instance from the published master template.</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Button type="submit" name="intent" value="draft" size="lg" variant="outline">
-            Save draft
-          </Button>
-          <Button type="submit" name="intent" value="launch" size="lg">
-            Create and launch
-          </Button>
+          <AsyncSubmitButton label="Save draft" pendingLabel="Saving..." name="intent" value="draft" size="lg" variant="outline" />
+          <AsyncSubmitButton label="Create and launch" pendingLabel="Launching..." name="intent" value="launch" size="lg" />
         </div>
       </div>
     </form>

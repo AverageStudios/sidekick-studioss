@@ -247,7 +247,7 @@ export function MondayBoardPicker({
               disabled={!canManage || !manualBoardId || isSavingBoard}
               onClick={() => saveBoardSelection(manualBoardId)}
             >
-              Use Pasted Board ID
+              {isSavingBoard ? "Saving..." : "Use Pasted Board ID"}
             </Button>
           </div>
         </div>

@@ -12,6 +12,18 @@ import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
 import { TemplateSeed } from "@/types";
 import { cn } from "@/lib/utils";
 
+// Friendly example values so marketing previews never show raw {{variables}} to
+// visitors. Real values are filled in per workspace inside the launch flow.
+const PREVIEW_PLACEHOLDER_EXAMPLES: Record<string, string> = {
+  businessName: "Your Business",
+  city: "your city",
+  serviceName: "your service",
+  offerName: "your offer",
+  offerPrice: "$149",
+  regularPrice: "$199",
+  monthlyRate: "$49",
+};
+
 export function PublicTemplatesPage({ templates }: { templates: TemplateSeed[] }) {
   const [query, setQuery] = useState("");
   const [industry, setIndustry] = useState<string>("All");
@@ -46,6 +58,10 @@ export function PublicTemplatesPage({ templates }: { templates: TemplateSeed[] }
           <p className="site-lead mx-auto mt-5">
             Every template below is a complete Meta campaign: the ad you see is the
             ad that runs. Pick one, add your details, and launch.
+          </p>
+          <p className="mt-4 text-sm text-[rgba(15,17,22,0.55)]">
+            Car detailing templates are available first. More small-business
+            categories are being added.
           </p>
         </div>
 
@@ -110,6 +126,7 @@ export function PublicTemplatesPage({ templates }: { templates: TemplateSeed[] }
                   <div className="overflow-hidden rounded-[18px] border border-[rgba(15,17,22,0.1)] bg-white shadow-[0_1px_2px_rgba(15,17,22,0.04)] transition-shadow duration-300 group-hover:shadow-[0_20px_48px_-16px_rgba(21,16,31,0.2)]">
                     <FacebookAdPreview
                       template={template}
+                      placeholderValues={PREVIEW_PLACEHOLDER_EXAMPLES}
                       primaryText={template.adCopy.primary}
                       headline={template.adCopy.headlines[0] || template.name}
                       description={template.adCopy.descriptions[0] || template.positioning}

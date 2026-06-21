@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { submitLeadAction } from "@/app/actions";
-import { Button } from "@/components/ui/button";
+import { AsyncSubmitButton } from "@/components/ui/async-submit-button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -64,9 +64,7 @@ export function PublicLeadForm({
       <Input name="email" type="email" placeholder="Email address" required />
       <Input name="serviceInterest" placeholder="Service interested in" required />
       <Textarea name="message" placeholder="Optional message" className="min-h-28" />
-      <Button type="submit" size="lg" className="w-full">
-        Send my request
-      </Button>
+      <AsyncSubmitButton label="Send my request" pendingLabel="Sending..." size="lg" className="w-full" />
     </form>
   );
 }

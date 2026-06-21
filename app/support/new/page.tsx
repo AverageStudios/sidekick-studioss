@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BookOpenText, CheckCircle2, LifeBuoy, Mail, ShieldCheck } from "lucide-react";
 import { submitSupportTicketAction } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
+import { AsyncSubmitButton } from "@/components/ui/async-submit-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -148,10 +149,12 @@ export default async function NewSupportTicketPage({
                 <p className="text-xs leading-5 text-[var(--muted)]">
                   Sending as {userName} from {workspaceName}.
                 </p>
-                <Button type="submit" className="rounded-[18px] bg-[var(--brand)] px-5 text-white hover:bg-[color-mix(in_oklab,var(--brand)_88%,black)]">
-                  <LifeBuoy className="h-4 w-4" />
-                  Submit Ticket
-                </Button>
+                <AsyncSubmitButton
+                  label="Submit Ticket"
+                  pendingLabel="Submitting..."
+                  icon={<LifeBuoy className="h-4 w-4" />}
+                  className="rounded-[18px] bg-[var(--brand)] px-5 text-white hover:bg-[color-mix(in_oklab,var(--brand)_88%,black)]"
+                />
               </div>
             </form>
           </div>

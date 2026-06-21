@@ -5,9 +5,9 @@ const coreFeatures = [
   "Full template library for your industry",
   "Campaign launch to Facebook and Instagram",
   "Lead management with status tracking",
-  "Automatic follow-up and outreach",
+  "Follow-up prompts and next-step tracking",
   "Email alerts and CSV export",
-  "CRM handoff to GoHighLevel and HubSpot",
+  "Send leads to GoHighLevel, HubSpot, or your connected CRM",
 ];
 
 export function PricingBase() {

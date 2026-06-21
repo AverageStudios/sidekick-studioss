@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CheckCircle2, Mail } from "lucide-react";
 import { replyToSupportTicketAction } from "@/app/actions";
 import { AppShell } from "@/components/app-shell";
+import { AsyncSubmitButton } from "@/components/ui/async-submit-button";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { requireUser } from "@/lib/auth";
@@ -193,9 +194,11 @@ export default async function SupportTicketDetailPage({
                   required
                 />
                 <div className="flex justify-end">
-                  <Button type="submit" className="rounded-[18px] bg-[var(--brand)] px-5 text-white hover:bg-[color-mix(in_oklab,var(--brand)_88%,black)]">
-                    Send Reply
-                  </Button>
+                  <AsyncSubmitButton
+                    label="Send Reply"
+                    pendingLabel="Sending..."
+                    className="rounded-[18px] bg-[var(--brand)] px-5 text-white hover:bg-[color-mix(in_oklab,var(--brand)_88%,black)]"
+                  />
                 </div>
               </form>
             ) : null}

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { FacebookAdPreview } from "@/components/facebook-ad-preview";
+import { AsyncSubmitButton } from "@/components/ui/async-submit-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
@@ -101,13 +102,12 @@ export default async function DraftCampaignsPage() {
                       <form action={deleteDraftCampaignAction}>
                         <input type="hidden" name="campaignId" value={campaign.id} />
                         <input type="hidden" name="redirectTo" value="/templates/drafts" />
-                        <Button
-                          type="submit"
+                        <AsyncSubmitButton
+                          label="Delete"
+                          pendingLabel="Deleting..."
                           variant="outline"
                           className="h-8 rounded-[12px] border-rose-200 px-3 text-[11px] font-medium text-rose-700 hover:bg-rose-50 hover:text-rose-800"
-                        >
-                          Delete
-                        </Button>
+                        />
                       </form>
                     </div>
                   </div>

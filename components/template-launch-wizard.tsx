@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -17,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PendingLinkButton } from "@/components/ui/pending-link-button";
 import { Textarea } from "@/components/ui/textarea";
 import {
   carDetailingLaunchCategories,
@@ -1491,7 +1491,7 @@ export function TemplateLaunchWizard({
 
     setPublishSuccess(mode === "live" ? "Campaign launched to Meta." : "Campaign draft pushed to Meta.");
     setPublishErrorDetails(null);
-    router.push("/templates");
+    router.push(mode === "live" ? "/campaigns" : "/templates/drafts");
   }
 
   function renderTemplateSelectionGrid() {
@@ -2990,9 +2990,13 @@ export function TemplateLaunchWizard({
                     {saveState === "saving" ? "Saving…" : "Save Draft"}
                   </Button>
                   {!metaConnected || launchState.selection.adType === "lead_form" ? (
-                    <Button type="button" variant="outline" asChild className="h-11 px-5">
-                      <Link href={metaConnectHref}>Reconnect Facebook</Link>
-                    </Button>
+                    <PendingLinkButton
+                      href={metaConnectHref}
+                      label="Reconnect Facebook"
+                      pendingLabel="Connecting..."
+                      variant="outline"
+                      className="h-11 px-5"
+                    />
                   ) : null}
                   <Button
                     type="button"

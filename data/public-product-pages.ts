@@ -79,10 +79,10 @@ export const publicProductItems: PublicProductItem[] = [
     ],
     includesTitle: "What comes with each template",
     includesDescription:
-      "Every template gives you more than a page layout. It brings the launch pieces into one place.",
+      "Every template gives you more than ad copy. It brings the launch pieces into one place.",
     includes: [
       "Offer-led copy structure",
-      "Campaign page layout",
+      "Lead capture form",
       "Lead management path",
       "Simple follow-up flow",
     ],
@@ -108,7 +108,7 @@ export const publicProductItems: PublicProductItem[] = [
     pillars: ["Sharper setup", "Cleaner campaigns", "Less drag"],
     pillarDetails: [
       "Start with a structure that already makes sense for paid traffic.",
-      "Keep the campaign message tighter from ad to landing experience.",
+      "Keep the campaign message tighter from ad to lead form.",
       "Reduce the usual back-and-forth that slows launch down.",
     ],
     workflowLabel: "How ads work",
@@ -118,7 +118,7 @@ export const publicProductItems: PublicProductItem[] = [
     workflowSteps: ["Choose the offer", "Align the campaign", "Launch from one flow"],
     workflowStepDetails: [
       "Pick the service or promotion you want to push.",
-      "Match the offer to a ready-to-go template and page structure.",
+      "Match the offer to a ready-to-go campaign template and lead flow.",
       "Launch from one connected system instead of patching tools together.",
     ],
     includesTitle: "Inside the ads workflow",
@@ -126,7 +126,7 @@ export const publicProductItems: PublicProductItem[] = [
       "The ads side of SideKick is built to remove setup friction without turning the product into an ad manager clone.",
     includes: [
       "Offer-backed ad structure",
-      "Cleaner campaign page handoff",
+      "Cleaner lead handoff",
       "Built-in lead path",
       "Simple next-step flow",
     ],
@@ -144,14 +144,14 @@ export const publicProductItems: PublicProductItem[] = [
     headline: "Cleaner inquiry capture without extra friction",
     subheadline:
       "Keep the path from campaign click to inquiry simple, mobile-friendly, and easier to complete.",
-    highlights: ["Focused pages", "Simpler forms", "Fewer drop-offs"],
+    highlights: ["Focused lead flow", "Simpler forms", "Fewer drop-offs"],
     frameTitle: "Built for a cleaner inquiry flow",
     frameLabel: "Lead capture",
     frameSteps: ["Visitor lands", "Form stays focused", "Inquiry comes through"],
     ctaLabel: "Start Free Trial",
     pillars: ["Mobile-first", "Clear next step", "Less drop-off"],
     pillarDetails: [
-      "Pages are built to keep the visitor focused on the next step.",
+      "Lead forms and response paths are built to keep the next step clear.",
       "Forms stay light enough for real small-business traffic.",
       "A cleaner path helps fewer leads get lost before they inquire.",
     ],
@@ -159,9 +159,9 @@ export const publicProductItems: PublicProductItem[] = [
     workflowTitle: "Turn attention into a real inquiry",
     workflowDescription:
       "Lead capture should feel like part of the launch flow, not a separate conversion tool glued on top.",
-    workflowSteps: ["Campaign page opens", "Visitor submits inquiry", "Lead is captured inside SideKick"],
+    workflowSteps: ["Prospect responds to the ad", "Visitor submits inquiry", "Lead is captured inside SideKick"],
     workflowStepDetails: [
-      "The campaign page is aligned to the offer the visitor clicked on.",
+      "The response path is aligned to the offer the visitor clicked on.",
       "The form keeps the next step clear and simple.",
       "The lead lands inside the same system so you can act on it quickly.",
     ],
@@ -169,7 +169,7 @@ export const publicProductItems: PublicProductItem[] = [
     includesDescription:
       "Lead capture is built into the SideKick system so the handoff into lead management stays clean.",
     includes: [
-      "Campaign page layout",
+      "Lead form structure",
       "Inquiry form flow",
       "Lead status entry point",
       "Connected follow-up path",
@@ -188,7 +188,7 @@ export const publicProductItems: PublicProductItem[] = [
     headline: "Keep every lead in one clearer workspace",
     subheadline:
       "Capture inquiries, update statuses, and see lead flow without switching between disconnected tools.",
-    highlights: ["Lead list", "Status updates", "Cleaner pipeline"],
+    highlights: ["Lead list", "Status updates", "Clear lead status"],
     frameTitle: "Built to keep leads visible",
     frameLabel: "Lead management",
     frameSteps: ["Lead captured", "Status updated", "Next step tracked"],
@@ -276,7 +276,7 @@ export const publicProductItems: PublicProductItem[] = [
     headline: "The right integrations, without extra clutter",
     subheadline:
       "Connect the systems that matter while keeping the core SideKick workflow clean and easy to understand.",
-    highlights: ["Meta/Facebook ready", "Core connections", "Cleaner stack"],
+    highlights: ["Meta ready", "Core connections", "Cleaner stack"],
     frameTitle: "Built for a cleaner connected stack",
     frameLabel: "Connected",
     frameSteps: ["Meta connection", "Lead flow stays connected", "Expansion stays simple"],
@@ -291,9 +291,9 @@ export const publicProductItems: PublicProductItem[] = [
     workflowTitle: "Connect the workflow, not just the tools",
     workflowDescription:
       "Integrations should support the SideKick flow, not distract from it. That means fewer connectors, but better handoffs.",
-    workflowSteps: ["Connect Meta/Facebook", "Keep leads inside SideKick", "Expand when needed"],
+    workflowSteps: ["Connect Meta", "Keep leads inside SideKick", "Expand when needed"],
     workflowStepDetails: [
-      "Use connected sources for the campaigns you want to launch.",
+      "Use connected Meta assets for the campaigns you want to launch.",
       "Keep the lead and outreach path inside the platform where it stays easier to manage.",
       "Add more integrations later without turning the workflow into a maze.",
     ],
@@ -301,7 +301,7 @@ export const publicProductItems: PublicProductItem[] = [
     includesDescription:
       "SideKick keeps the integrations list focused so the product still feels like one system instead of a connector catalog.",
     includes: [
-      "Meta/Facebook connection path",
+      "Meta connection path",
       "Connected lead workflow",
       "Email and follow-up support",
       "Expandable integration hooks",

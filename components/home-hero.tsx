@@ -9,7 +9,7 @@ import { SITE_EASE } from "@/components/ui/reveal";
 import { TiltFrame, Parallax } from "@/components/ui/scroll-motion";
 import { LaunchMockup } from "@/components/home-mockups";
 
-const HEADLINE = ["Your next Meta campaign", "is already built."];
+const HEADLINE = ["Launch better local ads.", "Capture every lead. Follow up faster."];
 
 function HeadlineLine({ line, lineIndex, instant }: { line: string; lineIndex: number; instant: boolean }) {
   const words = line.split(" ");
@@ -107,9 +107,9 @@ export function HomeHero() {
           </h1>
 
           <motion.p {...fadeUp(0.5)} className="site-lead mx-auto mt-6 max-w-[36rem] text-balance">
-            SideKick turns proven campaign templates into live Facebook and Instagram
-            ads for your local business. Pick one, set your budget and area, and
-            watch leads land in one place.
+            SideKick helps small businesses launch ready-to-go Facebook and
+            Instagram campaigns, capture leads, and keep follow-up organized
+            from one simple workspace.
           </motion.p>
 
           <motion.div {...fadeUp(0.62)} className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
