@@ -10,6 +10,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile, getCurrentRole, getCurrentUser } from "@/lib/auth";
 import { authSuccessMessages, formatAuthErrorMessage } from "@/lib/auth-messages";
+import { getSafeAuthNextValue, resolvePostAuthDestination } from "@/lib/auth-intent";
 import { getUserBillingStatus, hasLiveBillingPeriod, requireActiveUserBilling } from "@/lib/billing";
 import { createCampaignBlueprint } from "@/lib/template-engine";
 import { env, isDemoModeEnabled, isSupabasePublicConfigured, isSupabaseServerConfigured } from "@/lib/env";
@@ -1023,8 +1024,9 @@ async function buildUniqueTemplateLibrarySlug(
 }
 
 export async function signUpAction(formData: FormData) {
-  const nextPath = String(formData.get("next") || "/dashboard").trim();
-  const safeNextPath = nextPath.startsWith("/") ? nextPath : "/dashboard";
+  const nextValue = getSafeAuthNextValue(String(formData.get("next") || "/dashboard").trim());
+  const postAuthDestination = resolvePostAuthDestination(nextValue);
+  const emailConfirmationNext = nextValue === "/dashboard" ? "/login" : nextValue;
   const values = signUpSchema.safeParse({
     firstName: String(formData.get("firstName") || ""),
     lastName: String(formData.get("lastName") || ""),
@@ -1034,7 +1036,7 @@ export async function signUpAction(formData: FormData) {
 
   if (!values.success) {
     const message = values.error.issues[0]?.message || "Enter your name, email, and password.";
-    redirect(`/signup?error=${encodeURIComponent(formatAuthErrorMessage(message))}&next=${encodeURIComponent(safeNextPath)}`);
+    redirect(`/signup?error=${encodeURIComponent(formatAuthErrorMessage(message))}&next=${encodeURIComponent(nextValue)}`);
   }
 
   await enforceActionRateLimit({
@@ -1050,18 +1052,18 @@ export async function signUpAction(formData: FormData) {
       redirect("/dashboard");
     }
 
-    redirect(`/signup?error=${encodeURIComponent("Supabase auth is not configured yet.")}&next=${encodeURIComponent(safeNextPath)}`);
+    redirect(`/signup?error=${encodeURIComponent("Supabase auth is not configured yet.")}&next=${encodeURIComponent(nextValue)}`);
   }
 
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
-    redirect(`/signup?error=Supabase auth is not configured yet.&next=${encodeURIComponent(safeNextPath)}`);
+    redirect(`/signup?error=Supabase auth is not configured yet.&next=${encodeURIComponent(nextValue)}`);
   }
   const { data, error } = await supabase!.auth.signUp({
     email: values.data.email,
     password: values.data.password,
     options: {
-      emailRedirectTo: `${env.appUrl}/auth/callback?next=${encodeURIComponent(safeNextPath === "/dashboard" ? "/login" : safeNextPath)}`,
+      emailRedirectTo: `${env.appUrl}/auth/callback?next=${encodeURIComponent(emailConfirmationNext)}`,
       data: {
         first_name: values.data.firstName,
         last_name: values.data.lastName,
@@ -1071,7 +1073,7 @@ export async function signUpAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/signup?error=${encodeURIComponent(formatAuthErrorMessage(error.message))}&next=${encodeURIComponent(safeNextPath)}`);
+    redirect(`/signup?error=${encodeURIComponent(formatAuthErrorMessage(error.message))}&next=${encodeURIComponent(nextValue)}`);
   }
 
   if (data.user && isSupabaseServerConfigured()) {
@@ -1088,26 +1090,28 @@ export async function signUpAction(formData: FormData) {
       );
 
       if (profileError) {
-        redirect(`/signup?error=${encodeURIComponent(formatAuthErrorMessage(profileError.message))}&next=${encodeURIComponent(safeNextPath)}`);
+        redirect(`/signup?error=${encodeURIComponent(formatAuthErrorMessage(profileError.message))}&next=${encodeURIComponent(nextValue)}`);
       }
     }
   }
 
   if (data.session) {
-    redirect(safeNextPath);
+    redirect(postAuthDestination);
   }
 
-  redirect(`/signup/confirm?email=${encodeURIComponent(values.data.email)}&next=${encodeURIComponent(safeNextPath)}`);
+  redirect(`/signup/confirm?email=${encodeURIComponent(values.data.email)}&next=${encodeURIComponent(nextValue)}`);
 }
 
 export async function resendConfirmationAction(formData: FormData) {
   const email = String(formData.get("email") || "").trim();
   const source = String(formData.get("source") || "signup");
+  const nextValue = getSafeAuthNextValue(String(formData.get("next") || "/dashboard").trim());
+  const emailConfirmationNext = nextValue === "/dashboard" ? "/login" : nextValue;
   const safeSource = source === "login" ? "login" : "signup";
   const redirectBase =
     safeSource === "login"
-      ? `/login?email=${encodeURIComponent(email)}&needsConfirm=1`
-      : `/signup/confirm?email=${encodeURIComponent(email)}`;
+      ? `/login?email=${encodeURIComponent(email)}&needsConfirm=1&next=${encodeURIComponent(nextValue)}`
+      : `/signup/confirm?email=${encodeURIComponent(email)}&next=${encodeURIComponent(nextValue)}`;
 
   const values = z.object({ email: z.string().email() }).safeParse({ email });
 
@@ -1136,7 +1140,7 @@ export async function resendConfirmationAction(formData: FormData) {
     type: "signup",
     email: values.data.email,
     options: {
-      emailRedirectTo: `${env.appUrl}/auth/callback?next=/login`,
+      emailRedirectTo: `${env.appUrl}/auth/callback?next=${encodeURIComponent(emailConfirmationNext)}`,
     },
   });
 
@@ -1148,8 +1152,8 @@ export async function resendConfirmationAction(formData: FormData) {
 }
 
 export async function signInAction(formData: FormData) {
-  const nextPath = String(formData.get("next") || "/dashboard").trim();
-  const safeNextPath = nextPath.startsWith("/") ? nextPath : "/dashboard";
+  const nextValue = getSafeAuthNextValue(String(formData.get("next") || "/dashboard").trim());
+  const postAuthDestination = resolvePostAuthDestination(nextValue);
   const email = String(formData.get("email") || "").trim();
   const values = authSchema.safeParse({
     email,
@@ -1158,7 +1162,7 @@ export async function signInAction(formData: FormData) {
 
   if (!values.success) {
     const message = values.error.issues[0]?.message || "Enter a valid email and password.";
-    redirect(`/login?error=${encodeURIComponent(formatAuthErrorMessage(message))}&next=${encodeURIComponent(safeNextPath)}`);
+    redirect(`/login?error=${encodeURIComponent(formatAuthErrorMessage(message))}&next=${encodeURIComponent(nextValue)}`);
   }
 
   await enforceActionRateLimit({
@@ -1174,12 +1178,12 @@ export async function signInAction(formData: FormData) {
       redirect("/dashboard");
     }
 
-    redirect(`/login?error=${encodeURIComponent("Supabase auth is not configured yet.")}&next=${encodeURIComponent(safeNextPath)}`);
+    redirect(`/login?error=${encodeURIComponent("Supabase auth is not configured yet.")}&next=${encodeURIComponent(nextValue)}`);
   }
 
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
-    redirect(`/login?error=Supabase auth is not configured yet.&next=${encodeURIComponent(safeNextPath)}`);
+    redirect(`/login?error=Supabase auth is not configured yet.&next=${encodeURIComponent(nextValue)}`);
   }
   const { error } = await supabase!.auth.signInWithPassword(values.data);
 
@@ -1187,13 +1191,13 @@ export async function signInAction(formData: FormData) {
     const friendlyMessage = formatAuthErrorMessage(error.message);
     if (friendlyMessage === "Please confirm your email before signing in.") {
       redirect(
-        `/login?error=${encodeURIComponent(friendlyMessage)}&email=${encodeURIComponent(values.data.email)}&needsConfirm=1&next=${encodeURIComponent(safeNextPath)}`,
+        `/login?error=${encodeURIComponent(friendlyMessage)}&email=${encodeURIComponent(values.data.email)}&needsConfirm=1&next=${encodeURIComponent(nextValue)}`,
       );
     }
-    redirect(`/login?error=${encodeURIComponent(formatAuthErrorMessage(error.message))}&next=${encodeURIComponent(safeNextPath)}`);
+    redirect(`/login?error=${encodeURIComponent(formatAuthErrorMessage(error.message))}&next=${encodeURIComponent(nextValue)}`);
   }
 
-  redirect(safeNextPath);
+  redirect(postAuthDestination);
 }
 
 export async function signOutAction() {

@@ -65,7 +65,7 @@ export function SupportedCrmsSection({
 
       {showCta ? (
         <Reveal className="mt-12 flex justify-center" delay={0.1}>
-          <Link href="/signup" className="site-cta-secondary">
+          <Link href="/pricing" className="site-cta-secondary">
             Start free trial
             <ArrowRight className="h-4 w-4" />
           </Link>

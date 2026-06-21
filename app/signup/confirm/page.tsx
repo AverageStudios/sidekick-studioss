@@ -6,18 +6,20 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { getCurrentUser } from "@/lib/auth";
+import { getSafeAuthNextValue, isCheckoutAuthIntent, resolvePostAuthDestination } from "@/lib/auth-intent";
 
 export default async function SignupConfirmPage({
   searchParams,
 }: {
-  searchParams: Promise<{ email?: string; error?: string; success?: string }>;
+  searchParams: Promise<{ email?: string; error?: string; success?: string; next?: string }>;
 }) {
   const user = await getCurrentUser();
+  const { email, error, success, next } = await searchParams;
+  const safeNextValue = getSafeAuthNextValue(next);
+  const isCheckoutFlow = isCheckoutAuthIntent(safeNextValue);
   if (user) {
-    redirect("/dashboard");
+    redirect(resolvePostAuthDestination(safeNextValue));
   }
-
-  const { email, error, success } = await searchParams;
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-10 sm:px-6">
@@ -30,10 +32,12 @@ export default async function SignupConfirmPage({
         <div className="mt-6 space-y-3">
           <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--brand)]">Check your email</p>
           <h1 className="text-3xl font-semibold tracking-[-0.05em] text-[var(--ink)] sm:text-4xl">
-            Confirm your account to keep going
+            {isCheckoutFlow ? "Confirm your account to start your trial" : "Confirm your account to keep going"}
           </h1>
           <p className="text-base leading-7 text-[var(--muted-strong)]">
-            We sent a confirmation link{email ? ` to ${email}` : ""}. Open that email, confirm your account, and then sign in to reach your dashboard.
+            {isCheckoutFlow
+              ? `We sent a confirmation link${email ? ` to ${email}` : ""}. Open that email to confirm your account, then SideKick will continue to secure checkout so you can activate your 14-day free trial.`
+              : `We sent a confirmation link${email ? ` to ${email}` : ""}. Open that email, confirm your account, and then sign in to reach your dashboard.`}
           </p>
         </div>
         <div className="mt-6 rounded-[24px] bg-[var(--soft-panel)] px-4 py-4 text-sm leading-6 text-[var(--muted-strong)]">
@@ -53,6 +57,7 @@ export default async function SignupConfirmPage({
           <form action={resendConfirmationAction} className="mt-4">
             <input type="hidden" name="email" value={email} />
             <input type="hidden" name="source" value="signup" />
+            <input type="hidden" name="next" value={safeNextValue} />
             <Button type="submit" variant="outline" size="lg">
               Resend confirmation email
             </Button>
@@ -60,10 +65,10 @@ export default async function SignupConfirmPage({
         ) : null}
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <Button asChild size="lg">
-            <Link href="/login">Go to login</Link>
+            <Link href={`/login?next=${encodeURIComponent(safeNextValue)}`}>Go to login</Link>
           </Button>
           <Button asChild size="lg" variant="outline">
-            <Link href="/signup">Use another email</Link>
+            <Link href={`/signup?next=${encodeURIComponent(safeNextValue)}`}>Use another email</Link>
           </Button>
         </div>
       </Card>

@@ -90,7 +90,7 @@ export function PublicProductDetailPage({ item }: { item: PublicProductItem }) {
             <p className="site-lead mx-auto mt-5">{item.subheadline}</p>
 
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link href="/signup" className="site-cta-primary">
+              <Link href="/pricing" className="site-cta-primary">
                 Start free trial
                 <ArrowRight className="h-4 w-4" />
               </Link>

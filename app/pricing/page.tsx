@@ -10,7 +10,7 @@ export default async function PricingPage({
   searchParams: Promise<{ startTrial?: string; checkout?: string }>;
 }) {
   const user = await getCurrentUser();
-  const [{ startTrial }, billingStatus] = await Promise.all([
+  const [{ startTrial, checkout }, billingStatus] = await Promise.all([
     searchParams,
     user ? getUserBillingStatus(user.id) : Promise.resolve(null),
   ]);
@@ -22,6 +22,7 @@ export default async function PricingPage({
         loggedIn={Boolean(user)}
         hasProductAccess={Boolean(billingStatus?.hasAccess)}
         autoStartTrial={Boolean(user && startTrial === "1" && !billingStatus?.hasAccess)}
+        checkoutCancelled={checkout === "cancelled"}
       />
 
       <PublicSiteFooter />

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { signUpAction } from "@/app/actions";
 import { AuthCard } from "@/components/auth-card";
 import { getCurrentUser } from "@/lib/auth";
+import { getSafeAuthNextValue, isCheckoutAuthIntent, resolvePostAuthDestination } from "@/lib/auth-intent";
 import { ConfigNotice } from "@/components/config-notice";
 import { getSupabaseFallbackMessage, isSupabasePublicConfigured } from "@/lib/env";
 import { Input } from "@/components/ui/input";
@@ -13,9 +14,10 @@ export default async function SignupPage({
 }) {
   const user = await getCurrentUser();
   const { error, next } = await searchParams;
-  const safeNextPath = next?.startsWith("/") ? next : "/dashboard";
+  const safeNextValue = getSafeAuthNextValue(next);
+  const isCheckoutFlow = isCheckoutAuthIntent(safeNextValue);
   if (user) {
-    redirect(safeNextPath);
+    redirect(resolvePostAuthDestination(safeNextValue));
   }
   const supabaseFallbackMessage = getSupabaseFallbackMessage();
 
@@ -26,27 +28,33 @@ export default async function SignupPage({
         <div className="max-w-lg space-y-5 sm:space-y-6">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">Start simple</p>
           <h1 className="text-4xl font-semibold tracking-[-0.07em] text-[var(--ink)] sm:text-5xl">
-            Get your first detailing campaign live fast
+            {isCheckoutFlow ? "Create your account to start your trial" : "Get your first detailing campaign live fast"}
           </h1>
           <p className="text-lg leading-8 text-[var(--muted-strong)]">
-            Create an account, choose a template, customize a few fields, and publish your first campaign.
+            {isCheckoutFlow
+              ? "Set up your SideKick account, then you’ll activate your 14-day free trial securely through Stripe."
+              : "Create your account, activate your 14-day trial, then start building in SideKick."}
           </p>
           {!isSupabasePublicConfigured() && supabaseFallbackMessage ? (
             <ConfigNotice title="Supabase auth not configured" message={supabaseFallbackMessage} />
           ) : null}
         </div>
         <AuthCard
-          title="Create account"
-          description="Create your account to start with a template and launch your first detailing campaign."
+          title={isCheckoutFlow ? "Create account to start your trial" : "Create account"}
+          description={
+            isCheckoutFlow
+              ? "Create your account, then continue to secure checkout to activate your 14-day free trial."
+              : "Create your account, activate your 14-day trial, then start building in SideKick."
+          }
           action={signUpAction}
           submitLabel="Create account"
           pendingLabel="Creating account..."
           footerLabel="Already have an account?"
-          footerHref={`/login?next=${encodeURIComponent(safeNextPath)}`}
+          footerHref={`/login?next=${encodeURIComponent(safeNextValue)}`}
           footerLinkLabel="Sign in"
           error={error}
-          nextPath={safeNextPath}
-          socialAuthNextPath={safeNextPath}
+          nextPath={safeNextValue}
+          socialAuthNextPath={safeNextValue}
           fields={
             <div className="grid gap-[1.125rem] pt-2 sm:grid-cols-2 sm:pt-3">
               <div className="space-y-[0.625rem]">

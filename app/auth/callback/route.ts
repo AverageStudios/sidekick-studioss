@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { authSuccessMessages, formatAuthErrorMessage } from "@/lib/auth-messages";
+import { getSafeAuthNextValue, resolvePostAuthDestination } from "@/lib/auth-intent";
 import { env, isSupabasePublicConfigured } from "@/lib/env";
 import { checkRateLimit, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
@@ -11,8 +12,9 @@ export async function GET(request: NextRequest) {
   const next = requestUrl.searchParams.get("next");
   const errorCode = requestUrl.searchParams.get("error_code");
   const errorDescription = requestUrl.searchParams.get("error_description");
-  const safeNextPath = next?.startsWith("/") ? next : "/dashboard";
-  const redirectUrl = new URL(safeNextPath, env.appUrl);
+  const safeNextValue = getSafeAuthNextValue(next);
+  const postAuthDestination = resolvePostAuthDestination(safeNextValue);
+  const redirectUrl = new URL(postAuthDestination, env.appUrl);
   const ip = getIpFromRequest(request);
   const rateLimit = await checkRateLimit({
     key: "auth:callback",
@@ -74,11 +76,12 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  if (safeNextPath === "/login") {
+  if (safeNextValue === "/login") {
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("success", authSuccessMessages.confirmed);
   } else {
-    redirectUrl.pathname = safeNextPath;
+    redirectUrl.pathname = new URL(postAuthDestination, env.appUrl).pathname;
+    redirectUrl.search = new URL(postAuthDestination, env.appUrl).search;
   }
 
   return NextResponse.redirect(redirectUrl);

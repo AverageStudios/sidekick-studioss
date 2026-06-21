@@ -21,6 +21,15 @@ async function postForRedirect(url: string) {
   window.location.href = payload.url;
 }
 
+function resolveLoggedOutTrialHref(nextPath?: string) {
+  if (nextPath === "checkout") {
+    return "/signup?next=checkout";
+  }
+
+  const next = nextPath && nextPath.startsWith("/") ? nextPath : "/pricing?startTrial=1";
+  return `/signup?next=${encodeURIComponent(next)}`;
+}
+
 export function StartTrialButton({
   loggedIn,
   nextPath,
@@ -51,10 +60,9 @@ export function StartTrialButton({
   }, [autoStart, loggedIn]);
 
   if (!loggedIn) {
-    const next = nextPath && nextPath.startsWith("/") ? nextPath : "/pricing?startTrial=1";
     return (
       <Button asChild className={className}>
-        <a href={`/signup?next=${encodeURIComponent(next)}`}>
+        <a href={resolveLoggedOutTrialHref(nextPath)}>
           Start 14-day free trial
           <ArrowRight className="h-4 w-4" />
         </a>

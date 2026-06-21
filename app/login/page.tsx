@@ -5,6 +5,7 @@ import { AuthCard } from "@/components/auth-card";
 import { Button } from "@/components/ui/button";
 import { ConfigNotice } from "@/components/config-notice";
 import { getCurrentUser } from "@/lib/auth";
+import { getSafeAuthNextValue, isCheckoutAuthIntent, resolvePostAuthDestination } from "@/lib/auth-intent";
 import { authSuccessMessages } from "@/lib/auth-messages";
 import { getSupabaseFallbackMessage, isSupabasePublicConfigured } from "@/lib/env";
 
@@ -15,9 +16,10 @@ export default async function LoginPage({
 }) {
   const user = await getCurrentUser();
   const { error, success, email, needsConfirm, next } = await searchParams;
-  const safeNextPath = next?.startsWith("/") ? next : "/dashboard";
+  const safeNextValue = getSafeAuthNextValue(next);
+  const isCheckoutFlow = isCheckoutAuthIntent(safeNextValue);
   if (user) {
-    redirect(safeNextPath);
+    redirect(resolvePostAuthDestination(safeNextValue));
   }
   const supabaseFallbackMessage = getSupabaseFallbackMessage();
   const showResendConfirmation = needsConfirm === "1" && Boolean(email);
@@ -29,10 +31,12 @@ export default async function LoginPage({
         <div className="max-w-lg space-y-5 sm:space-y-6">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">SideKick Studioss</p>
           <h1 className="text-4xl font-semibold tracking-[-0.07em] text-[var(--ink)] sm:text-5xl">
-            Launch faster without starting from scratch
+            {isCheckoutFlow ? "Log in to start your trial" : "Launch faster without starting from scratch"}
           </h1>
           <p className="text-lg leading-8 text-[var(--muted-strong)]">
-            Sign in to manage your detail campaigns and leads in one calm workspace.
+            {isCheckoutFlow
+              ? "After logging in, you’ll continue to secure checkout and activate your 14-day free trial."
+              : "Sign in to manage your detail campaigns and leads in one calm workspace."}
           </p>
           {!isSupabasePublicConfigured() && supabaseFallbackMessage ? (
             <ConfigNotice title="Supabase auth not configured" message={supabaseFallbackMessage} />
@@ -42,19 +46,23 @@ export default async function LoginPage({
           </Link>
         </div>
         <AuthCard
-          title="Welcome back"
-          description="Use your email and password to get back into your campaign launcher."
+          title={isCheckoutFlow ? "Log in to start your trial" : "Welcome back"}
+          description={
+            isCheckoutFlow
+              ? "Log in, then continue to secure checkout to activate your 14-day free trial."
+              : "Use your email and password to get back into your campaign launcher."
+          }
           action={signInAction}
           submitLabel="Sign in"
           pendingLabel="Signing in..."
           footerLabel="Need an account?"
-          footerHref={`/signup?next=${encodeURIComponent(safeNextPath)}`}
+          footerHref={`/signup?next=${encodeURIComponent(safeNextValue)}`}
           footerLinkLabel="Start free trial"
           error={error}
           success={success === authSuccessMessages.confirmed ? "Email confirmed. You can sign in now." : success}
           emailDefaultValue={email}
-          nextPath={safeNextPath}
-          socialAuthNextPath={safeNextPath}
+          nextPath={safeNextValue}
+          socialAuthNextPath={safeNextValue}
           extraContent={
             showResendConfirmation ? (
               <div className="rounded-2xl border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-4">
@@ -65,6 +73,7 @@ export default async function LoginPage({
                 <form action={resendConfirmationAction} className="mt-4">
                   <input type="hidden" name="email" value={email} />
                   <input type="hidden" name="source" value="login" />
+                  <input type="hidden" name="next" value={safeNextValue} />
                   <Button type="submit" variant="outline">
                     Resend confirmation email
                   </Button>

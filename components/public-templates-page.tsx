@@ -109,7 +109,7 @@ export function PublicTemplatesPage({ templates }: { templates: TemplateSeed[] }
               Start the trial to browse every template for your industry and
               preview the exact ad each one runs.
             </p>
-            <Link href="/signup" className="site-cta-primary mt-6">
+            <Link href="/pricing" className="site-cta-primary mt-6">
               Start free trial
               <ArrowRight className="h-4 w-4" />
             </Link>
@@ -151,7 +151,7 @@ export function PublicTemplatesPage({ templates }: { templates: TemplateSeed[] }
                     </div>
                     <p className="site-body mt-2 line-clamp-2">{template.description}</p>
                     <Link
-                      href="/signup"
+                      href="/pricing"
                       className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--public-accent)] transition-colors hover:text-[var(--public-accent-strong)]"
                     >
                       Launch with this template

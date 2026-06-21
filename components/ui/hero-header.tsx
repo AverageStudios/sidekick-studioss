@@ -169,13 +169,13 @@ export function HeroHeader() {
           >
             Log in
           </Link>
-          <Link href="/signup" className="site-cta-primary !h-10 !px-4 text-sm">
+          <Link href="/pricing" className="site-cta-primary !h-10 !px-4 text-sm">
             Start free trial
           </Link>
         </div>
 
         <div className="flex items-center gap-2 lg:hidden">
-          <Link href="/signup" className="site-cta-primary !h-9 !px-3.5 !text-[13px]">
+          <Link href="/pricing" className="site-cta-primary !h-9 !px-3.5 !text-[13px]">
             Start free trial
           </Link>
           <button
@@ -239,7 +239,7 @@ export function HeroHeader() {
               </div>
 
               <Link
-                href="/signup"
+                href="/pricing"
                 onClick={() => setMobileOpen(false)}
                 className="site-cta-primary mt-4 w-full"
               >

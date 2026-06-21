@@ -27,7 +27,7 @@ const columns = [
     title: "Account",
     links: [
       { label: "Log in", href: "/login" },
-      { label: "Start free trial", href: "/signup" },
+      { label: "Start free trial", href: "/pricing" },
     ],
   },
 ];
