@@ -14,6 +14,7 @@ import {
 import { BrowserFrame } from "@/components/ui/browser-frame";
 import { Reveal } from "@/components/ui/reveal";
 import { TiltFrame } from "@/components/ui/scroll-motion";
+import { SupportedCrmsSection } from "@/components/supported-crms-section";
 import { PublicProductItem } from "@/data/public-product-pages";
 
 function HeroVisual({ item }: { item: PublicProductItem }) {
@@ -53,7 +54,7 @@ function HeroVisual({ item }: { item: PublicProductItem }) {
         <div className="rounded-[20px] border border-[rgba(15,17,22,0.08)] bg-white p-6 shadow-[0_1px_2px_rgba(15,17,22,0.04),0_30px_70px_-24px_rgba(21,16,31,0.22)]">
           <FlowDiagram />
           <p className="mt-2 text-center text-sm text-[rgba(15,17,22,0.55)] sm:hidden">
-            Meta lead form → SideKick → email alerts, CSV export, and your CRM.
+            Meta lead form → SideKick → email alerts, CSV export, and supported CRMs.
           </p>
         </div>
       );
@@ -185,6 +186,10 @@ export function PublicProductDetailPage({ item }: { item: PublicProductItem }) {
           </div>
         </div>
       </section>
+
+      {item.previewKind === "integrations" ? (
+        <SupportedCrmsSection className="border-t border-[rgba(15,17,22,0.08)]" />
+      ) : null}
 
       <HomeFinalCta
         title={`Put ${item.shortTitle.toLowerCase()} to work this week.`}

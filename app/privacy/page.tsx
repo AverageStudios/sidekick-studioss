@@ -17,7 +17,7 @@ const sections: LegalSection[] = [
       "Account details such as your name, email address, and workspace settings.",
       "Campaign configuration: the templates you use, budgets, schedules, and service areas you set.",
       "Lead data submitted through your Meta lead forms, which we process on your behalf: typically a lead's name, contact details, and message.",
-      "Connection data for integrations you authorize, such as Meta, GoHighLevel, or HubSpot.",
+      "Connection data for integrations you authorize, such as Meta or supported CRM providers.",
       "Basic usage data, such as pages viewed and device information, to keep the product working and improve it.",
     ],
   },

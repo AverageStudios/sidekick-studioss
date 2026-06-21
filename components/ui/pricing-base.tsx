@@ -7,7 +7,7 @@ const coreFeatures = [
   "Lead management with status tracking",
   "Follow-up prompts and next-step tracking",
   "Email alerts and CSV export",
-  "Send leads to GoHighLevel, HubSpot, or your connected CRM",
+  "Send leads to supported CRMs like Pipedrive, Zoho CRM, monday CRM, Keap, and Close",
 ];
 
 export function PricingBase() {

@@ -69,7 +69,7 @@ export const academySections: Array<{
   {
     key: "integrations",
     title: "Integrations",
-    description: "How to connect Meta, GoHighLevel, and HubSpot at the workspace level.",
+    description: "How to connect Meta and supported CRMs at the workspace level.",
   },
   {
     key: "crm-handoff",
@@ -108,7 +108,7 @@ export const academyArticles: AcademyArticle[] = [
         heading: "What SideKick is built for",
         body: [
           "SideKick helps small businesses move faster from idea to live campaign. The product covers campaign setup, launch, previewing, performance tracking, lead capture, and the integrations that keep the workflow connected.",
-          "SideKick is not a heavy CRM replacement. It gives you simple lead management — capture, status tracking, and follow-up — and can send leads to connected CRMs like GoHighLevel or HubSpot when you need deeper pipeline management.",
+          "SideKick is not a heavy CRM replacement. It gives you simple lead management — capture, status tracking, and follow-up — and can send leads to connected CRMs like Pipedrive, Zoho CRM, monday CRM, Keap, and Close when you need deeper pipeline management.",
         ],
         bullets: [
           "Create and manage campaigns",
@@ -402,7 +402,7 @@ export const academyArticles: AcademyArticle[] = [
   },
   {
     slug: "connect-meta-and-crms",
-    title: "How to connect Meta, GoHighLevel, and HubSpot",
+    title: "How to connect Meta and your CRM",
     section: "integrations",
     summary: "Set up the connected accounts SideKick needs for campaign launch and CRM handoff.",
     description:
@@ -414,7 +414,7 @@ export const academyArticles: AcademyArticle[] = [
         heading: "Where integrations live",
         body: [
           "Integrations live inside Workspace Settings so account connection feels like workspace configuration instead of a separate operational product area.",
-          "This is where you connect Meta, GoHighLevel, and HubSpot and review the current status of those connections.",
+          "This is where you connect Meta and supported CRMs like Pipedrive, Zoho CRM, monday CRM, Keap, and Close, and review the current status of those connections.",
         ],
       },
       {
@@ -425,15 +425,10 @@ export const academyArticles: AcademyArticle[] = [
         ],
       },
       {
-        heading: "GoHighLevel connection basics",
+        heading: "CRM connection basics",
         body: [
-          "GoHighLevel uses a connect flow that feels closer to a standard install or OAuth connection. Once connected, the workspace can deliver eligible lead submissions into that CRM destination.",
-        ],
-      },
-      {
-        heading: "HubSpot connection basics",
-        body: [
-          "HubSpot is also managed as a workspace-level CRM connection. Once connected, SideKick can use that account for CRM handoff on supported lead capture flows.",
+          "SideKick can send supported leads to connected CRMs including Pipedrive, Zoho CRM, monday CRM, Keap, and Close. Each CRM connection is managed from Workspace Settings.",
+          "Once a CRM is connected, the workspace can deliver eligible lead submissions into that CRM destination. monday CRM also asks you to choose the board where new lead items should be created.",
         ],
       },
       {
@@ -457,7 +452,7 @@ export const academyArticles: AcademyArticle[] = [
     section: "crm-handoff",
     summary: "See how SideKick captures, normalizes, and sends Meta Lead Form submissions to your connected CRM.",
     description:
-      "For Meta Lead Form campaigns, SideKick saves the lead in your workspace, connects it to the right campaign, and can also send it to connected CRMs like GoHighLevel or HubSpot.",
+      "For Meta Lead Form campaigns, SideKick saves the lead in your workspace, connects it to the right campaign, and can also send it to connected CRMs like Pipedrive, Zoho CRM, monday CRM, Keap, and Close.",
     readTime: "7 min read",
     updatedLabel: "Updated June 2026",
     blocks: [
@@ -612,7 +607,7 @@ export const academyArticles: AcademyArticle[] = [
       {
         heading: "Does SideKick replace my CRM?",
         body: [
-          "No. SideKick gives you simple lead management for your campaigns — capture, status tracking, and follow-up. For deeper pipeline management, connect a CRM like GoHighLevel or HubSpot and SideKick will send new leads there too.",
+          "No. SideKick gives you simple lead management for your campaigns — capture, status tracking, and follow-up. For deeper pipeline management, connect a CRM like Pipedrive, Zoho CRM, monday CRM, Keap, or Close and SideKick will send new leads there too.",
         ],
       },
       {

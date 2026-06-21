@@ -11,6 +11,7 @@ const columns = [
       { label: "Lead management", href: "/product/lead-management" },
       { label: "Outreach", href: "/product/outreach" },
       { label: "Integrations", href: "/product/integrations" },
+      { label: "Supported CRMs", href: "/supported-crms" },
     ],
   },
   {

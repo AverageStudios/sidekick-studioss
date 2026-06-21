@@ -17,7 +17,7 @@ const destinations = [
   {
     icon: Database,
     title: "Your CRM",
-    detail: "Hand leads to GoHighLevel, HubSpot, or any system you run.",
+    detail: "Send leads to supported CRMs like Pipedrive, Zoho CRM, monday CRM, Keap, and Close.",
   },
 ];
 
@@ -56,7 +56,7 @@ export function FlowDiagram() {
         {[
           { y: 28, title: "Email alert", detail: "Instant, on every lead" },
           { y: 118, title: "CSV export", detail: "Your data, any time" },
-          { y: 208, title: "Your CRM", detail: "GoHighLevel · HubSpot" },
+          { y: 208, title: "Your CRM", detail: "Pipedrive · Zoho · +3" },
         ].map((node) => (
           <g key={node.title}>
             <rect x="578" y={node.y} width="156" height="64" rx="13" fill="#ffffff" stroke="rgba(15,17,22,0.12)" />
