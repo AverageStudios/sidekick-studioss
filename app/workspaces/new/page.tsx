@@ -5,11 +5,11 @@ import { createWorkspaceAction } from "@/app/actions";
 import { AsyncSubmitButton } from "@/components/ui/async-submit-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { requireUser } from "@/lib/auth";
+import { requireProductAccessUser } from "@/lib/auth";
 import { supportedIndustries } from "@/data/template-taxonomy";
 
 export default async function NewWorkspacePage() {
-  const user = await requireUser();
+  const user = await requireProductAccessUser("/workspaces/new");
 
   return (
     <AppShell currentPath="/workspaces">

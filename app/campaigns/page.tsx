@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FacebookAdPreview } from "@/components/facebook-ad-preview";
 import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
-import { requireUser } from "@/lib/auth";
+import { requireProductAccessUser } from "@/lib/auth";
 import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
 import { getCampaignPreviewDisplayLink, normalizeCampaignLaunchState } from "@/lib/campaign-launch";
 import { getDashboardSnapshot, getTemplates, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
@@ -30,7 +30,7 @@ function getCampaignBadgeTone(state: ReturnType<typeof getCampaignLifecycleState
 }
 
 export default async function CampaignsPage() {
-  const user = await requireUser();
+  const user = await requireProductAccessUser("/campaigns");
   const [snapshot, templates, metaIntegration] = await Promise.all([
     getDashboardSnapshot(user.id),
     getTemplates(),

@@ -11,14 +11,14 @@ import { getSupabaseFallbackMessage, isSupabasePublicConfigured } from "@/lib/en
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; success?: string; email?: string; needsConfirm?: string }>;
+  searchParams: Promise<{ error?: string; success?: string; email?: string; needsConfirm?: string; next?: string }>;
 }) {
   const user = await getCurrentUser();
+  const { error, success, email, needsConfirm, next } = await searchParams;
+  const safeNextPath = next?.startsWith("/") ? next : "/dashboard";
   if (user) {
-    redirect("/dashboard");
+    redirect(safeNextPath);
   }
-
-  const { error, success, email, needsConfirm } = await searchParams;
   const supabaseFallbackMessage = getSupabaseFallbackMessage();
   const showResendConfirmation = needsConfirm === "1" && Boolean(email);
 
@@ -48,11 +48,13 @@ export default async function LoginPage({
           submitLabel="Sign in"
           pendingLabel="Signing in..."
           footerLabel="Need an account?"
-          footerHref="/signup"
+          footerHref={`/signup?next=${encodeURIComponent(safeNextPath)}`}
           footerLinkLabel="Start free trial"
           error={error}
           success={success === authSuccessMessages.confirmed ? "Email confirmed. You can sign in now." : success}
           emailDefaultValue={email}
+          nextPath={safeNextPath}
+          socialAuthNextPath={safeNextPath}
           extraContent={
             showResendConfirmation ? (
               <div className="rounded-2xl border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-4">

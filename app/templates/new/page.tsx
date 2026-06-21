@@ -3,7 +3,7 @@ import { TemplateLaunchWizard } from "@/components/template-launch-wizard";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { requireUser } from "@/lib/auth";
+import { requireProductAccessUser } from "@/lib/auth";
 import {
   getBusinessProfile,
   getCampaignBundle,
@@ -16,7 +16,7 @@ export default async function NewTemplateCampaignPage({
 }: {
   searchParams: Promise<{ draft?: string; template?: string }>;
 }) {
-  const user = await requireUser();
+  const user = await requireProductAccessUser("/templates/new");
   const [{ draft, template }, templates, businessProfile, metaIntegration] =
     await Promise.all([
     searchParams,

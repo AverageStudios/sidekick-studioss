@@ -16,6 +16,7 @@ import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
+import { getUserBillingStatusWithRetry, requireActiveUserBilling } from "@/lib/billing";
 import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
 import { getWorkspaceCrmState } from "@/lib/crm-integration";
 import { getDashboardSnapshot, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
@@ -242,14 +243,61 @@ function MetaConnectionCallout() {
   );
 }
 
+function BillingActivationState() {
+  return (
+    <AppShell currentPath="/dashboard">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 py-10 sm:py-14">
+        <Card className="overflow-hidden border-[var(--line)] bg-[rgba(255,255,255,0.88)] p-7 shadow-[0_10px_24px_rgba(16,24,40,0.03)] sm:p-8">
+          <div className="space-y-5">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[rgba(109,94,248,0.18)] bg-[rgba(109,94,248,0.08)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand)]">
+              <RefreshCcw className="h-3.5 w-3.5" />
+              Billing update
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)] sm:text-[2.15rem]">
+                Activating your trial…
+              </h1>
+              <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-[15px]">
+                Stripe checkout finished successfully. SideKick is still waiting for the billing update to land, which usually only takes a few seconds.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button asChild>
+                <Link href="/dashboard?checkout=success">
+                  Check again
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/settings#account-controls">Open billing settings</Link>
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    </AppShell>
+  );
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string }>;
+  searchParams: Promise<{ success?: string; checkout?: string }>;
 }) {
   const user = await requireUser();
-  const [{ success }, snapshot, metaIntegration, activeWorkspaceId] = await Promise.all([
-    searchParams,
+  const { success, checkout } = await searchParams;
+  const billingStatus =
+    checkout === "success"
+      ? await getUserBillingStatusWithRetry(user.id, { attempts: 4, delayMs: 1500 })
+      : await requireActiveUserBilling(user.id, "/dashboard");
+
+  if (!billingStatus.hasAccess) {
+    if (checkout === "success") {
+      return <BillingActivationState />;
+    }
+  }
+
+  const [snapshot, metaIntegration, activeWorkspaceId] = await Promise.all([
     getDashboardSnapshot(user.id, { allowDemo: false }),
     getWorkspaceMetaIntegrationForUser(user.id),
     getActiveWorkspaceIdForUser(user.id),
@@ -286,13 +334,14 @@ export default async function DashboardPage({
   const deliveredCount = crmState?.deliveryCounts.delivered || 0;
   const failedCount = crmState?.deliveryCounts.failed || 0;
   const pendingCount = (crmState?.deliveryCounts.pending || 0) + (crmState?.deliveryCounts.retrying || 0);
+  const successBanner = checkout === "success" ? "Your 14-day trial is active." : success;
 
   return (
     <AppShell currentPath="/dashboard">
       <div className="space-y-8">
-        {success ? (
+        {successBanner ? (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-            {success}
+            {successBanner}
           </div>
         ) : null}
 

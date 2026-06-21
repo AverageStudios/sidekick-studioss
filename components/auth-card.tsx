@@ -20,6 +20,7 @@ export function AuthCard({
   fields,
   emailDefaultValue,
   socialAuthNextPath = "/dashboard",
+  nextPath = "/dashboard",
 }: {
   title: string;
   description: string;
@@ -35,6 +36,7 @@ export function AuthCard({
   fields?: React.ReactNode;
   emailDefaultValue?: string;
   socialAuthNextPath?: string;
+  nextPath?: string;
 }) {
   return (
     <Card className="w-full max-w-md p-6 sm:p-7">
@@ -57,6 +59,7 @@ export function AuthCard({
         <SocialAuthButtons nextPath={socialAuthNextPath} />
       </div>
       <form action={action} className="mt-6 space-y-[1.125rem]">
+        <input type="hidden" name="next" value={nextPath} />
         {fields}
         <div className="space-y-[0.625rem]">
           <label className="text-sm font-medium text-[var(--ink)]" htmlFor="email">

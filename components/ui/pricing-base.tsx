@@ -1,16 +1,26 @@
 import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
+import { ManageBillingButton, StartTrialButton } from "@/components/billing-action-buttons";
 
 const coreFeatures = [
   "Full template library for your industry",
   "Campaign launch to Facebook and Instagram",
-  "Lead management with status tracking",
-  "Follow-up prompts and next-step tracking",
-  "Email alerts and CSV export",
-  "Send leads to supported CRMs like Pipedrive, Zoho CRM, monday CRM, Keap, and Close",
+  "Campaign performance and CRM handoff in one platform",
+  "Unlimited workspaces included",
+  "Connect Pipedrive, Zoho CRM, monday CRM, Keap, and Close CRM",
+  "Payment method required up front with a 14-day free trial",
+  "Ad spend is billed separately by Meta",
 ];
 
-export function PricingBase() {
+export function PricingBase({
+  loggedIn,
+  hasProductAccess,
+  autoStartTrial = false,
+}: {
+  loggedIn: boolean;
+  hasProductAccess: boolean;
+  autoStartTrial?: boolean;
+}) {
   return (
     <section className="site-container pb-24 pt-36 sm:pb-28 sm:pt-44">
       <div className="mx-auto max-w-2xl text-center">
@@ -28,13 +38,13 @@ export function PricingBase() {
           <div className="px-8 pb-8 pt-9 text-center">
             <p className="text-sm font-semibold text-[rgba(15,17,22,0.55)]">Core</p>
             <p className="mt-3 font-heading text-6xl font-semibold tracking-[-0.03em] text-[var(--public-text)]">
-              $39
+              $97
               <span className="ml-1.5 text-lg font-medium tracking-normal text-[rgba(15,17,22,0.5)]">
                 /month
               </span>
             </p>
             <p className="mt-3 text-sm text-[rgba(15,17,22,0.55)]">
-              14-day free trial. Cancel anytime before billing.
+              14-day free trial. Payment method required. You will not be charged until your trial ends.
             </p>
           </div>
 
@@ -50,15 +60,32 @@ export function PricingBase() {
               ))}
             </ul>
 
-            <Link href="/signup" className="site-cta-primary mt-8 w-full">
-              Start free trial
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            <div className="mt-8">
+              {hasProductAccess ? (
+                <div className="space-y-3">
+                  <ManageBillingButton label="Manage billing" className="w-full justify-center" />
+                  <Link href="/dashboard" className="inline-flex w-full items-center justify-center gap-2 rounded-[18px] border border-[var(--line)] px-5 py-3 text-sm font-medium text-[var(--ink)] transition-colors hover:bg-[var(--soft-panel)]">
+                    Open dashboard
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              ) : (
+                <StartTrialButton
+                  loggedIn={loggedIn}
+                  nextPath="/pricing?startTrial=1"
+                  autoStart={autoStartTrial}
+                  className="site-cta-primary w-full justify-center"
+                />
+              )}
+            </div>
           </div>
         </div>
 
         <p className="mt-8 text-center text-sm text-[rgba(15,17,22,0.5)]">
-          No long-term contract. Built for local businesses.
+          Unlimited workspaces included. Cancel anytime through Stripe Customer Portal.
+        </p>
+        <p className="mt-3 text-center text-sm text-[rgba(15,17,22,0.5)]">
+          Ad spend is paid directly to Meta and is separate from your SideKick subscription.
         </p>
       </div>
     </section>

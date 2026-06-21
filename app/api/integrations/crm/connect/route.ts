@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
+import { assertActiveUserBilling, BillingRequiredError } from "@/lib/billing";
 import { createCrmOAuthState } from "@/lib/crm-oauth-state";
 import { env, isGhlConfigured } from "@/lib/env";
 import { buildFreshsalesAuthorizationUrl, getFreshsalesOAuthDebugInfo } from "@/lib/integrations/freshsales";
@@ -86,6 +87,17 @@ export async function GET(request: NextRequest) {
     const loginUrl = new URL("/login", getAppOrigin(request));
     loginUrl.searchParams.set("error", "Sign in before connecting a CRM.");
     return NextResponse.redirect(loginUrl);
+  }
+
+  try {
+    await assertActiveUserBilling(user.id);
+  } catch (error) {
+    if (error instanceof BillingRequiredError) {
+      const billingUrl = new URL("/billing-required", getAppOrigin(request));
+      billingUrl.searchParams.set("returnTo", "/workspace/settings?section=integrations");
+      return NextResponse.redirect(billingUrl);
+    }
+    throw error;
   }
 
   const ip = getIpFromRequest(request);

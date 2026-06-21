@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PendingLinkButton } from "@/components/ui/pending-link-button";
 import { requireUser } from "@/lib/auth";
+import { requireActiveUserBilling } from "@/lib/billing";
 import { getDashboardSnapshot } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
@@ -89,13 +90,15 @@ export default async function WorkspaceSettingsPage({
   searchParams: Promise<{ section?: string; saved?: string; error?: string; created?: string }>;
 }) {
   const user = await requireUser();
-  const [{ section: rawSection, saved, error, created }, workspaceContext, dashboardSnapshot] = await Promise.all([
-    searchParams,
+  const { section: rawSection, saved, error, created } = await searchParams;
+  const section = getSection(rawSection);
+  if (section === "integrations" || section === "campaigns") {
+    await requireActiveUserBilling(user.id, `/workspace/settings?section=${section}`);
+  }
+  const [workspaceContext, dashboardSnapshot] = await Promise.all([
     getCurrentWorkspaceContext(),
     getDashboardSnapshot(user.id),
   ]);
-
-  const section = getSection(rawSection);
   const workspaceName = workspaceContext?.activeWorkspace.name || "My Workspace";
   const businessProfile = workspaceContext?.businessProfile;
   const workspaceId = workspaceContext?.activeWorkspace.id || null;

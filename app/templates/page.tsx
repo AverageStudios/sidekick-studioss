@@ -4,11 +4,11 @@ import { PageHeader } from "@/components/page-header";
 import { TemplateCard } from "@/components/template-card";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { requireUser } from "@/lib/auth";
+import { requireProductAccessUser } from "@/lib/auth";
 import { getTemplates } from "@/lib/data";
 
 export default async function TemplatesPage() {
-  await requireUser();
+  await requireProductAccessUser("/templates");
   const templates = await getTemplates();
 
   return (

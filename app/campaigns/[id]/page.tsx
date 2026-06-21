@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { deleteCampaignAction, pauseCampaignAction, resumeCampaignAction, syncCampaignStatusAction } from "@/app/actions";
-import { requireUser } from "@/lib/auth";
+import { requireProductAccessUser } from "@/lib/auth";
 import { getCampaignBundle, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
 import {
   createLaunchStateView,
@@ -27,9 +27,6 @@ import {
   getAdTypeLabel,
   getCampaignPreviewDisplayLink,
   getStepDefinition,
-  getTemplatePlaceholderFields,
-  getTemplateSetupValuesFromLaunchState,
-  resolvePlaceholderValue,
   campaignGoalOptions,
 } from "@/lib/campaign-launch";
 import {
@@ -137,7 +134,7 @@ export default async function CampaignPage({
   searchParams: Promise<{ success?: string; error?: string }>;
 }) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
-  const user = await requireUser();
+  const user = await requireProductAccessUser(`/campaigns/${id}`);
   const [bundle, metaIntegration] = await Promise.all([
     getCampaignBundle(user.id, id),
     getWorkspaceMetaIntegrationForUser(user.id),
@@ -165,9 +162,6 @@ export default async function CampaignPage({
 
   const launchState = bundle.campaign.launch_state_json || null;
   const launchView = launchState ? createLaunchStateView(launchState) : null;
-  const setupValues = launchState
-    ? getTemplateSetupValuesFromLaunchState(bundle.template, launchState, bundle.businessProfile)
-    : null;
   const launchIssues = launchState
     ? evaluateLaunchReadiness({
         state: launchState,
@@ -175,17 +169,6 @@ export default async function CampaignPage({
         businessProfile: bundle.businessProfile,
       })
     : [];
-  const placeholderFields = getTemplatePlaceholderFields(bundle.template);
-  const filledPlaceholderCount = launchState && setupValues
-    ? placeholderFields.filter((field) => resolvePlaceholderValue(field.id, launchState, setupValues)).length
-    : 0;
-  const readyToPublish =
-    Boolean(launchState) &&
-    metaIntegration?.connection?.status === "connected" &&
-    Boolean(metaIntegration?.tokenAvailable) &&
-    Boolean(metaIntegration?.selected.adAccountId) &&
-    Boolean(metaIntegration?.selected.pageId) &&
-    launchIssues.length === 0;
 
   const currentStep = launchState ? getStepDefinition(launchState.stepId) : null;
   const objectiveLabel =
@@ -286,7 +269,6 @@ export default async function CampaignPage({
   ];
   const timelineEntries = timelineItems.filter((item): item is TimelineItem => item !== null);
 
-  const hasLaunchWarnings = launchIssues.length > 0 || !readyToPublish;
   const baseDescription =
     isDraft
       ? "Review what is configured, see what is still missing, and jump back into the editor when you are ready to launch."

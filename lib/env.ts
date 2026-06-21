@@ -31,6 +31,9 @@ export const env = {
   supabaseStorageBucket: readEnv("SUPABASE_STORAGE_BUCKET") || "assets",
   resendApiKey: readEnv("RESEND_API_KEY"),
   resendFromEmail: readEnv("RESEND_FROM_EMAIL"),
+  stripeSecretKey: readEnv("STRIPE_SECRET_KEY"),
+  stripeWebhookSecret: readEnv("STRIPE_WEBHOOK_SECRET"),
+  stripePriceId: readEnv("STRIPE_PRICE_ID"),
   metaAppId: readEnv("META_APP_ID"),
   metaAppSecret: readEnv("META_APP_SECRET"),
   metaRedirectUri: readEnv("META_REDIRECT_URI"),
@@ -110,6 +113,14 @@ export function getSupabaseServerEnvStatus() {
 export function getResendEnvStatus() {
   const missingKeys = missing(["RESEND_API_KEY", "RESEND_FROM_EMAIL"]);
 
+  return {
+    configured: missingKeys.length === 0,
+    missingKeys,
+  };
+}
+
+export function getStripeEnvStatus() {
+  const missingKeys = missing(["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID"]);
   return {
     configured: missingKeys.length === 0,
     missingKeys,
@@ -240,6 +251,10 @@ export function isDemoModeEnabled() {
 
 export function isResendConfigured() {
   return getResendEnvStatus().configured;
+}
+
+export function isStripeConfigured() {
+  return getStripeEnvStatus().configured;
 }
 
 export function isMetaConfigured() {

@@ -9,14 +9,14 @@ import { Input } from "@/components/ui/input";
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; next?: string }>;
 }) {
   const user = await getCurrentUser();
+  const { error, next } = await searchParams;
+  const safeNextPath = next?.startsWith("/") ? next : "/dashboard";
   if (user) {
-    redirect("/dashboard");
+    redirect(safeNextPath);
   }
-
-  const { error } = await searchParams;
   const supabaseFallbackMessage = getSupabaseFallbackMessage();
 
   return (
@@ -42,9 +42,11 @@ export default async function SignupPage({
           submitLabel="Create account"
           pendingLabel="Creating account..."
           footerLabel="Already have an account?"
-          footerHref="/login"
+          footerHref={`/login?next=${encodeURIComponent(safeNextPath)}`}
           footerLinkLabel="Sign in"
           error={error}
+          nextPath={safeNextPath}
+          socialAuthNextPath={safeNextPath}
           fields={
             <div className="grid gap-[1.125rem] pt-2 sm:grid-cols-2 sm:pt-3">
               <div className="space-y-[0.625rem]">

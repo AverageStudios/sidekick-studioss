@@ -6,13 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
 import { deleteDraftCampaignAction } from "@/app/actions";
-import { requireUser } from "@/lib/auth";
+import { requireProductAccessUser } from "@/lib/auth";
 import { getCampaignPreviewDisplayLink, normalizeCampaignLaunchState } from "@/lib/campaign-launch";
 import { getDashboardSnapshot, getTemplates, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
 import { resolveMetaPagePreviewIdentity } from "@/lib/meta-page-identity";
 
 export default async function DraftCampaignsPage() {
-  const user = await requireUser();
+  const user = await requireProductAccessUser("/templates/drafts");
   const [snapshot, templates, metaIntegration] = await Promise.all([
     getDashboardSnapshot(user.id),
     getTemplates(),

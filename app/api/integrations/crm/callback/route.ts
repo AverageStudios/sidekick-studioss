@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
+import { assertActiveUserBilling, BillingRequiredError } from "@/lib/billing";
 import { parseCrmOAuthState } from "@/lib/crm-oauth-state";
 import {
   connectWorkspaceFreshsalesOAuthProvider,
@@ -174,6 +175,19 @@ export async function GET(request: NextRequest) {
     const response = NextResponse.redirect(loginUrl);
     clearOauthCookies(response);
     return response;
+  }
+
+  try {
+    await assertActiveUserBilling(user.id);
+  } catch (error) {
+    if (error instanceof BillingRequiredError) {
+      const billingUrl = new URL("/billing-required", getAppOrigin(request));
+      billingUrl.searchParams.set("returnTo", "/workspace/settings?section=integrations");
+      const response = NextResponse.redirect(billingUrl);
+      clearOauthCookies(response);
+      return response;
+    }
+    throw error;
   }
 
   const ip = getIpFromRequest(request);

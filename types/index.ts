@@ -30,6 +30,16 @@ export type TemplateLibraryStatus = "active" | "archived";
 
 export type UserRole = "admin" | "user";
 export type TemplateStatus = "draft" | "published" | "archived";
+export type UserBillingSubscriptionStatus =
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "canceled"
+  | "incomplete"
+  | "incomplete_expired"
+  | "unpaid"
+  | "paused"
+  | "none";
 export type CrmProvider =
   | "gohighlevel"
   | "hubspot"
@@ -69,6 +79,18 @@ export type SupportTicketCategory =
 export type SupportTicketPriority = "low" | "medium" | "high";
 export type SupportTicketStatus = "new" | "active" | "waiting_on_user" | "resolved" | "closed";
 export type SupportTicketAuthorRole = "user" | "admin" | "system";
+export type UserBillingRecord = {
+  user_id: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  stripe_price_id: string | null;
+  subscription_status: UserBillingSubscriptionStatus | null;
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  created_at: string;
+  updated_at: string;
+};
 export type SupportTicketRecord = {
   id: string;
   workspace_id: string;

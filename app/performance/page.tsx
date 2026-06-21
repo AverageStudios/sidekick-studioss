@@ -20,7 +20,7 @@ import { AsyncSubmitButton } from "@/components/ui/async-submit-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { deleteDraftCampaignAction } from "@/app/actions";
-import { requireUser } from "@/lib/auth";
+import { requireProductAccessUser } from "@/lib/auth";
 import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
 import { getWorkspaceCrmState } from "@/lib/crm-integration";
 import { getDashboardSnapshot, getLeads, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
@@ -258,54 +258,6 @@ function MetricCard({
   );
 }
 
-function ReportingBanner({
-  title,
-  description,
-  ctaHref,
-  ctaLabel,
-  ctaSecondaryHref,
-  ctaSecondaryLabel,
-  tone = "brand",
-}: {
-  title: string;
-  description: string;
-  ctaHref: string;
-  ctaLabel: string;
-  ctaSecondaryHref?: string;
-  ctaSecondaryLabel?: string;
-  tone?: MetricTone;
-}) {
-  return (
-    <Card className="rounded-[28px] border-[var(--line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.95)_0%,rgba(246,248,255,0.92)_100%)] p-6 shadow-[0_10px_30px_rgba(15,23,42,0.04)] sm:p-7">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="max-w-3xl">
-          <div className="flex items-center gap-2">
-            <div className={`flex h-9 w-9 items-center justify-center rounded-2xl border ${getToneClasses(tone)}`}>
-              <BarChart3 className="h-4.5 w-4.5" />
-            </div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
-              Reporting state
-            </p>
-          </div>
-          <h2 className="mt-4 text-2xl font-semibold tracking-[-0.05em] text-[var(--ink)]">{title}</h2>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">{description}</p>
-        </div>
-
-        <div className="flex flex-wrap gap-3">
-          <Button asChild variant="outline">
-            <Link href={ctaSecondaryHref || "/workspace/settings?section=integrations"}>
-              {ctaSecondaryLabel || "Open integrations"}
-            </Link>
-          </Button>
-          <Button asChild>
-            <Link href={ctaHref}>{ctaLabel}</Link>
-          </Button>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 function EmptyChartState({
   title,
   description,
@@ -433,7 +385,7 @@ function EmptyWorkspaceState() {
 }
 
 export default async function PerformancePage() {
-  const user = await requireUser();
+  const user = await requireProductAccessUser("/performance");
   const admin = createSupabaseAdminClient();
   const [activeWorkspaceId, snapshot, metaIntegration] = await Promise.all([
     getActiveWorkspaceIdForUser(user.id),
@@ -459,10 +411,6 @@ export default async function PerformancePage() {
       metaIntegration.connection.status === "connected",
   );
   const selectedAdAccountId = metaIntegration?.selected.adAccountId || null;
-  const selectedAdAccount =
-    selectedAdAccountId
-      ? metaIntegration?.assets.adAccounts.find((asset) => asset.asset_id === selectedAdAccountId) || null
-      : null;
   const reportingReady = metaConnected && Boolean(selectedAdAccountId);
 
   const tokenContext =
@@ -525,24 +473,6 @@ export default async function PerformancePage() {
   const connectedCrmCount =
     crmState?.connections.filter((connection) => connection.is_active && connection.status === "connected").length || 0;
 
-  const metaBannerTitle = !metaConnected
-    ? "Connect Meta to unlock reporting"
-    : !reportingReady
-      ? "Meta is connected, but reporting still needs an ad account"
-      : adAccountDetails?.name
-        ? `Reporting from ${adAccountDetails.name}`
-        : selectedAdAccount?.name
-          ? `Reporting from ${selectedAdAccount.name}`
-          : "Meta reporting is active";
-
-  const metaBannerDescription = !metaConnected
-    ? "The performance page is ready to become a reporting workspace. Connect Meta to populate spend, impressions, clicks, and cost-based reporting."
-    : !reportingReady
-      ? "Select an ad account so this page can pull live Meta delivery metrics for the current workspace."
-      : metaInsights
-        ? "Live Meta delivery data is flowing in. The summary cards below are grounded in account reporting plus real workspace lead and CRM delivery data."
-        : "Meta is connected, but recent delivery data is not available yet. Until Meta returns reporting, only workspace lead and CRM delivery metrics will populate here.";
-
   return (
     <AppShell currentPath="/performance">
       <div className="space-y-8">
@@ -567,16 +497,6 @@ export default async function PerformancePage() {
               </Button>
             </>
           }
-        />
-
-        <ReportingBanner
-          title={metaBannerTitle}
-          description={metaBannerDescription}
-          ctaHref={metaConnected ? "/workspace/settings?section=integrations" : "/api/meta/connect?next=/performance"}
-          ctaLabel={metaConnected ? "Manage Meta" : "Connect Meta"}
-          ctaSecondaryHref="/workspace/settings?section=integrations"
-          ctaSecondaryLabel="Open integrations"
-          tone={metaConnected ? "emerald" : "brand"}
         />
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

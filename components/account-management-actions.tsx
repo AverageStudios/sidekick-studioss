@@ -30,6 +30,8 @@ function ConfirmationModal({
   cancelLabel = "Go back",
   submitLabel,
   pendingLabel,
+  pendingOverride,
+  onSubmit,
 }: {
   open: boolean;
   onClose: () => void;
@@ -41,8 +43,11 @@ function ConfirmationModal({
   cancelLabel?: string;
   submitLabel: string;
   pendingLabel: string;
+  pendingOverride?: boolean;
+  onSubmit?: () => void;
 }) {
-  const { pending } = useFormStatus();
+  const { pending: formPending } = useFormStatus();
+  const pending = pendingOverride ?? formPending;
 
   useEffect(() => {
     if (!open) return;
@@ -99,7 +104,13 @@ function ConfirmationModal({
           <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
             {cancelLabel}
           </Button>
-          <ConfirmSubmitButton label={submitLabel} pendingLabel={pendingLabel} />
+          {onSubmit ? (
+            <Button type="button" onClick={onSubmit} disabled={pending}>
+              {pending ? pendingLabel : submitLabel}
+            </Button>
+          ) : (
+            <ConfirmSubmitButton label={submitLabel} pendingLabel={pendingLabel} />
+          )}
         </div>
       </div>
     </div>

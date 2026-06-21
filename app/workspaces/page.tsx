@@ -3,11 +3,11 @@ import Link from "next/link";
 import { switchWorkspaceAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { WorkspaceDeleteButton } from "@/components/workspace-delete-button";
-import { requireUser } from "@/lib/auth";
+import { requireProductAccessUser } from "@/lib/auth";
 import { getCurrentWorkspaceContext } from "@/lib/workspaces";
 
 export default async function WorkspacesPage() {
-  await requireUser();
+  await requireProductAccessUser("/workspaces");
   const workspaceContext = await getCurrentWorkspaceContext();
   const canDeleteWorkspaces = (workspaceContext?.workspaces || []).length > 1;
 

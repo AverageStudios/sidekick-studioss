@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/app-shell";
-import { CancelSubscriptionButton, DeleteAccountButton } from "@/components/account-management-actions";
+import { DeleteAccountButton } from "@/components/account-management-actions";
+import { CancelSubscriptionPortalButton, ManageBillingButton, StartTrialButton } from "@/components/billing-action-buttons";
 import { InitialsAvatar } from "@/components/initials-avatar";
 import { ProfilePictureField } from "@/components/profile-picture-field";
 import Link from "next/link";
@@ -8,6 +9,7 @@ import { signOutAction, updateProfileSettingsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getCurrentProfile, getUserAvatarUrl, requireUser } from "@/lib/auth";
+import { getUserBillingStatus } from "@/lib/billing";
 import { getCurrentWorkspaceContext, getUserDisplayNameFromProfile, getUserInitialsFromProfile } from "@/lib/workspaces";
 
 export default async function SettingsPage({
@@ -21,6 +23,7 @@ export default async function SettingsPage({
     getCurrentWorkspaceContext(),
     getCurrentProfile(),
   ]);
+  const billingStatus = await getUserBillingStatus(user.id);
   const resolvedProfile = accountProfile || workspaceContext?.profile || null;
   const resolvedName =
     getUserDisplayNameFromProfile(resolvedProfile, user) ||
@@ -33,6 +36,11 @@ export default async function SettingsPage({
   const resolvedEmail = user.email || workspaceContext?.userEmail || "";
   const resolvedAvatarUrl = getUserAvatarUrl(resolvedProfile, user);
   const savedMessage = saved && saved !== "1" ? saved : saved ? "Settings saved." : "";
+  const hasActiveBilling = billingStatus.hasAccess;
+  const subscriptionLabel =
+    billingStatus.subscriptionStatus === "none"
+      ? "Not started"
+      : billingStatus.subscriptionStatus.replaceAll("_", " ");
 
   return (
     <AppShell currentPath="/settings">
@@ -146,13 +154,49 @@ export default async function SettingsPage({
                   <CreditCard className="h-5 w-5" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Subscription</p>
-                  <h3 className="mt-1 text-lg font-semibold text-[var(--ink)]">Cancel subscription</h3>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Billing</p>
+                  <h3 className="mt-1 text-lg font-semibold text-[var(--ink)]">SideKick Core</h3>
                   <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">
-                    Send a billing cancellation request from your account settings. You will be asked to confirm before anything is submitted.
+                    Billing belongs to your user account, not to individual workspaces. One paid account unlocks SideKick across every workspace you create or belong to.
                   </p>
-                  <div className="mt-4">
-                    <CancelSubscriptionButton />
+                  <div className="mt-4 grid gap-3 rounded-2xl border border-amber-200/60 bg-white/75 p-4 sm:grid-cols-2">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Price</p>
+                      <p className="mt-1 text-sm font-semibold text-[var(--ink)]">$97/month</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Workspaces</p>
+                      <p className="mt-1 text-sm font-semibold text-[var(--ink)]">Unlimited</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Status</p>
+                      <p className="mt-1 text-sm font-semibold capitalize text-[var(--ink)]">{subscriptionLabel}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Trial / period end</p>
+                      <p className="mt-1 text-sm font-semibold text-[var(--ink)]">
+                        {billingStatus.trialEndsAt
+                          ? new Date(billingStatus.trialEndsAt).toLocaleDateString()
+                          : billingStatus.currentPeriodEnd
+                            ? new Date(billingStatus.currentPeriodEnd).toLocaleDateString()
+                            : "Not started"}
+                      </p>
+                    </div>
+                  </div>
+                  {billingStatus.cancelAtPeriodEnd ? (
+                    <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                      This subscription is set to cancel at the end of the current billing period.
+                    </div>
+                  ) : null}
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                    {billingStatus.stripeCustomerId ? (
+                      <>
+                        <ManageBillingButton />
+                        <CancelSubscriptionPortalButton hasActiveBilling={hasActiveBilling} />
+                      </>
+                    ) : (
+                      <StartTrialButton loggedIn nextPath="/settings#account-controls" />
+                    )}
                   </div>
                 </div>
               </div>
@@ -170,10 +214,10 @@ export default async function SettingsPage({
                 </p>
               </div>
               <p className="text-xs leading-5 text-[var(--muted)]">
-                If trial or subscription billing is active on this account in the future, canceling billing should happen before account deletion.
+                Cancel any active trial or subscription in Stripe before deleting the account if you do not want billing to continue.
               </p>
               <div className="pt-2">
-                <DeleteAccountButton />
+                <DeleteAccountButton hasActiveBilling={hasActiveBilling} />
               </div>
             </div>
           </div>

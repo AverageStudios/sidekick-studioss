@@ -10,6 +10,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile, getCurrentRole, getCurrentUser } from "@/lib/auth";
 import { authSuccessMessages, formatAuthErrorMessage } from "@/lib/auth-messages";
+import { getUserBillingStatus, hasLiveBillingPeriod, requireActiveUserBilling } from "@/lib/billing";
 import { createCampaignBlueprint } from "@/lib/template-engine";
 import { env, isDemoModeEnabled, isSupabasePublicConfigured, isSupabaseServerConfigured } from "@/lib/env";
 import { getPublishedTemplateBySlug } from "@/lib/template-repository";
@@ -288,6 +289,12 @@ async function requireAuthenticatedActionUser(redirectTo = "/login") {
   if (!user) {
     redirect(redirectTo);
   }
+  return user;
+}
+
+async function requireProductActionUser(redirectTo: string) {
+  const user = await requireAuthenticatedActionUser("/login");
+  await requireActiveUserBilling(user.id, redirectTo);
   return user;
 }
 
@@ -1016,6 +1023,8 @@ async function buildUniqueTemplateLibrarySlug(
 }
 
 export async function signUpAction(formData: FormData) {
+  const nextPath = String(formData.get("next") || "/dashboard").trim();
+  const safeNextPath = nextPath.startsWith("/") ? nextPath : "/dashboard";
   const values = signUpSchema.safeParse({
     firstName: String(formData.get("firstName") || ""),
     lastName: String(formData.get("lastName") || ""),
@@ -1025,7 +1034,7 @@ export async function signUpAction(formData: FormData) {
 
   if (!values.success) {
     const message = values.error.issues[0]?.message || "Enter your name, email, and password.";
-    redirect(`/signup?error=${encodeURIComponent(formatAuthErrorMessage(message))}`);
+    redirect(`/signup?error=${encodeURIComponent(formatAuthErrorMessage(message))}&next=${encodeURIComponent(safeNextPath)}`);
   }
 
   await enforceActionRateLimit({
@@ -1041,18 +1050,18 @@ export async function signUpAction(formData: FormData) {
       redirect("/dashboard");
     }
 
-    redirect(`/signup?error=${encodeURIComponent("Supabase auth is not configured yet.")}`);
+    redirect(`/signup?error=${encodeURIComponent("Supabase auth is not configured yet.")}&next=${encodeURIComponent(safeNextPath)}`);
   }
 
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
-    redirect("/signup?error=Supabase auth is not configured yet.");
+    redirect(`/signup?error=Supabase auth is not configured yet.&next=${encodeURIComponent(safeNextPath)}`);
   }
   const { data, error } = await supabase!.auth.signUp({
     email: values.data.email,
     password: values.data.password,
     options: {
-      emailRedirectTo: `${env.appUrl}/auth/callback?next=/login`,
+      emailRedirectTo: `${env.appUrl}/auth/callback?next=${encodeURIComponent(safeNextPath === "/dashboard" ? "/login" : safeNextPath)}`,
       data: {
         first_name: values.data.firstName,
         last_name: values.data.lastName,
@@ -1062,7 +1071,7 @@ export async function signUpAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/signup?error=${encodeURIComponent(formatAuthErrorMessage(error.message))}`);
+    redirect(`/signup?error=${encodeURIComponent(formatAuthErrorMessage(error.message))}&next=${encodeURIComponent(safeNextPath)}`);
   }
 
   if (data.user && isSupabaseServerConfigured()) {
@@ -1079,16 +1088,16 @@ export async function signUpAction(formData: FormData) {
       );
 
       if (profileError) {
-        redirect(`/signup?error=${encodeURIComponent(formatAuthErrorMessage(profileError.message))}`);
+        redirect(`/signup?error=${encodeURIComponent(formatAuthErrorMessage(profileError.message))}&next=${encodeURIComponent(safeNextPath)}`);
       }
     }
   }
 
   if (data.session) {
-    redirect("/dashboard");
+    redirect(safeNextPath);
   }
 
-  redirect(`/signup/confirm?email=${encodeURIComponent(values.data.email)}`);
+  redirect(`/signup/confirm?email=${encodeURIComponent(values.data.email)}&next=${encodeURIComponent(safeNextPath)}`);
 }
 
 export async function resendConfirmationAction(formData: FormData) {
@@ -1139,6 +1148,8 @@ export async function resendConfirmationAction(formData: FormData) {
 }
 
 export async function signInAction(formData: FormData) {
+  const nextPath = String(formData.get("next") || "/dashboard").trim();
+  const safeNextPath = nextPath.startsWith("/") ? nextPath : "/dashboard";
   const email = String(formData.get("email") || "").trim();
   const values = authSchema.safeParse({
     email,
@@ -1147,7 +1158,7 @@ export async function signInAction(formData: FormData) {
 
   if (!values.success) {
     const message = values.error.issues[0]?.message || "Enter a valid email and password.";
-    redirect(`/login?error=${encodeURIComponent(formatAuthErrorMessage(message))}`);
+    redirect(`/login?error=${encodeURIComponent(formatAuthErrorMessage(message))}&next=${encodeURIComponent(safeNextPath)}`);
   }
 
   await enforceActionRateLimit({
@@ -1163,12 +1174,12 @@ export async function signInAction(formData: FormData) {
       redirect("/dashboard");
     }
 
-    redirect(`/login?error=${encodeURIComponent("Supabase auth is not configured yet.")}`);
+    redirect(`/login?error=${encodeURIComponent("Supabase auth is not configured yet.")}&next=${encodeURIComponent(safeNextPath)}`);
   }
 
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
-    redirect("/login?error=Supabase auth is not configured yet.");
+    redirect(`/login?error=Supabase auth is not configured yet.&next=${encodeURIComponent(safeNextPath)}`);
   }
   const { error } = await supabase!.auth.signInWithPassword(values.data);
 
@@ -1176,13 +1187,13 @@ export async function signInAction(formData: FormData) {
     const friendlyMessage = formatAuthErrorMessage(error.message);
     if (friendlyMessage === "Please confirm your email before signing in.") {
       redirect(
-        `/login?error=${encodeURIComponent(friendlyMessage)}&email=${encodeURIComponent(values.data.email)}&needsConfirm=1`,
+        `/login?error=${encodeURIComponent(friendlyMessage)}&email=${encodeURIComponent(values.data.email)}&needsConfirm=1&next=${encodeURIComponent(safeNextPath)}`,
       );
     }
-    redirect(`/login?error=${encodeURIComponent(formatAuthErrorMessage(error.message))}`);
+    redirect(`/login?error=${encodeURIComponent(formatAuthErrorMessage(error.message))}&next=${encodeURIComponent(safeNextPath)}`);
   }
 
-  redirect("/dashboard");
+  redirect(safeNextPath);
 }
 
 export async function signOutAction() {
@@ -1197,88 +1208,18 @@ export async function signOutAction() {
 }
 
 export async function cancelSubscriptionAction() {
-  const user = await getCurrentUser();
-  if (!user) {
-    redirect("/login");
-  }
-
-  if (!isSupabaseServerConfigured()) {
-    redirect(
-      `/settings?error=${encodeURIComponent(
-        "Billing cancellation requests are not available right now. Please contact support.",
-      )}#account-controls`,
-    );
-  }
-
-  const admin = createSupabaseAdminClient();
-  if (!admin) {
-    redirect(
-      `/settings?error=${encodeURIComponent(
-        "Billing cancellation requests are not available right now. Please contact support.",
-      )}#account-controls`,
-    );
-  }
-
-  const workspaceContext = await ensureWorkspaceContextForUser(user);
-  const workspaceId = workspaceContext?.activeWorkspace.id || "";
-  const workspaceName = workspaceContext?.activeWorkspace.name || "Current workspace";
-  const userName = workspaceContext?.userDisplayName || user.email || "SideKick user";
-  const userEmail = user.email || workspaceContext?.userEmail || "";
-
-  if (!workspaceId) {
-    redirect(`/settings?error=${encodeURIComponent("Choose a workspace before canceling a subscription.")}#account-controls`);
-  }
-
-  try {
-    await createSupportTicketWithMessage({
-      admin,
-      ticket: {
-        workspace_id: workspaceId,
-        workspace_name: workspaceName,
-        user_id: user.id,
-        user_name: userName,
-        user_email: userEmail,
-        subject: "Cancel subscription request",
-        category: "billing",
-        priority: "medium",
-        message:
-          "Please cancel my SideKick subscription or active trial. This request was submitted from account settings.",
-        current_route: "/settings",
-        context_json: {
-          workspaceName,
-          workspaceId,
-          currentRoute: "/settings",
-          submittedAt: new Date().toISOString(),
-          requestType: "cancel_subscription",
-        },
-      },
-      message: {
-        ticket_id: "",
-        workspace_id: workspaceId,
-        author_user_id: user.id,
-        author_name: userName,
-        author_email: userEmail,
-        author_role: "user",
-        body: "Please cancel my SideKick subscription or active trial.",
-      },
-    });
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Could not submit cancellation request.";
-    const message = isMissingSupportTableError(errorMessage)
-      ? "Billing cancellation requests are not enabled in this database yet. Please contact support directly."
-      : errorMessage;
-    redirect(`/settings?error=${encodeURIComponent(message)}#account-controls`);
-  }
-
-  revalidatePath("/settings");
-  revalidatePath("/support");
-  redirect(`/settings?saved=${encodeURIComponent("Cancellation request received. Our team will confirm it by email.")}#account-controls`);
+  redirect(`/settings?error=${encodeURIComponent("Use Manage billing to cancel through Stripe.")}#account-controls`);
 }
 
 export async function deleteAccountAction() {
   const user = await getCurrentUser();
   if (!user) {
     redirect("/login");
+  }
+
+  const billingStatus = await getUserBillingStatus(user.id);
+  if (hasLiveBillingPeriod(billingStatus)) {
+    redirect(`/settings?error=${encodeURIComponent("Cancel your active trial or subscription in billing before deleting the account.")}#account-controls`);
   }
 
   if (!isSupabaseServerConfigured()) {
@@ -1351,6 +1292,7 @@ export async function deleteAccountAction() {
     await optionalDelete("support_tickets", admin.from("support_tickets").delete().eq("user_id", user.id));
     await optionalDelete("workspace_provider_connections", admin.from("workspace_provider_connections").delete().eq("user_id", user.id));
     await optionalDelete("workspace_meta_connections", admin.from("workspace_meta_connections").delete().eq("user_id", user.id));
+    await optionalDelete("user_billing", admin.from("user_billing").delete().eq("user_id", user.id));
     await optionalDelete("workspace_invitations", admin.from("workspace_invitations").delete().eq("invited_by_user_id", user.id));
     await optionalDelete("workspace_invitations", admin.from("workspace_invitations").delete().eq("accepted_by_user_id", user.id));
     await optionalDelete("campaign_publish_jobs", admin.from("campaign_publish_jobs").update({ created_by: null }).eq("created_by", user.id));
@@ -1371,6 +1313,7 @@ export async function deleteAccountAction() {
       { table: "leads", column: "user_id", value: user.id },
       { table: "follow_up_settings", column: "user_id", value: user.id },
       { table: "profiles", column: "user_id", value: user.id },
+      { table: "user_billing", column: "user_id", value: user.id, optional: true },
       { table: "support_tickets", column: "user_id", value: user.id, optional: true },
       { table: "workspace_provider_connections", column: "user_id", value: user.id, optional: true },
       { table: "workspace_meta_connections", column: "user_id", value: user.id, optional: true },
@@ -1684,17 +1627,13 @@ async function runCampaignLifecycleAction(
   formData: FormData,
   action: CampaignLifecycleControl,
 ) {
-  const user = await getCurrentUser();
-  if (!user) {
-    redirect("/login");
-  }
+  const campaignId = String(formData.get("campaignId") || "").trim();
+  const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
+  const user = await requireProductActionUser(redirectTo);
 
   if (!isSupabaseServerConfigured()) {
     redirect("/dashboard");
   }
-
-  const campaignId = String(formData.get("campaignId") || "").trim();
-  const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
 
   if (!campaignId) {
     redirect(appendQueryParam(redirectTo, "error", "Campaign could not be found."));
@@ -1880,19 +1819,15 @@ export async function archiveCampaignAction(formData: FormData) {
 }
 
 export async function deleteCampaignAction(formData: FormData) {
-  const user = await getCurrentUser();
-  if (!user) {
-    redirect("/login");
-  }
-
-  if (!isSupabaseServerConfigured()) {
-    redirect("/dashboard");
-  }
-
   const campaignId = String(formData.get("campaignId") || "").trim();
   const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
   const successRedirectTo = String(formData.get("successRedirectTo") || "/templates") || "/templates";
   const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/templates";
+  const user = await requireProductActionUser(safeRedirectTo);
+
+  if (!isSupabaseServerConfigured()) {
+    redirect("/dashboard");
+  }
   const campaignIdResult = uuidSchema.safeParse(campaignId);
 
   if (!campaignIdResult.success) {
@@ -1936,18 +1871,14 @@ export async function deleteCampaignAction(formData: FormData) {
 }
 
 export async function deleteDraftCampaignAction(formData: FormData) {
-  const user = await getCurrentUser();
-  if (!user) {
-    redirect("/login");
-  }
+  const campaignId = String(formData.get("campaignId") || "").trim();
+  const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
+  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/templates/drafts";
+  const user = await requireProductActionUser(safeRedirectTo);
 
   if (!isSupabaseServerConfigured()) {
     redirect("/dashboard");
   }
-
-  const campaignId = String(formData.get("campaignId") || "").trim();
-  const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
-  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/templates/drafts";
   const campaignIdResult = uuidSchema.safeParse(campaignId);
 
   if (!campaignIdResult.success) {
@@ -1995,17 +1926,13 @@ export async function deleteDraftCampaignAction(formData: FormData) {
 }
 
 export async function syncCampaignStatusAction(formData: FormData) {
-  const user = await getCurrentUser();
-  if (!user) {
-    redirect("/login");
-  }
+  const campaignId = String(formData.get("campaignId") || "").trim();
+  const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
+  const user = await requireProductActionUser(redirectTo);
 
   if (!isSupabaseServerConfigured()) {
     redirect("/dashboard");
   }
-
-  const campaignId = String(formData.get("campaignId") || "").trim();
-  const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
 
   if (!campaignId) {
     redirect(appendQueryParam(redirectTo, "error", "Campaign could not be found."));
@@ -2086,12 +2013,8 @@ export async function switchWorkspaceAction(formData: FormData) {
 }
 
 export async function createWorkspaceAction(formData: FormData) {
-  const user = await getCurrentUser();
-  if (!user) {
-    redirect("/login");
-  }
-
   const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=general&created=1");
+  const user = await requireProductActionUser("/workspaces/new");
   const workspaceName = String(formData.get("workspaceName") || "").trim();
   if (!workspaceName) {
     redirect("/workspaces/new?error=Workspace%20name%20is%20required.");
@@ -2585,7 +2508,7 @@ export async function acceptWorkspaceInvitationAction(formData: FormData) {
 }
 
 export async function createCampaignAction(formData: FormData) {
-  const user = await getCurrentUser();
+  const user = await requireProductActionUser("/templates/new");
   const templateSlug = String(formData.get("templateSlug") || "");
   const intent = String(formData.get("intent") || "launch");
   const template = await getPublishedTemplateBySlug(templateSlug);
@@ -2630,7 +2553,7 @@ export async function createCampaignAction(formData: FormData) {
     afterImageUrls,
   });
 
-  if (!isSupabaseServerConfigured() || !user) {
+  if (!isSupabaseServerConfigured()) {
     redirect("/campaigns/campaign-demo");
   }
 
@@ -2919,7 +2842,7 @@ export async function submitLeadAction(formData: FormData) {
 export async function updateLeadStatusAction(formData: FormData) {
   const redirectTo = String(formData.get("redirectTo") || "/leads");
   const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/leads";
-  const user = await requireAuthenticatedActionUser("/login");
+  const user = await requireProductActionUser(safeRedirectTo);
   const leadIdResult = uuidSchema.safeParse(String(formData.get("leadId") || ""));
   if (!leadIdResult.success) {
     redirect(appendQueryParam(safeRedirectTo, "error", "Lead not found."));
@@ -2961,7 +2884,7 @@ export async function updateLeadStatusAction(formData: FormData) {
 export async function updateLeadNotesAction(formData: FormData) {
   const redirectTo = String(formData.get("redirectTo") || "/leads");
   const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/leads";
-  const user = await requireAuthenticatedActionUser("/login");
+  const user = await requireProductActionUser(safeRedirectTo);
   const leadIdResult = uuidSchema.safeParse(String(formData.get("leadId") || ""));
   if (!leadIdResult.success) {
     redirect(appendQueryParam(safeRedirectTo, "error", "Lead not found."));
@@ -3000,10 +2923,7 @@ export async function syncMetaLeadsAction(formData: FormData) {
   const redirectTo = String(formData.get("redirectTo") || "/leads");
   const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/leads";
   const mode = String(formData.get("mode") || "incremental") === "backfill" ? "backfill" : "incremental";
-  const user = await getCurrentUser();
-  if (!user) {
-    redirect("/login");
-  }
+  const user = await requireProductActionUser(safeRedirectTo);
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
@@ -3400,6 +3320,7 @@ export async function refreshMetaIntegrationAssetsAction() {
   if (!user) {
     redirect("/login");
   }
+  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   if (!isSupabaseServerConfigured()) {
     redirect("/workspace/settings?section=integrations&error=Supabase server access is not configured.");
@@ -3457,6 +3378,7 @@ export async function saveMetaIntegrationSelectionsAction(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
+  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   if (!isSupabaseServerConfigured()) {
     redirect("/workspace/settings?section=integrations&error=Supabase server access is not configured.");
@@ -3520,6 +3442,7 @@ export async function disconnectMetaIntegrationAction() {
   if (!user) {
     redirect("/login");
   }
+  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   if (!isSupabaseServerConfigured()) {
     redirect("/workspace/settings?section=integrations&error=Supabase server access is not configured.");
@@ -3564,6 +3487,7 @@ export async function saveCrmConnectionAction(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
+  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   if (!isSupabaseServerConfigured()) {
     redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");
@@ -3648,6 +3572,7 @@ export async function disconnectCrmConnectionAction(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
+  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   if (!isSupabaseServerConfigured()) {
     redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");
@@ -3693,6 +3618,7 @@ export async function testCrmDeliveryAction(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
+  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   const workspaceId = String(formData.get("workspaceId") || "").trim();
   const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=integrations");
@@ -3788,6 +3714,7 @@ export async function saveMondayBoardIdAction(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
+  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=integrations");
   const boardId = String(formData.get("boardId") || "").trim();
@@ -3882,6 +3809,7 @@ export async function updateMondayBoardSelectionAction({
       error: "Monday board could not be saved right now.",
     };
   }
+  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   const normalizedWorkspaceId = workspaceId.trim();
   const normalizedBoardId = boardId.trim();
@@ -3992,6 +3920,7 @@ export async function listMondayBoardsAction(workspaceId: string) {
       error: "Could not load monday boards. Paste a board ID manually.",
     };
   }
+  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   const normalizedWorkspaceId = workspaceId.trim();
 
@@ -4105,6 +4034,7 @@ export async function requestCrmIntegrationAction(input: {
       error: "Could not send request. Please try again.",
     };
   }
+  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   const parsed = crmRequestSchema.safeParse({
     crmName: input.crmName,
@@ -4184,6 +4114,7 @@ export async function saveCrmRoutingAction(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
+  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   if (!isSupabaseServerConfigured()) {
     redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");
@@ -4231,6 +4162,7 @@ export async function retryCrmDeliveryAction(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
+  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   await enforceActionRateLimit({
     key: "crm:retry-delivery",
@@ -4303,6 +4235,7 @@ export async function retryFailedCrmDeliveriesAction() {
   if (!user) {
     redirect("/login");
   }
+  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   await enforceActionRateLimit({
     key: "crm:retry-failed-deliveries",
