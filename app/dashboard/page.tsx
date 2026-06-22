@@ -11,6 +11,7 @@ import {
   Users,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { BillingCheckoutSyncState } from "@/components/billing-checkout-sync-state";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
@@ -243,37 +244,41 @@ function MetaConnectionCallout() {
   );
 }
 
-function BillingActivationState() {
+function BillingActivationState({ sessionId }: { sessionId?: string | null }) {
   return (
     <AppShell currentPath="/dashboard">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 py-10 sm:py-14">
-        <Card className="overflow-hidden border-[var(--line)] bg-[rgba(255,255,255,0.88)] p-7 shadow-[0_10px_24px_rgba(16,24,40,0.03)] sm:p-8">
-          <div className="space-y-5">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[rgba(109,94,248,0.18)] bg-[rgba(109,94,248,0.08)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand)]">
-              <RefreshCcw className="h-3.5 w-3.5" />
-              Billing update
+        {sessionId ? (
+          <BillingCheckoutSyncState sessionId={sessionId} />
+        ) : (
+          <Card className="overflow-hidden border-[var(--line)] bg-[rgba(255,255,255,0.88)] p-7 shadow-[0_10px_24px_rgba(16,24,40,0.03)] sm:p-8">
+            <div className="space-y-5">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[rgba(109,94,248,0.18)] bg-[rgba(109,94,248,0.08)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand)]">
+                <RefreshCcw className="h-3.5 w-3.5" />
+                Billing update
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)] sm:text-[2.15rem]">
+                  Activating your trial…
+                </h1>
+                <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-[15px]">
+                  Stripe checkout finished successfully. SideKick is still waiting for the billing update to land, which usually only takes a few seconds.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button asChild>
+                  <Link href="/dashboard?checkout=success">
+                    Check again
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href="/support/new?from=/dashboard-billing-activation">Contact support</Link>
+                </Button>
+              </div>
             </div>
-            <div className="space-y-2">
-              <h1 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)] sm:text-[2.15rem]">
-                Activating your trial…
-              </h1>
-              <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-[15px]">
-                Stripe checkout finished successfully. SideKick is still waiting for the billing update to land, which usually only takes a few seconds.
-              </p>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button asChild>
-                <Link href="/dashboard?checkout=success">
-                  Check again
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href="/settings#account-controls">Open billing settings</Link>
-              </Button>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        )}
       </div>
     </AppShell>
   );
@@ -282,10 +287,16 @@ function BillingActivationState() {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string; checkout?: string }>;
+  searchParams: Promise<{ success?: string; checkout?: string; session_id?: string }>;
 }) {
   const user = await requireUser();
-  const { success, checkout } = await searchParams;
+  const { success, checkout, session_id: sessionId } = await searchParams;
+  const isCheckoutActivation = checkout === "success" && Boolean(sessionId);
+
+  if (isCheckoutActivation) {
+    return <BillingActivationState sessionId={sessionId} />;
+  }
+
   const billingStatus =
     checkout === "success"
       ? await getUserBillingStatusWithRetry(user.id, { attempts: 4, delayMs: 1500 })
@@ -293,7 +304,7 @@ export default async function DashboardPage({
 
   if (!billingStatus.hasAccess) {
     if (checkout === "success") {
-      return <BillingActivationState />;
+      return <BillingActivationState sessionId={sessionId} />;
     }
   }
 

@@ -101,7 +101,7 @@ export async function POST(request: Request) {
         },
       ],
       payment_method_collection: "always",
-      success_url: buildAbsoluteUrl("/dashboard?checkout=success"),
+      success_url: buildAbsoluteUrl("/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}"),
       cancel_url: buildAbsoluteUrl("/pricing?checkout=cancelled"),
       metadata: {
         user_id: user.id,

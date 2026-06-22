@@ -2,8 +2,14 @@ import { redirect } from "next/navigation";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { env, isSupabaseServerConfigured, isStripeConfigured } from "@/lib/env";
+import { getStripeServerClient } from "@/lib/stripe";
 import type { UserBillingRecord, UserBillingSubscriptionStatus } from "@/types";
-import { getStripeSubscriptionPriceId, getStripeSubscriptionUserId, unixSecondsToIso } from "@/lib/stripe";
+import {
+  getStripeCheckoutUserId,
+  getStripeSubscriptionPriceId,
+  getStripeSubscriptionUserId,
+  unixSecondsToIso,
+} from "@/lib/stripe";
 import type Stripe from "stripe";
 
 const ACCESS_ALLOWED_STATUSES = new Set<UserBillingSubscriptionStatus>(["trialing", "active"]);
@@ -44,6 +50,18 @@ export class BillingRequiredError extends Error {
   constructor(message = "Billing required.") {
     super(message);
     this.name = "BillingRequiredError";
+  }
+}
+
+export class CheckoutSessionSyncError extends Error {
+  statusCode: number;
+  code: string;
+
+  constructor(message: string, statusCode = 400, code = "checkout_sync_failed") {
+    super(message);
+    this.name = "CheckoutSessionSyncError";
+    this.statusCode = statusCode;
+    this.code = code;
   }
 }
 
@@ -430,4 +448,102 @@ export function getStripeSubscriptionLookupUserId(subscription: Stripe.Subscript
     metadataUserId: getStripeSubscriptionUserId(subscription),
     stripeCustomerId: stripeCustomerId || (typeof subscription.customer === "string" ? subscription.customer : null),
   });
+}
+
+export async function syncCheckoutSessionBillingForUser({
+  userId,
+  sessionId,
+}: {
+  userId: string;
+  sessionId: string;
+}) {
+  const normalizedSessionId = sessionId.trim();
+  if (!normalizedSessionId) {
+    throw new CheckoutSessionSyncError("Checkout session id is required.", 400, "missing_session_id");
+  }
+
+  const stripe = getStripeServerClient();
+  if (!stripe || !isStripeConfigured()) {
+    throw new CheckoutSessionSyncError("Billing is not configured yet.", 503, "stripe_not_configured");
+  }
+
+  console.info("[billing sync] checkout session received", {
+    sessionId: normalizedSessionId,
+    userId,
+  });
+
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await stripe.checkout.sessions.retrieve(normalizedSessionId, {
+      expand: ["subscription"],
+    });
+  } catch (error) {
+    console.warn("[billing sync] checkout session lookup failed", {
+      sessionId: normalizedSessionId,
+      userId,
+      message: error instanceof Error ? error.message : "unknown_error",
+    });
+    throw new CheckoutSessionSyncError("Checkout session could not be found.", 400, "invalid_session_id");
+  }
+
+  const stripeCustomerId =
+    typeof session.customer === "string"
+      ? session.customer
+      : session.customer && "id" in session.customer
+        ? session.customer.id
+        : null;
+
+  const existingStatus = await getUserBillingStatus(userId);
+  let subscription: Stripe.Subscription | null = null;
+
+  if (session.subscription) {
+    subscription =
+      typeof session.subscription === "string"
+        ? await stripe.subscriptions.retrieve(session.subscription)
+        : (session.subscription as Stripe.Subscription);
+  }
+
+  const sessionUserId = getStripeCheckoutUserId(session);
+  const subscriptionUserId = subscription ? getStripeSubscriptionUserId(subscription) : null;
+  const customerMatches =
+    Boolean(stripeCustomerId) &&
+    Boolean(existingStatus.stripeCustomerId) &&
+    stripeCustomerId === existingStatus.stripeCustomerId;
+
+  const matchedUserId = sessionUserId || subscriptionUserId || (customerMatches ? userId : null);
+  if (matchedUserId !== userId) {
+    console.warn("[billing sync] checkout session user mismatch", {
+      sessionId: normalizedSessionId,
+      userId,
+      matchedUserId,
+      stripeCustomerId,
+    });
+    throw new CheckoutSessionSyncError("This checkout session does not belong to the current user.", 403, "session_user_mismatch");
+  }
+
+  if (!subscription) {
+    throw new CheckoutSessionSyncError("Checkout session is missing a subscription.", 400, "missing_subscription");
+  }
+
+  const updatedRow = await syncUserBillingFromStripeSubscription({
+    userId,
+    stripeCustomerId,
+    subscription,
+  });
+  const updatedStatus = evaluateUserBillingStatus(updatedRow);
+
+  console.info("[billing sync] billing updated", {
+    sessionId: normalizedSessionId,
+    userId,
+    stripeCustomerId,
+    stripeSubscriptionId: subscription.id,
+    subscriptionStatus: updatedStatus.subscriptionStatus,
+  });
+
+  return {
+    billingStatus: updatedStatus,
+    stripeCustomerId,
+    stripeSubscriptionId: subscription.id,
+    stripePriceId: getStripeSubscriptionPriceId(subscription),
+  };
 }
