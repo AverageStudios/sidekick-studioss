@@ -94,6 +94,18 @@ export class CheckoutSessionSyncError extends Error {
   }
 }
 
+export class BillingSubscriptionSyncError extends Error {
+  statusCode: number;
+  code: string;
+
+  constructor(message: string, statusCode = 400, code = "billing_subscription_sync_failed") {
+    super(message);
+    this.name = "BillingSubscriptionSyncError";
+    this.statusCode = statusCode;
+    this.code = code;
+  }
+}
+
 async function isBillingBypassUser(userId: string) {
   if (!isSupabaseServerConfigured()) {
     return false;
@@ -792,6 +804,81 @@ export async function syncCheckoutSessionBillingForUser({
     stripeCustomerId,
     stripeSubscriptionId: subscription.id,
     subscriptionStatus: updatedStatus.subscriptionStatus,
+  });
+
+  return {
+    billingStatus: updatedStatus,
+    stripeCustomerId,
+    stripeSubscriptionId: subscription.id,
+    stripePriceId: getStripeSubscriptionPriceId(subscription),
+  };
+}
+
+async function getLatestStripeSubscriptionForUser(status: UserBillingStatus) {
+  const stripe = getStripeServerClient();
+  if (!stripe || !isStripeConfigured()) {
+    throw new BillingSubscriptionSyncError("Billing is not configured yet.", 503, "stripe_not_configured");
+  }
+
+  if (status.stripeSubscriptionId) {
+    return stripe.subscriptions.retrieve(status.stripeSubscriptionId);
+  }
+
+  if (!status.stripeCustomerId) {
+    throw new BillingSubscriptionSyncError("No Stripe billing record was found for this account.", 400, "missing_customer");
+  }
+
+  const result = await stripe.subscriptions.list({
+    customer: status.stripeCustomerId,
+    status: "all",
+    limit: 10,
+  });
+
+  const preferred =
+    result.data.find((subscription) => ["trialing", "active", "past_due", "unpaid", "paused"].includes(subscription.status)) ||
+    result.data[0] ||
+    null;
+
+  if (!preferred) {
+    throw new BillingSubscriptionSyncError("No Stripe subscription was found for this account.", 404, "missing_subscription");
+  }
+
+  return preferred;
+}
+
+export async function syncBillingSubscriptionForUser(userId: string) {
+  const status = await getUserBillingStatus(userId);
+  if (!status.stripeCustomerId && !status.stripeSubscriptionId) {
+    throw new BillingSubscriptionSyncError("No Stripe billing record was found for this account.", 400, "missing_billing_record");
+  }
+
+  const subscription = await getLatestStripeSubscriptionForUser(status);
+  const stripeCustomerId =
+    typeof subscription.customer === "string"
+      ? subscription.customer
+      : subscription.customer && "id" in subscription.customer
+        ? subscription.customer.id
+        : status.stripeCustomerId;
+
+  console.info("[billing sync] subscription refresh received", {
+    userId,
+    stripeCustomerId,
+    stripeSubscriptionId: subscription.id,
+  });
+
+  const updatedRow = await syncUserBillingFromStripeSubscription({
+    userId,
+    stripeCustomerId,
+    subscription,
+  });
+  const updatedStatus = evaluateUserBillingStatus(updatedRow);
+
+  console.info("[billing sync] subscription refresh updated", {
+    userId,
+    stripeCustomerId,
+    stripeSubscriptionId: subscription.id,
+    subscriptionStatus: updatedStatus.subscriptionStatus,
+    cancelAtPeriodEnd: updatedStatus.cancelAtPeriodEnd,
   });
 
   return {

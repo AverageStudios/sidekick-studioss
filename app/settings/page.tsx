@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { DeleteAccountButton } from "@/components/account-management-actions";
 import { ManageBillingButton, StartTrialButton } from "@/components/billing-action-buttons";
+import { BillingRefreshButton } from "@/components/billing-refresh-button";
 import { InitialsAvatar } from "@/components/initials-avatar";
 import { ProfilePictureField } from "@/components/profile-picture-field";
 import Link from "next/link";
@@ -9,7 +10,12 @@ import { signOutAction, updateProfileSettingsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getCurrentProfile, getUserAvatarUrl, requireUser } from "@/lib/auth";
-import { formatBillingDate, getBillingDisplayState, getUserBillingStatus } from "@/lib/billing";
+import {
+  formatBillingDate,
+  getBillingDisplayState,
+  getUserBillingStatus,
+  syncBillingSubscriptionForUser,
+} from "@/lib/billing";
 import { getCurrentWorkspaceContext, getUserDisplayNameFromProfile, getUserInitialsFromProfile } from "@/lib/workspaces";
 
 function getBillingPillClass(key: ReturnType<typeof getBillingDisplayState>["key"]) {
@@ -33,14 +39,24 @@ function getBillingPillClass(key: ReturnType<typeof getBillingDisplayState>["key
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; billing?: string }>;
 }) {
   const user = await requireUser();
-  const [{ saved, error }, workspaceContext, accountProfile] = await Promise.all([
+  const [{ saved, error, billing }, workspaceContext, accountProfile] = await Promise.all([
     searchParams,
     getCurrentWorkspaceContext(),
     getCurrentProfile(),
   ]);
+  if (billing === "updated") {
+    try {
+      await syncBillingSubscriptionForUser(user.id);
+    } catch (syncError) {
+      console.warn("[settings billing] billing refresh after portal return failed", {
+        userId: user.id,
+        message: syncError instanceof Error ? syncError.message : "unknown_error",
+      });
+    }
+  }
   const billingStatus = await getUserBillingStatus(user.id);
   const billingDisplayState = getBillingDisplayState(billingStatus);
   const billingDate = formatBillingDate(billingDisplayState.importantDateValue);
@@ -229,6 +245,7 @@ export default async function SettingsPage({
                         <Link href="/support/new?from=/settings-billing">Contact support</Link>
                       </Button>
                     ) : null}
+                    <BillingRefreshButton />
                   </div>
                   <p className="mt-4 text-xs leading-5 text-[var(--muted)]">
                     Payment method required. Ad spend is billed separately by Meta.

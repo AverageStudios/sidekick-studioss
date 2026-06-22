@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   try {
     const session = await stripe.billingPortal.sessions.create({
       customer: billingStatus.stripeCustomerId,
-      return_url: buildAbsoluteUrl("/settings#account-controls"),
+      return_url: buildAbsoluteUrl("/settings?billing=updated#account-controls"),
     });
 
     return NextResponse.json({ url: session.url });
