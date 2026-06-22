@@ -155,11 +155,11 @@ export const getDashboardSnapshot = cache(async (userId: string, options?: Dashb
 
   try {
     const [funnelsResult, leadCountsResult, recentLeadsResult, campaignsResult] = await Promise.all([
-      supabase.from("funnels").select("*").eq("workspace_id", activeWorkspaceId),
+      supabase.from("funnels").select("id, is_published").eq("workspace_id", activeWorkspaceId),
       loadDashboardLeadCountRows(supabase, activeWorkspaceId),
       supabase
         .from("leads")
-        .select("*")
+        .select("id, status, created_at, meta_created_time, campaign_id, full_name, email, phone, name, first_name, last_name")
         .eq("workspace_id", activeWorkspaceId)
         .order("created_at", { ascending: false })
         .limit(8),
@@ -198,6 +198,46 @@ export const getDashboardSnapshot = cache(async (userId: string, options?: Dashb
     };
   }
 });
+
+export const getWorkspaceCampaignsForUser = cache(
+  async (userId: string, syncLiveStatuses = false, allowDemo = true) => {
+    if (!isSupabaseServerConfigured()) {
+      if (!allowDemo || !isDemoModeEnabled()) {
+        return [] as CampaignRecord[];
+      }
+      return [demoCampaign];
+    }
+
+    const supabase = createSupabaseAdminClient();
+    if (!supabase) {
+      if (!allowDemo || !isDemoModeEnabled()) {
+        return [] as CampaignRecord[];
+      }
+      return [demoCampaign];
+    }
+
+    const activeWorkspaceId = await getActiveWorkspaceIdForUser(userId);
+    if (!activeWorkspaceId) {
+      return [] as CampaignRecord[];
+    }
+
+    const { data, error } = await supabase
+      .from("campaigns")
+      .select("*")
+      .eq("workspace_id", activeWorkspaceId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return hydrateAndSyncCampaignRecords({
+      admin: supabase,
+      campaigns: (data || []) as CampaignRecord[],
+      syncLiveStatuses,
+    });
+  },
+);
 
 export const getCampaignBundle = cache(async (userId: string, id: string) => {
   if (!isSupabaseServerConfigured()) {

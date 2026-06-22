@@ -714,7 +714,7 @@ export async function ensureWorkspaceContextForUser(user: UserIdentityLike) {
   return ensureWorkspaceContextResolved(user);
 }
 
-export async function ensureWorkspaceContextByUserId(userId: string) {
+export const ensureWorkspaceContextByUserId = cache(async (userId: string) => {
   if (!isSupabaseServerConfigured()) {
     if (!isDemoModeEnabled()) {
       return null;
@@ -738,7 +738,7 @@ export async function ensureWorkspaceContextByUserId(userId: string) {
   } catch {
     return null;
   }
-}
+});
 
 export const getCurrentWorkspaceContext = cache(async () => {
   const user = await getCurrentUser();
@@ -751,10 +751,10 @@ export const getCurrentWorkspaceContext = cache(async () => {
   }
 });
 
-export async function getActiveWorkspaceIdForUser(userId: string) {
+export const getActiveWorkspaceIdForUser = cache(async (userId: string) => {
   const context = await ensureWorkspaceContextByUserId(userId);
   return context?.activeWorkspace.id || null;
-}
+});
 
 export async function userHasWorkspaceAccess(userId: string, workspaceId: string | null | undefined) {
   if (!workspaceId || !isSupabaseServerConfigured()) return false;

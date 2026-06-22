@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
-import { FacebookAdPreview } from "@/components/facebook-ad-preview";
+import { LazyFacebookAdPreview } from "@/components/lazy-facebook-ad-preview";
 import { AsyncSubmitButton } from "@/components/ui/async-submit-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -8,13 +8,13 @@ import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
 import { deleteDraftCampaignAction } from "@/app/actions";
 import { requireProductAccessUser } from "@/lib/auth";
 import { getCampaignPreviewDisplayLink, normalizeCampaignLaunchState } from "@/lib/campaign-launch";
-import { getDashboardSnapshot, getTemplates, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
+import { getTemplates, getWorkspaceCampaignsForUser, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
 import { resolveMetaPagePreviewIdentity } from "@/lib/meta-page-identity";
 
 export default async function DraftCampaignsPage() {
   const user = await requireProductAccessUser("/templates/drafts");
-  const [snapshot, templates, metaIntegration] = await Promise.all([
-    getDashboardSnapshot(user.id),
+  const [campaigns, templates, metaIntegration] = await Promise.all([
+    getWorkspaceCampaignsForUser(user.id, false, false),
     getTemplates(),
     getWorkspaceMetaIntegrationForUser(user.id),
   ]);
@@ -24,7 +24,7 @@ export default async function DraftCampaignsPage() {
   });
 
   const templateMap = new Map(templates.map((template) => [template.id, template]));
-  const draftCampaigns = snapshot.campaigns.filter((campaign) => campaign.status === "draft");
+  const draftCampaigns = campaigns.filter((campaign) => campaign.status === "draft");
 
   return (
     <AppShell currentPath="/campaigns">
@@ -59,7 +59,7 @@ export default async function DraftCampaignsPage() {
               return (
                 <Card key={campaign.id} className="group max-w-[22rem] overflow-hidden rounded-[24px] border-[var(--line)] bg-white transition duration-200 hover:shadow-[0_8px_28px_rgba(16,24,40,0.06)]">
                   <Link href={`/campaigns/${campaign.id}`} className="block">
-                    <FacebookAdPreview
+                    <LazyFacebookAdPreview
                       template={template || undefined}
                       pageName={pagePreviewIdentity.pageName}
                       pageAvatarUrl={pagePreviewIdentity.pageAvatarUrl}

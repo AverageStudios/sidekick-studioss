@@ -56,7 +56,7 @@ export function getUserAvatarUrl(profile: Partial<ProfileRecord> | null, user: U
   return profileAvatar || getAvatarUrlFromMetadata(user);
 }
 
-export async function getCurrentUser() {
+export const getCurrentUser = cache(async () => {
   if (!isSupabasePublicConfigured()) {
     return isDemoModeEnabled() ? demoUser : null;
   }
@@ -69,7 +69,7 @@ export async function getCurrentUser() {
   } = await supabase.auth.getUser();
 
   return user;
-}
+});
 
 export const getCurrentProfile = cache(async () => {
   const user = await getCurrentUser();

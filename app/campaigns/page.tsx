@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { Folder } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { LazyFacebookAdPreview } from "@/components/lazy-facebook-ad-preview";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FacebookAdPreview } from "@/components/facebook-ad-preview";
 import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
 import { requireProductAccessUser } from "@/lib/auth";
 import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
 import { getCampaignPreviewDisplayLink, normalizeCampaignLaunchState } from "@/lib/campaign-launch";
-import { getDashboardSnapshot, getTemplates, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
+import { getTemplates, getWorkspaceCampaignsForUser, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
 import { resolveMetaPagePreviewIdentity } from "@/lib/meta-page-identity";
 
 function getCampaignBadgeTone(state: ReturnType<typeof getCampaignLifecycleState>) {
@@ -31,8 +31,8 @@ function getCampaignBadgeTone(state: ReturnType<typeof getCampaignLifecycleState
 
 export default async function CampaignsPage() {
   const user = await requireProductAccessUser("/campaigns");
-  const [snapshot, templates, metaIntegration] = await Promise.all([
-    getDashboardSnapshot(user.id),
+  const [campaigns, templates, metaIntegration] = await Promise.all([
+    getWorkspaceCampaignsForUser(user.id, true, false),
     getTemplates(),
     getWorkspaceMetaIntegrationForUser(user.id),
   ]);
@@ -42,8 +42,8 @@ export default async function CampaignsPage() {
   });
 
   const templateMap = new Map(templates.map((template) => [template.id, template]));
-  const draftCampaigns = snapshot.campaigns.filter((campaign) => getCampaignLifecycleState(campaign) === "draft");
-  const publishedCampaigns = snapshot.campaigns.filter((campaign) => {
+  const draftCampaigns = campaigns.filter((campaign) => getCampaignLifecycleState(campaign) === "draft");
+  const publishedCampaigns = campaigns.filter((campaign) => {
     const lifecycle = getCampaignLifecycleState(campaign);
     return lifecycle !== "draft" && lifecycle !== "archived";
   });
@@ -102,7 +102,7 @@ export default async function CampaignsPage() {
               return (
                 <Link key={campaign.id} href={`/campaigns/${campaign.id}`} className="block">
                   <Card className="group max-w-[22rem] overflow-hidden rounded-[24px] border-[var(--line)] bg-white transition duration-200 hover:shadow-[0_8px_28px_rgba(16,24,40,0.06)]">
-                    <FacebookAdPreview
+                    <LazyFacebookAdPreview
                       template={template || undefined}
                       pageName={pagePreviewIdentity.pageName}
                       pageAvatarUrl={pagePreviewIdentity.pageAvatarUrl}

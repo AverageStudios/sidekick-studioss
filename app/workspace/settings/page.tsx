@@ -26,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { PendingLinkButton } from "@/components/ui/pending-link-button";
 import { requireUser } from "@/lib/auth";
 import { requireActiveUserBilling } from "@/lib/billing";
-import { getDashboardSnapshot } from "@/lib/data";
+import { getWorkspaceCampaignsForUser } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
 import { getCrmProviderLabel, getWorkspaceCrmState } from "@/lib/crm-integration";
@@ -92,12 +92,14 @@ export default async function WorkspaceSettingsPage({
   const user = await requireUser();
   const { section: rawSection, saved, error, created } = await searchParams;
   const section = getSection(rawSection);
+  const shouldLoadCampaigns = section === "campaigns";
+  const shouldLoadIntegrations = section === "integrations";
   if (section === "integrations" || section === "campaigns") {
     await requireActiveUserBilling(user.id, `/workspace/settings?section=${section}`);
   }
-  const [workspaceContext, dashboardSnapshot] = await Promise.all([
+  const [workspaceContext, campaigns] = await Promise.all([
     getCurrentWorkspaceContext(),
-    getDashboardSnapshot(user.id),
+    shouldLoadCampaigns ? getWorkspaceCampaignsForUser(user.id, false, false) : Promise.resolve([]),
   ]);
   const workspaceName = workspaceContext?.activeWorkspace.name || "My Workspace";
   const businessProfile = workspaceContext?.businessProfile;
@@ -107,23 +109,17 @@ export default async function WorkspaceSettingsPage({
   let integrationError: string | null = null;
   let crmIntegrationError: string | null = null;
   let leadSyncError: string | null = null;
-  const integrationState =
-    admin && workspaceId
-      ? await getWorkspaceMetaIntegrationState({ admin, workspaceId }).catch((err) => {
+  const [integrationState, leadSyncHealth, crmState] = admin && workspaceId && shouldLoadIntegrations
+    ? await Promise.all([
+        getWorkspaceMetaIntegrationState({ admin, workspaceId }).catch((err) => {
           integrationError = err instanceof Error ? err.message : "Meta integration data could not be loaded.";
           return null;
-        })
-      : null;
-  const leadSyncHealth =
-    admin && workspaceId
-      ? await getWorkspaceLeadSyncHealth({ admin, workspaceId }).catch((err) => {
+        }),
+        getWorkspaceLeadSyncHealth({ admin, workspaceId }).catch((err) => {
           leadSyncError = err instanceof Error ? err.message : "Lead sync status could not be loaded.";
           return null;
-        })
-      : null;
-  const crmState =
-    admin && workspaceId
-      ? await getWorkspaceCrmState({ admin, workspaceId }).catch((err) => {
+        }),
+        getWorkspaceCrmState({ admin, workspaceId }).catch((err) => {
           crmIntegrationError = err instanceof Error ? err.message : "CRM connections could not be loaded.";
           return {
             connections: [],
@@ -137,8 +133,12 @@ export default async function WorkspaceSettingsPage({
               skipped: 0,
             },
           };
-        })
-      : {
+        }),
+      ])
+    : [
+        null,
+        null,
+        {
           connections: [],
           destinations: [],
           deliveries: [],
@@ -149,7 +149,8 @@ export default async function WorkspaceSettingsPage({
             retrying: 0,
             skipped: 0,
           },
-        };
+        },
+      ];
   const connection = integrationState?.connection || null;
   const adAccounts = integrationState?.assets.adAccounts || [];
   const pages = integrationState?.assets.pages || [];
@@ -210,7 +211,6 @@ export default async function WorkspaceSettingsPage({
       : leadSyncHealth?.canReadLeads
         ? "Lead recovery sync is available."
         : "Lead form sync needs reconnect permissions.";
-  const campaigns = dashboardSnapshot.campaigns || [];
   const publishedCampaigns = campaigns.filter((campaign) => campaign.status === "published");
   const draftCampaigns = campaigns.filter((campaign) => campaign.status === "draft");
   const archivedCampaigns = campaigns.filter((campaign) => campaign.status === "archived");

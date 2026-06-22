@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
@@ -8,14 +8,16 @@ import {
   ChevronRight,
   FileText,
   Globe,
+  Loader2,
   MessageCircle,
   PhoneCall,
   Rocket,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { FacebookAdPreview } from "@/components/facebook-ad-preview";
+import { LazyFacebookAdPreview } from "@/components/lazy-facebook-ad-preview";
 import { PendingLinkButton } from "@/components/ui/pending-link-button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -26,7 +28,6 @@ import {
   resolveTemplateLaunchCategory,
   supportedIndustries,
 } from "@/data/template-taxonomy";
-import { FacebookAdPreview } from "@/components/facebook-ad-preview";
 import { resolveMetaPagePreviewIdentity } from "@/lib/meta-page-identity";
 import { buildResolvedPlaceholderMap } from "@/lib/template-placeholders";
 import { buildInternationalPhoneNumber, PHONE_COUNTRY_OPTIONS } from "@/lib/phone-utils";
@@ -200,22 +201,6 @@ const adTypeOptions = [
   },
 ] as const;
 
-function getAdTypeFieldHint(adType: CampaignLaunchState["selection"]["adType"]) {
-  switch (adType) {
-    case "lead_form":
-      return "Uses a Facebook lead form, privacy policy, and lead fields.";
-    case "landing_page":
-      return "Needs a public website URL and a selected tracking pixel.";
-    case "call_now":
-      return "Needs a business phone number for the call button.";
-    case "messenger_leads":
-    case "messenger_engagement":
-      return "Uses Messenger-specific setup instead of a website, phone, or lead form.";
-    default:
-      return "";
-  }
-}
-
 function templateSupportsAdType(
   template: TemplateSeed | null,
   adType: CampaignLaunchState["selection"]["adType"],
@@ -293,63 +278,6 @@ function createCustomLeadFormQuestion(
           ]
         : [],
   };
-}
-
-function SectionCard({
-  title,
-  description,
-  children,
-  className,
-}: {
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <Card
-      className={cn(
-        "rounded-[28px] border border-[rgba(102,112,133,0.12)] bg-white/96 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.06)] backdrop-blur-sm",
-        className,
-      )}
-    >
-      <div className="mb-5">
-        <h3 className="text-[1.05rem] font-semibold tracking-[-0.03em] text-[var(--ink)]">{title}</h3>
-        {description ? <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{description}</p> : null}
-      </div>
-      {children}
-    </Card>
-  );
-}
-
-function TopStepPill({
-  stepNumber,
-  label,
-  active,
-  complete,
-}: {
-  stepNumber: number;
-  label: string;
-  active: boolean;
-  complete: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span
-        className={cn(
-          "flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-semibold transition-all",
-          complete || active
-            ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_10px_18px_rgba(109,94,248,0.18)]"
-            : "border-[rgba(102,112,133,0.18)] bg-white text-[var(--muted-strong)]",
-        )}
-      >
-        {complete ? <CheckCircle2 className="h-3.5 w-3.5" /> : stepNumber}
-      </span>
-      <span className={cn("text-xs font-medium", active ? "text-[var(--ink)]" : "text-[var(--muted)]")}>
-        {label}
-      </span>
-    </div>
-  );
 }
 
 function SummaryRow({
@@ -683,6 +611,7 @@ export function TemplateLaunchWizard({
   const [budgetGuidance, setBudgetGuidance] = useState<BudgetGuidanceResponse | null>(null);
   const [budgetGuidanceError, setBudgetGuidanceError] = useState<string | null>(null);
   const [templateCategoryFilter, setTemplateCategoryFilter] = useState("all");
+  const [isStepPending, startStepTransition] = useTransition();
   const locationSuggestionCacheRef = useRef<Map<string, CachedLocationLookup>>(new Map());
   const locationSearchAbortRef = useRef<AbortController | null>(null);
   const budgetGuidanceAbortRef = useRef<AbortController | null>(null);
@@ -701,6 +630,7 @@ export function TemplateLaunchWizard({
   }, [router]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLaunchState((current) => {
       const nextAdAccountId = metaIntegration?.selected.adAccountId || "";
       const nextPageId = metaIntegration?.selected.pageId || "";
@@ -939,6 +869,7 @@ export function TemplateLaunchWizard({
   }, [templates]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTemplateCategoryFilter("all");
   }, [launchState.selection.industry]);
 
@@ -948,6 +879,7 @@ export function TemplateLaunchWizard({
     }
 
     if (!templateCategoryOptions.some((option) => option.key === templateCategoryFilter)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTemplateCategoryFilter("all");
     }
   }, [templateCategoryFilter, templateCategoryOptions]);
@@ -1041,6 +973,12 @@ export function TemplateLaunchWizard({
     setPublishSuccess(null);
   }
 
+  function transitionLaunchState(updater: (current: CampaignLaunchState) => CampaignLaunchState) {
+    startStepTransition(() => {
+      updateLaunchState(updater);
+    });
+  }
+
   function selectTemplateAndAdvance(template: TemplateSeed) {
     const nextState = normalizeCampaignLaunchState(
       {
@@ -1065,11 +1003,11 @@ export function TemplateLaunchWizard({
       businessProfile,
     );
 
-    updateLaunchState(() => nextState);
+    transitionLaunchState(() => nextState);
   }
 
   function applyAdType(adType: CampaignLaunchState["selection"]["adType"]) {
-    updateLaunchState((current) =>
+    transitionLaunchState((current) =>
       normalizeCampaignLaunchState(
         {
           ...current,
@@ -1234,12 +1172,12 @@ export function TemplateLaunchWizard({
       selectedTemplate || templates[0],
       businessProfile,
     );
-    updateLaunchState(() => nextState);
+    transitionLaunchState(() => nextState);
   }
 
   function handleBack() {
     const previousStepId = getPreviousWizardStep(launchState.selection.adType, launchState.stepId);
-    updateLaunchState((current) =>
+    transitionLaunchState((current) =>
       normalizeCampaignLaunchState(
         {
           ...current,
@@ -1551,7 +1489,7 @@ export function TemplateLaunchWizard({
                   "border-[var(--line)] bg-white shadow-[var(--shadow-soft)] hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--brand)_18%,white)] hover:bg-white active:translate-y-px",
                 )}
               >
-                <FacebookAdPreview
+                <LazyFacebookAdPreview
                   template={template}
                   pageName={pagePreviewIdentity.pageName}
                   pageAvatarUrl={pagePreviewIdentity.pageAvatarUrl}
@@ -1598,7 +1536,7 @@ export function TemplateLaunchWizard({
                     data-active={active}
                     className="lf-industry-tile focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:ring-offset-2"
                     onClick={() =>
-                      updateLaunchState((current) =>
+                      transitionLaunchState((current) =>
                         normalizeCampaignLaunchState(
                           {
                             ...current,
@@ -2433,7 +2371,7 @@ export function TemplateLaunchWizard({
                         <div className="rounded-[20px] border border-[var(--line)] bg-white p-4">
                           <p className="text-sm font-semibold text-[var(--ink)]">Choose destination</p>
                           <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                            Choose between Meta's built-in thank-you page or a website redirect after submit.
+                            Choose between Meta&apos;s built-in thank-you page or a website redirect after submit.
                           </p>
                           <div className="mt-4 grid gap-3 lg:grid-cols-2">
                             {[
@@ -2817,24 +2755,6 @@ export function TemplateLaunchWizard({
           </div>
         );
       case "placeholders": {
-        const placeholderPreviewPrimary =
-          previewBlueprint?.adCopy.primary ||
-          selectedTemplate?.adCopy.primary ||
-          selectedTemplate?.description ||
-          "";
-        const placeholderPreviewHeadline =
-          previewBlueprint?.funnelConfig.headline ||
-          selectedTemplate?.name ||
-          "Template headline";
-        const placeholderPreviewDescription =
-          previewBlueprint?.adCopy.descriptions[0] ||
-          selectedTemplate?.promoDetails ||
-          "";
-        const placeholderPreviewCta =
-          selectedTemplate?.ctaLabel ||
-          previewBlueprint?.funnelConfig.ctaText ||
-          resolveTemplateCtaLabel(selectedTemplate, "Learn more");
-
         return (
           <div className="grid gap-5">
             {placeholderFields.length > 0 ? (
@@ -2984,9 +2904,10 @@ export function TemplateLaunchWizard({
                     type="button"
                     variant="outline"
                     onClick={() => persistDraft(launchState, true)}
-                    disabled={!selectedTemplate || saveState === "saving"}
+                    disabled={!selectedTemplate || saveState === "saving" || isPublishing || isStepPending}
                     className="h-11 px-5"
                   >
+                    {saveState === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     {saveState === "saving" ? "Saving…" : "Save Draft"}
                   </Button>
                   {!metaConnected || launchState.selection.adType === "lead_form" ? (
@@ -3001,9 +2922,10 @@ export function TemplateLaunchWizard({
                   <Button
                     type="button"
                     onClick={() => handleLaunch("live")}
-                    disabled={isPublishing || !selectedTemplate}
+                    disabled={isPublishing || !selectedTemplate || saveState === "saving" || isStepPending}
                     className="h-11 px-6"
                   >
+                    {isPublishing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     {isPublishing ? "Launching…" : "Launch Campaign"}
                     <Rocket className="h-4 w-4" />
                   </Button>
@@ -3030,7 +2952,7 @@ export function TemplateLaunchWizard({
         <div className="lf-content-wrap">
           <div className="lf-content">
             {/* Step header */}
-            <div key={`header-${launchState.stepId}`} className="step-content mb-1">
+            <div key={`header-${launchState.stepId}`} className="step-content mb-1" aria-busy={isStepPending}>
               <div className="lf-eyebrow">Step {resolvedStepIndex + 1} of {visibleSteps.length}</div>
               <h1 className="lf-title" style={{ whiteSpace: "pre-line" }}>
                 {getStepHeadline(launchState.stepId)}
@@ -3048,7 +2970,10 @@ export function TemplateLaunchWizard({
             ) : null}
 
             {/* Step content */}
-            <div key={launchState.stepId} className="step-content">
+            <div
+              key={launchState.stepId}
+              className={cn("step-content transition-opacity duration-150", isStepPending ? "opacity-70" : "opacity-100")}
+            >
               {renderStepContent()}
             </div>
           </div>
@@ -3060,10 +2985,10 @@ export function TemplateLaunchWizard({
                 type="button"
                 variant="outline"
                 onClick={handleBack}
-                disabled={currentStepIndex <= 0}
+                disabled={currentStepIndex <= 0 || isStepPending}
                 className="h-11 rounded-[14px] px-5"
               >
-                <ChevronLeft className="h-4 w-4" />
+                {isStepPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronLeft className="h-4 w-4" />}
                 Back
               </Button>
               {launchState.stepId !== "review-launch" ? (
@@ -3077,10 +3002,11 @@ export function TemplateLaunchWizard({
                   <Button
                     type="button"
                     onClick={handleContinue}
+                    disabled={isStepPending}
                     className="h-11 rounded-[14px] px-6 shadow-[0_8px_24px_rgba(109,94,248,0.28)]"
                   >
-                    Continue
-                    <ChevronRight className="h-4 w-4" />
+                    {isStepPending ? "Loading…" : "Continue"}
+                    {isStepPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
                   </Button>
                 )
               ) : null}

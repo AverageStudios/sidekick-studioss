@@ -7,7 +7,7 @@ import { buildResolvedPlaceholderMap, replacePlaceholdersInString } from "@/lib/
 import { cn } from "@/lib/utils";
 import { TemplateSeed } from "@/types";
 
-type FacebookAdPreviewProps = {
+export type FacebookAdPreviewProps = {
   template?: TemplateSeed | null;
   pageName?: string;
   pageAvatarUrl?: string | null;
@@ -290,6 +290,7 @@ export function FacebookAdPreview({
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsPrimaryExpanded(false);
   }, [resolvedPrimaryText, compact, template?.id]);
 

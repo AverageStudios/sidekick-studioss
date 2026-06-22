@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { LazyFacebookAdPreview } from "@/components/lazy-facebook-ad-preview";
 import { Button } from "@/components/ui/button";
-import { FacebookAdPreview } from "@/components/facebook-ad-preview";
 import { TemplateSeed } from "@/types";
 
 export function TemplateCard({ template }: { template: TemplateSeed }) {
   return (
     <div className="group flex max-w-[22rem] flex-col overflow-hidden rounded-[30px] border border-[var(--line)] bg-white transition duration-200 hover:shadow-[0_16px_40px_rgba(16,24,40,0.08)]">
-      <FacebookAdPreview
+      <LazyFacebookAdPreview
         template={template}
         description={template.promoDetails}
         className="border-0 shadow-none"

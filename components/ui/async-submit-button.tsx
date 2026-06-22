@@ -36,6 +36,7 @@ export function AsyncSubmitButton({
       className={className}
       disabled={isDisabled}
       aria-disabled={isDisabled}
+      aria-busy={pending}
       {...props}
     >
       {pending ? pendingIcon || <Loader2 className="h-4 w-4 animate-spin" /> : icon}

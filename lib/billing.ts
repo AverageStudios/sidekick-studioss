@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -106,7 +107,7 @@ export class BillingSubscriptionSyncError extends Error {
   }
 }
 
-async function isBillingBypassUser(userId: string) {
+const isBillingBypassUser = cache(async (userId: string) => {
   if (!isSupabaseServerConfigured()) {
     return false;
   }
@@ -130,7 +131,7 @@ async function isBillingBypassUser(userId: string) {
   }
 
   return data?.role === "admin";
-}
+});
 
 function isMissingUserBillingTableError(message: string | null | undefined) {
   if (!message) return false;

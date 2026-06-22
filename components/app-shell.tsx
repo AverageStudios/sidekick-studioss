@@ -3,7 +3,7 @@ import { BarChart3, BookOpenText, Building2, ChevronDown, LayoutDashboard, Layou
 import { ConfigNotice } from "@/components/config-notice";
 import { InitialsAvatar } from "@/components/initials-avatar";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
-import { getCurrentProfile, getCurrentRole, getCurrentUser, getUserAvatarUrl } from "@/lib/auth";
+import { getCurrentProfile, getUserAvatarUrl } from "@/lib/auth";
 import { getSupabaseFallbackMessage } from "@/lib/env";
 import { cn } from "@/lib/utils";
 import {
@@ -31,18 +31,17 @@ export async function AppShell({
   children: React.ReactNode;
 }) {
   const supabaseFallbackMessage = getSupabaseFallbackMessage();
-  const [role, workspaceContext, user, accountProfile] = await Promise.all([
-    getCurrentRole(),
+  const [workspaceContext, accountProfile] = await Promise.all([
     getCurrentWorkspaceContext(),
-    getCurrentUser(),
     getCurrentProfile(),
   ]);
-  const identityUser = user || {
+  const identityUser = {
     id: accountProfile?.user_id || "unknown-user",
     email: workspaceContext?.userEmail || null,
     user_metadata: {},
   };
   const identityProfile = accountProfile || workspaceContext?.profile || null;
+  const role = identityProfile?.role || workspaceContext?.profile?.role || "user";
   const userDisplayName =
     getUserDisplayNameFromProfile(identityProfile, identityUser) ||
     workspaceContext?.userDisplayName ||

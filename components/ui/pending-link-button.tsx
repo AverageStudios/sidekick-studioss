@@ -35,6 +35,7 @@ export function PendingLinkButton({
       className={className}
       disabled={isDisabled}
       aria-disabled={isDisabled}
+      aria-busy={pending}
       onClick={() => {
         if (isDisabled) return;
         setPending(true);

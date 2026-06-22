@@ -23,7 +23,7 @@ import { deleteDraftCampaignAction } from "@/app/actions";
 import { requireProductAccessUser } from "@/lib/auth";
 import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
 import { getWorkspaceCrmState } from "@/lib/crm-integration";
-import { getDashboardSnapshot, getLeads, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
+import { getLeads, getWorkspaceCampaignsForUser, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
 import { getLeadSubmittedAt } from "@/lib/leads";
 import { fetchMetaAdAccountDetails, fetchMetaAdAccountInsights } from "@/lib/meta";
 import { getWorkspaceLeadSyncHealth, type WorkspaceLeadSyncHealth } from "@/lib/meta-leads";
@@ -386,14 +386,21 @@ function EmptyWorkspaceState() {
 export default async function PerformancePage() {
   const user = await requireProductAccessUser("/performance");
   const admin = createSupabaseAdminClient();
-  const [activeWorkspaceId, snapshot, metaIntegration] = await Promise.all([
+  const [activeWorkspaceId, metaIntegration] = await Promise.all([
     getActiveWorkspaceIdForUser(user.id),
-    getDashboardSnapshot(user.id, { allowDemo: false }),
     getWorkspaceMetaIntegrationForUser(user.id),
   ]);
 
   if (!activeWorkspaceId) {
     return <EmptyWorkspaceState />;
+  }
+
+  let campaigns: CampaignRecord[] = [];
+  let campaignLoadError = false;
+  try {
+    campaigns = await getWorkspaceCampaignsForUser(user.id, true, false);
+  } catch {
+    campaignLoadError = true;
   }
 
   let allLeads: LeadRecord[] = [];
@@ -432,13 +439,13 @@ export default async function PerformancePage() {
       : Promise.resolve(null),
   ]);
 
-  const campaigns = snapshot.campaigns
+  const sortedCampaigns = campaigns
     .slice()
     .sort((left, right) => +new Date(right.updated_at) - +new Date(left.updated_at));
-  const campaignSummary = summarizeCampaignLifecycles(campaigns);
-  const pausedCampaigns = campaigns.filter((campaign) => getCampaignLifecycleState(campaign) === "paused");
-  const draftCampaigns = campaigns.filter((campaign) => getCampaignLifecycleState(campaign) === "draft");
-  const errorCampaigns = campaigns.filter(
+  const campaignSummary = summarizeCampaignLifecycles(sortedCampaigns);
+  const pausedCampaigns = sortedCampaigns.filter((campaign) => getCampaignLifecycleState(campaign) === "paused");
+  const draftCampaigns = sortedCampaigns.filter((campaign) => getCampaignLifecycleState(campaign) === "draft");
+  const errorCampaigns = sortedCampaigns.filter(
     (campaign) => campaign.management_sync_state === "error" || campaign.management_sync_state === "stale",
   );
 
@@ -450,7 +457,7 @@ export default async function PerformancePage() {
   const newLeadsLast30Days = countLeadsInPastDays(allLeads, 30);
   const costPerLead = spend !== null && totalLeads > 0 ? spend / totalLeads : null;
   const leadBuckets = buildLeadBuckets(allLeads);
-  const campaignRows = buildCampaignRows(campaigns, allLeads);
+  const campaignRows = buildCampaignRows(sortedCampaigns, allLeads);
   const attentionItems = buildAttentionItems({
     metaConnected,
     metaReportingReady: reportingReady,
@@ -475,7 +482,7 @@ export default async function PerformancePage() {
   return (
     <AppShell currentPath="/performance">
       <div className="space-y-8">
-        {snapshot.loadError || leadsLoadError ? (
+        {campaignLoadError || leadsLoadError ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             Some performance data is temporarily unavailable. The page is showing safe fallback states until reporting loads again.
           </div>
