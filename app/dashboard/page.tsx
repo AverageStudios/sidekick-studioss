@@ -329,16 +329,10 @@ export default async function DashboardPage({
           </div>
         ) : null}
 
-        {snapshot.loadError ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Some workspace metrics are temporarily unavailable. The page is showing safe fallback states until the next refresh.
-          </div>
-        ) : null}
-
         <PageHeader
           variant="plain"
-          badge="Home"
-          title="Workspace overview"
+          badge="Workspace overview"
+          title="Home"
           actions={
             <>
               <Button asChild variant="outline">

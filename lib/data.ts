@@ -192,6 +192,10 @@ export const getDashboardSnapshot = cache(async (userId: string, options?: Dashb
       loadError: null,
     };
   } catch (error) {
+    console.error("[dashboard snapshot] metrics load failed", {
+      userId,
+      message: error instanceof Error ? error.message : "unknown_error",
+    });
     return {
       ...getEmptyDashboardSnapshot(),
       loadError: error instanceof Error ? error.message : "Dashboard metrics could not be loaded.",
