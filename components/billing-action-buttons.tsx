@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { ArrowRight, CreditCard } from "lucide-react";
-import { ConfirmationModal } from "@/components/account-management-actions";
 import { Button } from "@/components/ui/button";
 
 async function postForRedirect(url: string) {
@@ -35,11 +34,15 @@ export function StartTrialButton({
   nextPath,
   autoStart = false,
   className,
+  label = "Start 14-day free trial",
+  pendingLabel = "Starting trial...",
 }: {
   loggedIn: boolean;
   nextPath?: string;
   autoStart?: boolean;
   className?: string;
+  label?: string;
+  pendingLabel?: string;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -63,7 +66,7 @@ export function StartTrialButton({
     return (
       <Button asChild className={className}>
         <a href={resolveLoggedOutTrialHref(nextPath)}>
-          Start 14-day free trial
+          {label}
           <ArrowRight className="h-4 w-4" />
         </a>
       </Button>
@@ -87,7 +90,7 @@ export function StartTrialButton({
           })
         }
       >
-        {isPending ? "Starting trial..." : "Start 14-day free trial"}
+        {isPending ? pendingLabel : label}
         <ArrowRight className="h-4 w-4" />
       </Button>
       {error ? (
@@ -130,61 +133,6 @@ export function ManageBillingButton({
         <CreditCard className="h-4 w-4" />
         {isPending ? "Opening billing..." : label}
       </Button>
-      {error ? (
-        <p className="text-sm text-rose-700">{error}</p>
-      ) : null}
-    </div>
-  );
-}
-
-export function CancelSubscriptionPortalButton({
-  hasActiveBilling = false,
-}: {
-  hasActiveBilling?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  return (
-    <div className="space-y-3">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-300 hover:bg-amber-100 hover:text-amber-900"
-        onClick={() => setOpen(true)}
-      >
-        <CreditCard className="h-4 w-4" />
-        Cancel subscription
-      </Button>
-      <ConfirmationModal
-        open={open}
-        onClose={() => setOpen(false)}
-        eyebrow="Billing"
-        title="Cancel subscription?"
-        description="You’ll be taken to the Stripe billing portal, where you can cancel the trial or subscription for this account."
-        note={
-          hasActiveBilling
-            ? "Your cancellation settings are handled securely in Stripe."
-            : "If this account has billing set up, Stripe is where you can cancel it safely."
-        }
-        tone="warning"
-        cancelLabel="Go back"
-        submitLabel="Open billing portal"
-        pendingLabel="Opening portal..."
-        pendingOverride={isPending}
-        onSubmit={() =>
-          startTransition(async () => {
-            try {
-              setError(null);
-              await postForRedirect("/api/billing/create-portal-session");
-            } catch (fetchError) {
-              setError(fetchError instanceof Error ? fetchError.message : "Billing portal could not be opened.");
-            }
-          })
-        }
-      />
       {error ? (
         <p className="text-sm text-rose-700">{error}</p>
       ) : null}

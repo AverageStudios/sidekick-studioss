@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/app-shell";
 import { DeleteAccountButton } from "@/components/account-management-actions";
-import { CancelSubscriptionPortalButton, ManageBillingButton, StartTrialButton } from "@/components/billing-action-buttons";
+import { ManageBillingButton, StartTrialButton } from "@/components/billing-action-buttons";
 import { InitialsAvatar } from "@/components/initials-avatar";
 import { ProfilePictureField } from "@/components/profile-picture-field";
 import Link from "next/link";
@@ -9,8 +9,37 @@ import { signOutAction, updateProfileSettingsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getCurrentProfile, getUserAvatarUrl, requireUser } from "@/lib/auth";
-import { getUserBillingStatus } from "@/lib/billing";
+import { getBillingDisplayState, getUserBillingStatus } from "@/lib/billing";
 import { getCurrentWorkspaceContext, getUserDisplayNameFromProfile, getUserInitialsFromProfile } from "@/lib/workspaces";
+
+function formatBillingDate(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function getBillingPillClass(key: ReturnType<typeof getBillingDisplayState>["key"]) {
+  switch (key) {
+    case "trial_active":
+    case "active":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "trial_cancels_soon":
+    case "cancels_soon":
+    case "payment_issue_grace":
+      return "border-amber-200 bg-amber-50 text-amber-800";
+    case "payment_required":
+    case "canceled":
+    case "paused":
+      return "border-rose-200 bg-rose-50 text-rose-700";
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-600";
+  }
+}
 
 export default async function SettingsPage({
   searchParams,
@@ -24,6 +53,8 @@ export default async function SettingsPage({
     getCurrentProfile(),
   ]);
   const billingStatus = await getUserBillingStatus(user.id);
+  const billingDisplayState = getBillingDisplayState(billingStatus);
+  const billingDate = formatBillingDate(billingDisplayState.importantDateValue);
   const resolvedProfile = accountProfile || workspaceContext?.profile || null;
   const resolvedName =
     getUserDisplayNameFromProfile(resolvedProfile, user) ||
@@ -37,10 +68,6 @@ export default async function SettingsPage({
   const resolvedAvatarUrl = getUserAvatarUrl(resolvedProfile, user);
   const savedMessage = saved && saved !== "1" ? saved : saved ? "Settings saved." : "";
   const hasActiveBilling = billingStatus.hasAccess;
-  const subscriptionLabel =
-    billingStatus.subscriptionStatus === "none"
-      ? "Not started"
-      : billingStatus.subscriptionStatus.replaceAll("_", " ");
 
   return (
     <AppShell currentPath="/settings">
@@ -141,25 +168,34 @@ export default async function SettingsPage({
         <div className="mb-5">
           <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--muted)]">Billing & account</p>
           <h2 className="mt-1 text-base font-semibold text-[var(--ink)]">Billing & account controls</h2>
-          <p className="mt-0.5 text-sm text-[var(--muted)]">
-            Subscription cancellation and permanent account removal live here so they are easy to find when you need them.
-          </p>
+          <p className="mt-0.5 text-sm text-[var(--muted)]">Manage your SideKick subscription and account access.</p>
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="space-y-5">
-            <div className="rounded-2xl border border-amber-200 bg-[linear-gradient(180deg,#fffdf5_0%,#fff9e7_100%)] p-5 shadow-[0_8px_24px_rgba(120,53,15,0.06)]">
-              <div className="flex items-start gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+            <div className="rounded-2xl border border-[var(--line)] bg-white p-5 shadow-[0_14px_40px_rgba(15,23,42,0.05)]">
+              <div className="flex items-start gap-4">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--soft-panel)] text-[var(--brand)]">
                   <CreditCard className="h-5 w-5" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Billing</p>
-                  <h3 className="mt-1 text-lg font-semibold text-[var(--ink)]">SideKick Core</h3>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Billing</p>
+                      <h3 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-[var(--ink)]">SideKick Core</h3>
+                    </div>
+                    <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${getBillingPillClass(billingDisplayState.key)}`}>
+                      {billingDisplayState.label}
+                    </span>
+                  </div>
                   <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">
-                    Billing belongs to your user account, not to individual workspaces. One paid account unlocks SideKick across every workspace you create or belong to.
+                    One SideKick subscription unlocks every workspace on your account.
                   </p>
-                  <div className="mt-4 grid gap-3 rounded-2xl border border-amber-200/60 bg-white/75 p-4 sm:grid-cols-2">
+                  <div className="mt-5 grid gap-3 rounded-2xl border border-[var(--line)] bg-[var(--soft-panel)] p-4 sm:grid-cols-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Plan</p>
+                      <p className="mt-1 text-sm font-semibold text-[var(--ink)]">SideKick Core</p>
+                    </div>
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Price</p>
                       <p className="mt-1 text-sm font-semibold text-[var(--ink)]">$97/month</p>
@@ -168,36 +204,41 @@ export default async function SettingsPage({
                       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Workspaces</p>
                       <p className="mt-1 text-sm font-semibold text-[var(--ink)]">Unlimited</p>
                     </div>
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Status</p>
-                      <p className="mt-1 text-sm font-semibold capitalize text-[var(--ink)]">{subscriptionLabel}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Trial / period end</p>
-                      <p className="mt-1 text-sm font-semibold text-[var(--ink)]">
-                        {billingStatus.trialEndsAt
-                          ? new Date(billingStatus.trialEndsAt).toLocaleDateString()
-                          : billingStatus.currentPeriodEnd
-                            ? new Date(billingStatus.currentPeriodEnd).toLocaleDateString()
-                            : "Not started"}
-                      </p>
-                    </div>
                   </div>
-                  {billingStatus.cancelAtPeriodEnd ? (
-                    <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                      This subscription is set to cancel at the end of the current billing period.
-                    </div>
-                  ) : null}
+                  <div className="mt-4 rounded-2xl border border-[var(--line)] bg-white px-4 py-3">
+                    <p className="text-sm leading-6 text-[var(--muted-strong)]">{billingDisplayState.description}</p>
+                    {billingDisplayState.importantDateLabel && billingDate ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                        <span className="font-semibold text-[var(--ink)]">{billingDisplayState.importantDateLabel}</span>
+                        <span className="text-[var(--muted)]">{billingDate}</span>
+                      </div>
+                    ) : null}
+                  </div>
                   <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                    {billingStatus.stripeCustomerId ? (
-                      <>
-                        <ManageBillingButton />
-                        <CancelSubscriptionPortalButton hasActiveBilling={hasActiveBilling} />
-                      </>
+                    {billingDisplayState.primaryActionType === "portal" && billingStatus.stripeCustomerId ? (
+                      <ManageBillingButton
+                        label={billingDisplayState.primaryActionLabel}
+                        variant="primary"
+                        className="sm:min-w-48"
+                      />
                     ) : (
-                      <StartTrialButton loggedIn nextPath="/settings#account-controls" />
+                      <StartTrialButton
+                        loggedIn
+                        nextPath="/settings#account-controls"
+                        label={billingDisplayState.primaryActionLabel}
+                        pendingLabel="Opening checkout..."
+                        className="sm:min-w-48"
+                      />
                     )}
+                    {!billingStatus.isStripeConfigured ? (
+                      <Button asChild variant="outline">
+                        <Link href="/support/new?from=/settings-billing">Contact support</Link>
+                      </Button>
+                    ) : null}
                   </div>
+                  <p className="mt-4 text-xs leading-5 text-[var(--muted)]">
+                    Payment method required. Ad spend is billed separately by Meta.
+                  </p>
                 </div>
               </div>
             </div>
@@ -214,7 +255,7 @@ export default async function SettingsPage({
                 </p>
               </div>
               <p className="text-xs leading-5 text-[var(--muted)]">
-                Cancel any active trial or subscription in Stripe before deleting the account if you do not want billing to continue.
+                Manage billing in Stripe before deleting your account if you need to change an active trial or subscription.
               </p>
               <div className="pt-2">
                 <DeleteAccountButton hasActiveBilling={hasActiveBilling} />

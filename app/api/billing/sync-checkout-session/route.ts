@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { CheckoutSessionSyncError, syncCheckoutSessionBillingForUser } from "@/lib/billing";
+import { CheckoutSessionSyncError, getBillingDisplayState, syncCheckoutSessionBillingForUser } from "@/lib/billing";
 import { checkRateLimit, createRateLimitResponse, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
@@ -44,6 +44,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       billingStatus: result.billingStatus,
+      billingDisplayState: getBillingDisplayState(result.billingStatus),
       stripeCustomerId: result.stripeCustomerId,
       stripeSubscriptionId: result.stripeSubscriptionId,
       stripePriceId: result.stripePriceId,

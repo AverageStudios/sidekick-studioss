@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentProfile, getCurrentUser } from "@/lib/auth";
-import { getUserBillingStatus, upsertUserBillingRow } from "@/lib/billing";
+import { getBillingDisplayState, getUserBillingStatus, upsertUserBillingRow } from "@/lib/billing";
 import { env, isStripeConfigured, isSupabaseServerConfigured } from "@/lib/env";
 import { checkRateLimit, createRateLimitResponse, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
 import { getStripeServerClient } from "@/lib/stripe";
@@ -46,7 +46,12 @@ export async function POST(request: Request) {
   }
 
   const billingStatus = await getUserBillingStatus(user.id);
-  if (billingStatus.hasAccess) {
+  const billingDisplayState = getBillingDisplayState(billingStatus);
+  const shouldOpenPortal =
+    billingDisplayState.primaryActionType === "portal" ||
+    ["trial_active", "trial_cancels_soon", "active", "cancels_soon", "payment_issue_grace"].includes(billingDisplayState.key);
+
+  if (shouldOpenPortal) {
     if (billingStatus.stripeCustomerId) {
       try {
         const portalSession = await stripe.billingPortal.sessions.create({
@@ -120,7 +125,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Checkout could not be started.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.warn("[billing checkout] checkout session creation failed", {
+      userId: user.id,
+      message: error instanceof Error ? error.message : "unknown_error",
+    });
+    return NextResponse.json({ error: "Checkout could not be started." }, { status: 500 });
   }
 }

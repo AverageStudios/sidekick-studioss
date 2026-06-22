@@ -41,6 +41,34 @@ export type UserBillingStatus = {
   isStripeConfigured: boolean;
 };
 
+export type BillingPrimaryActionType = "checkout" | "portal";
+
+export type BillingDisplayStateKey =
+  | "not_started"
+  | "trial_active"
+  | "trial_cancels_soon"
+  | "active"
+  | "cancels_soon"
+  | "payment_issue_grace"
+  | "payment_required"
+  | "canceled"
+  | "incomplete"
+  | "checkout_expired"
+  | "paused";
+
+export type BillingDisplayState = {
+  key: BillingDisplayStateKey;
+  label: string;
+  description: string;
+  accessAllowed: boolean;
+  primaryActionLabel: string;
+  primaryActionType: BillingPrimaryActionType;
+  secondaryActionLabel?: string;
+  secondaryActionType?: BillingPrimaryActionType;
+  importantDateLabel?: string;
+  importantDateValue?: string | null;
+};
+
 type BillingStatusRetryOptions = {
   attempts?: number;
   delayMs?: number;
@@ -128,6 +156,166 @@ function isFutureDate(value: string | null | undefined) {
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function getBillingDisplayState(
+  input: UserBillingStatus | UserBillingRecord | null | undefined,
+): BillingDisplayState {
+  const status =
+    input && "subscriptionStatus" in input
+      ? input
+      : evaluateUserBillingStatus(normalizeBillingRow(input as UserBillingRecord | null | undefined));
+  const subscriptionStatus = status.subscriptionStatus;
+  const hasSubscription = Boolean(status.stripeSubscriptionId);
+  const cancelAtPeriodEnd = status.cancelAtPeriodEnd;
+
+  if (!hasSubscription && subscriptionStatus === "none") {
+    return {
+      key: "not_started",
+      label: "Not started",
+      accessAllowed: false,
+      primaryActionLabel: "Start 14-day free trial",
+      primaryActionType: "checkout",
+      description: "Start your 14-day free trial to unlock SideKick across unlimited workspaces.",
+    };
+  }
+
+  if (subscriptionStatus === "trialing" && cancelAtPeriodEnd) {
+    return {
+      key: "trial_cancels_soon",
+      label: "Trial canceled",
+      accessAllowed: status.hasAccess,
+      primaryActionLabel: "Manage billing",
+      primaryActionType: "portal",
+      importantDateLabel: "Access ends",
+      importantDateValue: status.trialEndsAt,
+      description: "Your trial has been canceled. You can keep using SideKick until the trial ends.",
+    };
+  }
+
+  if (subscriptionStatus === "trialing") {
+    return {
+      key: "trial_active",
+      label: "Trial active",
+      accessAllowed: true,
+      primaryActionLabel: "Manage billing",
+      primaryActionType: "portal",
+      importantDateLabel: "Trial ends",
+      importantDateValue: status.trialEndsAt,
+      description: "You will not be charged until your trial ends. You can cancel anytime before billing.",
+    };
+  }
+
+  if (subscriptionStatus === "active" && cancelAtPeriodEnd) {
+    return {
+      key: "cancels_soon",
+      label: "Cancels soon",
+      accessAllowed: status.hasAccess,
+      primaryActionLabel: "Manage billing",
+      primaryActionType: "portal",
+      importantDateLabel: "Access ends",
+      importantDateValue: status.currentPeriodEnd,
+      description: "Your subscription has been canceled. You can keep using SideKick until the end of your current billing period.",
+    };
+  }
+
+  if (subscriptionStatus === "active") {
+    return {
+      key: "active",
+      label: "Active",
+      accessAllowed: true,
+      primaryActionLabel: "Manage billing",
+      primaryActionType: "portal",
+      importantDateLabel: "Next billing date",
+      importantDateValue: status.currentPeriodEnd,
+      description: "Your account unlocks SideKick across unlimited workspaces.",
+    };
+  }
+
+  if (subscriptionStatus === "past_due" && isFutureDate(status.currentPeriodEnd)) {
+    return {
+      key: "payment_issue_grace",
+      label: "Payment issue",
+      accessAllowed: true,
+      primaryActionLabel: "Update payment method",
+      primaryActionType: "portal",
+      importantDateLabel: "Access continues until",
+      importantDateValue: status.currentPeriodEnd,
+      description: "We could not process your latest payment. Update your billing details to avoid losing access.",
+    };
+  }
+
+  if (subscriptionStatus === "canceled") {
+    return {
+      key: "canceled",
+      label: "Canceled",
+      accessAllowed: false,
+      primaryActionLabel: "Restart subscription",
+      primaryActionType: "checkout",
+      description: "Your SideKick access has ended. Restart your subscription to continue using campaigns, leads, and integrations.",
+    };
+  }
+
+  if (subscriptionStatus === "incomplete") {
+    return {
+      key: "incomplete",
+      label: "Checkout incomplete",
+      accessAllowed: false,
+      primaryActionLabel: "Finish checkout",
+      primaryActionType: "checkout",
+      description: "Your subscription setup was not completed. Finish checkout to start using SideKick.",
+    };
+  }
+
+  if (subscriptionStatus === "incomplete_expired") {
+    return {
+      key: "checkout_expired",
+      label: "Checkout expired",
+      accessAllowed: false,
+      primaryActionLabel: "Start 14-day free trial",
+      primaryActionType: "checkout",
+      description: "Your checkout session expired. Start a new trial whenever you are ready.",
+    };
+  }
+
+  if (subscriptionStatus === "unpaid" || subscriptionStatus === "past_due") {
+    return {
+      key: "payment_required",
+      label: "Payment required",
+      accessAllowed: false,
+      primaryActionLabel: "Update payment method",
+      primaryActionType: "portal",
+      description:
+        subscriptionStatus === "unpaid"
+          ? "Your subscription is unpaid. Update billing to regain access."
+          : "Your payment could not be processed. Update your billing details to continue using SideKick.",
+    };
+  }
+
+  if (subscriptionStatus === "paused") {
+    return {
+      key: "paused",
+      label: "Paused",
+      accessAllowed: false,
+      primaryActionLabel: "Manage billing",
+      primaryActionType: "portal",
+      description: "Your subscription is paused. Manage billing to reactivate access.",
+    };
+  }
+
+  return {
+    key: "not_started",
+    label: "Not started",
+    accessAllowed: false,
+    primaryActionLabel: "Start 14-day free trial",
+    primaryActionType: "checkout",
+    description: "Start your 14-day free trial to unlock SideKick across unlimited workspaces.",
+  };
+}
+
+export function canCreateCheckoutForBillingStatus(status: UserBillingStatus) {
+  const displayState = getBillingDisplayState(status);
+  return ["not_started", "canceled", "incomplete", "checkout_expired", "payment_required"].includes(displayState.key);
 }
 
 export function evaluateUserBillingStatus(row: UserBillingRecord | null): UserBillingStatus {

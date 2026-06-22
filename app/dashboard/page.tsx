@@ -259,16 +259,16 @@ function BillingActivationState({ sessionId }: { sessionId?: string | null }) {
               </div>
               <div className="space-y-2">
                 <h1 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)] sm:text-[2.15rem]">
-                  Activating your trial…
+                  We could not finish activating your trial.
                 </h1>
                 <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-[15px]">
-                  Stripe checkout finished successfully. SideKick is still waiting for the billing update to land, which usually only takes a few seconds.
+                  The checkout confirmation was missing the session details SideKick needs to verify your subscription instantly.
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Button asChild>
-                  <Link href="/dashboard?checkout=success">
-                    Check again
+                  <Link href="/pricing?startTrial=1">
+                    Retry activation
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>

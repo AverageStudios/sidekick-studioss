@@ -60,7 +60,7 @@ export function BillingCheckoutSyncState({ sessionId }: { sessionId: string }) {
       }
     }
 
-    setError("We couldn’t activate your trial automatically yet. Please retry activation or contact support.");
+    setError("We could not finish activating your trial.");
     setPhase("failed");
   }, [router, sessionId]);
 
@@ -87,7 +87,7 @@ export function BillingCheckoutSyncState({ sessionId }: { sessionId: string }) {
           <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-[15px]">
             {phase === "syncing"
               ? "Stripe checkout finished successfully. SideKick is syncing your billing now so the dashboard can unlock."
-              : error || "We couldn’t finish activating your trial automatically."}
+              : error || "We could not finish activating your trial."}
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">

@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import type { ReactNode } from "react";
-import { AlertTriangle, CreditCard, Trash2, X } from "lucide-react";
-import { cancelSubscriptionAction, deleteAccountAction } from "@/app/actions";
+import { AlertTriangle, Trash2, X } from "lucide-react";
+import { deleteAccountAction } from "@/app/actions";
 import { AsyncSubmitButton } from "@/components/ui/async-submit-button";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -165,33 +165,6 @@ function ConfirmActionForm({
         pendingLabel={pendingLabel}
       />
     </form>
-  );
-}
-
-export function CancelSubscriptionButton({
-  hasActiveBilling = false,
-}: {
-  hasActiveBilling?: boolean;
-}) {
-  return (
-    <ConfirmActionForm
-      triggerLabel="Cancel subscription"
-      triggerIcon={<CreditCard className="h-4 w-4" />}
-      triggerClassName="border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-300 hover:bg-amber-100 hover:text-amber-900"
-      action={cancelSubscriptionAction}
-      confirmEyebrow="Billing"
-      confirmTitle="Cancel subscription?"
-      confirmDescription="We’ll submit a billing cancellation request from your account settings so the SideKick team can stop the trial or subscription for this account."
-      confirmNote={
-        hasActiveBilling
-          ? "This should cancel the active trial or subscription tied to this account."
-          : "If billing is active on this account in the future, this request will still be the right place to start."
-      }
-      confirmTone="warning"
-      cancelLabel="Go back"
-      submitLabel="Yes, cancel subscription"
-      pendingLabel="Submitting request..."
-    />
   );
 }
 

@@ -4,23 +4,18 @@ import { ManageBillingButton, StartTrialButton } from "@/components/billing-acti
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getCurrentUser, requireUser } from "@/lib/auth";
-import { getUserBillingStatus } from "@/lib/billing";
+import { getBillingDisplayState, getUserBillingStatus } from "@/lib/billing";
 
-function buildReason(status: Awaited<ReturnType<typeof getUserBillingStatus>>) {
-  switch (status.subscriptionStatus) {
+function getBillingRequiredHeadline(key: ReturnType<typeof getBillingDisplayState>["key"]) {
+  switch (key) {
     case "canceled":
-      return "This account no longer has an active SideKick subscription.";
-    case "incomplete":
-    case "incomplete_expired":
-      return "Billing setup was started but never completed.";
-    case "unpaid":
-      return "This account is currently unpaid.";
+      return "Restart your subscription";
+    case "payment_issue_grace":
+    case "payment_required":
     case "paused":
-      return "This account is paused and needs billing attention.";
-    case "past_due":
-      return "Your last payment needs attention before SideKick can unlock product access again.";
+      return "Update your billing";
     default:
-      return "Start your SideKick plan to unlock campaign launch, performance, and CRM handoff across all workspaces on this account.";
+      return "Start your 14-day free trial";
   }
 }
 
@@ -41,7 +36,22 @@ export default async function BillingRequiredPage({
   }
 
   const safeReturnTo = returnTo?.startsWith("/") ? returnTo : "/dashboard";
-  const hasCustomer = Boolean(billingStatus.stripeCustomerId);
+  const billingDisplayState = getBillingDisplayState(billingStatus);
+  const headline = getBillingRequiredHeadline(billingDisplayState.key);
+  const primaryAction =
+    billingDisplayState.primaryActionType === "portal" && billingStatus.stripeCustomerId
+      ? (
+        <ManageBillingButton label={billingDisplayState.primaryActionLabel} variant="primary" />
+      )
+      : (
+        <StartTrialButton
+          loggedIn
+          nextPath={safeReturnTo}
+          label={billingDisplayState.primaryActionLabel}
+          pendingLabel="Opening checkout..."
+          className="sm:min-w-56"
+        />
+      );
 
   return (
     <AppShell currentPath="/settings">
@@ -49,10 +59,12 @@ export default async function BillingRequiredPage({
         <Card className="rounded-[28px] border-[var(--line)] bg-white p-8 shadow-[0_16px_50px_rgba(15,23,42,0.06)]">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Billing required</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-[-0.05em] text-[var(--ink)]">
-            Finish billing to keep using SideKick
+            {headline}
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-            {buildReason(billingStatus)}
+            {billingDisplayState.key === "not_started"
+              ? "Activate SideKick Core to launch campaigns, capture leads, and manage unlimited workspaces."
+              : billingDisplayState.description}
           </p>
 
           <div className="mt-6 rounded-[22px] border border-[var(--line)] bg-[var(--soft-panel)] p-5">
@@ -71,19 +83,13 @@ export default async function BillingRequiredPage({
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Status</p>
-                <p className="mt-1 text-base font-semibold capitalize text-[var(--ink)]">
-                  {billingStatus.subscriptionStatus.replaceAll("_", " ")}
-                </p>
+                <p className="mt-1 text-base font-semibold text-[var(--ink)]">{billingDisplayState.label}</p>
               </div>
             </div>
           </div>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            {hasCustomer ? (
-              <ManageBillingButton label="Manage billing" />
-            ) : (
-              <StartTrialButton loggedIn nextPath={safeReturnTo} className="sm:min-w-56" />
-            )}
+            {primaryAction}
             <Button asChild variant="outline">
               <Link href="/support/new?from=/billing-required">Contact support</Link>
             </Button>
