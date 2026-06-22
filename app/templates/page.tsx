@@ -22,10 +22,10 @@ export default async function TemplatesPage() {
           actions={
             <>
               <Button asChild variant="outline">
-                <Link href="/campaigns">View campaigns</Link>
+                <Link href="/campaigns" prefetch>View campaigns</Link>
               </Button>
               <Button asChild>
-                <Link href="/templates/new">Launch from template</Link>
+                <Link href="/templates/new" prefetch>Launch from template</Link>
               </Button>
             </>
           }
@@ -45,7 +45,7 @@ export default async function TemplatesPage() {
             </p>
             <div className="mt-6">
               <Button asChild className="rounded-[18px] px-5">
-                <Link href="/templates/new">Open launch flow</Link>
+                <Link href="/templates/new" prefetch>Open launch flow</Link>
               </Button>
             </div>
           </Card>

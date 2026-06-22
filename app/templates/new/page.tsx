@@ -44,7 +44,7 @@ export default async function NewTemplateCampaignPage({
           </p>
           <div className="mt-6">
             <Button asChild className="rounded-[18px] px-5">
-              <Link href="/templates">Back to templates</Link>
+              <Link href="/templates" prefetch>Back to templates</Link>
             </Button>
           </div>
         </Card>

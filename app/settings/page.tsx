@@ -83,16 +83,16 @@ export default async function SettingsPage({
         </div>
         <div className="flex flex-wrap gap-3">
           <Button asChild variant="outline">
-            <Link href="/workspace/settings">Open workspace settings</Link>
+            <Link href="/workspace/settings" prefetch>Open workspace settings</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/academy">
+            <Link href="/academy" prefetch>
               <BookOpenText className="h-4 w-4" />
               View Academy
             </Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/support/new?from=/settings">
+            <Link href="/support/new?from=/settings" prefetch>
               <LifeBuoy className="h-4 w-4" />
               Get Support
             </Link>
@@ -234,7 +234,7 @@ export default async function SettingsPage({
                     )}
                     {!billingStatus.isStripeConfigured ? (
                       <Button asChild variant="outline">
-                        <Link href="/support/new?from=/settings-billing">Contact support</Link>
+                        <Link href="/support/new?from=/settings-billing" prefetch>Contact support</Link>
                       </Button>
                     ) : null}
                     <BillingRefreshButton />

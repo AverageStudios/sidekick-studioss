@@ -37,10 +37,10 @@ export default async function DraftCampaignsPage() {
 
           <div className="flex gap-3">
             <Button asChild variant="outline" className="rounded-[18px] px-5">
-              <Link href="/campaigns">Back to campaigns</Link>
+              <Link href="/campaigns" prefetch>Back to campaigns</Link>
             </Button>
             <Button asChild className="rounded-[18px] px-5">
-              <Link href="/templates/new">New Campaign</Link>
+              <Link href="/templates/new" prefetch>New Campaign</Link>
             </Button>
           </div>
         </div>
@@ -58,7 +58,7 @@ export default async function DraftCampaignsPage() {
 
               return (
                 <Card key={campaign.id} className="group max-w-[22rem] overflow-hidden rounded-[24px] border-[var(--line)] bg-white transition duration-200 hover:shadow-[0_8px_28px_rgba(16,24,40,0.06)]">
-                  <Link href={`/campaigns/${campaign.id}`} className="block">
+                  <Link href={`/campaigns/${campaign.id}`} prefetch className="block">
                     <LazyFacebookAdPreview
                       template={template || undefined}
                       pageName={pagePreviewIdentity.pageName}
@@ -120,7 +120,7 @@ export default async function DraftCampaignsPage() {
             </p>
             <div className="mt-6">
               <Button asChild className="rounded-[18px] px-5">
-                <Link href="/templates/new">New Campaign</Link>
+                <Link href="/templates/new" prefetch>New Campaign</Link>
               </Button>
             </div>
           </Card>

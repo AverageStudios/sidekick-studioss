@@ -67,7 +67,7 @@ export default async function SupportPage({
           </div>
           <div className="flex gap-3">
             <Button asChild variant="outline" className="rounded-[18px] px-5">
-              <Link href="/academy">
+              <Link href="/academy" prefetch>
                 <BookOpenText className="h-4 w-4" />
                 Academy
               </Link>
@@ -110,7 +110,7 @@ export default async function SupportPage({
         {tickets.length ? (
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
             {tickets.map((ticket) => (
-              <Link key={ticket.id} href={`/support/${ticket.id}`} className="block">
+              <Link key={ticket.id} href={`/support/${ticket.id}`} prefetch className="block">
                 <Card className="group h-full rounded-[24px] border-[var(--line)] bg-white p-5 transition duration-200 hover:shadow-[0_8px_28px_rgba(16,24,40,0.06)]">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">

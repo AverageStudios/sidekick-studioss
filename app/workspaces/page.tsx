@@ -19,7 +19,7 @@ export default async function WorkspacesPage() {
           <h1 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[var(--ink)]">All workspaces</h1>
         </div>
         <Button asChild>
-          <Link href="/workspaces/new">New workspace</Link>
+          <Link href="/workspaces/new" prefetch>New workspace</Link>
         </Button>
       </div>
 
@@ -81,7 +81,7 @@ export default async function WorkspacesPage() {
           </p>
           <div className="mt-5">
             <Button asChild>
-              <Link href="/workspaces/new">New workspace</Link>
+              <Link href="/workspaces/new" prefetch>New workspace</Link>
             </Button>
           </div>
         </div>

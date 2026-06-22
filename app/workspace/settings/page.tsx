@@ -248,6 +248,7 @@ export default async function WorkspaceSettingsPage({
                   <Link
                     key={item.id}
                     href={`/workspace/settings?section=${item.id}`}
+                    prefetch
                     className={cn(
                       "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-colors",
                       active
@@ -288,10 +289,10 @@ export default async function WorkspaceSettingsPage({
                     </p>
                     <div className="mt-4 flex flex-wrap gap-3">
                       <Button asChild size="sm">
-                        <Link href="/workspace/settings?section=integrations">Connect Meta</Link>
+                        <Link href="/workspace/settings?section=integrations" prefetch>Connect Meta</Link>
                       </Button>
                       <Button asChild size="sm" variant="outline">
-                        <Link href="/templates/new">Launch first campaign</Link>
+                        <Link href="/templates/new" prefetch>Launch first campaign</Link>
                       </Button>
                     </div>
                   </div>
@@ -488,7 +489,7 @@ export default async function WorkspaceSettingsPage({
                               </p>
                             </div>
                             <Button asChild variant="outline">
-                              <Link href={`/campaigns/${campaign.id}`}>Open campaign</Link>
+                              <Link href={`/campaigns/${campaign.id}`} prefetch>Open campaign</Link>
                             </Button>
                           </div>
                         ))
@@ -531,7 +532,7 @@ export default async function WorkspaceSettingsPage({
                               </p>
                             </div>
                             <Button asChild variant="outline">
-                              <Link href={`/campaigns/${campaign.id}`}>View archived campaign</Link>
+                              <Link href={`/campaigns/${campaign.id}`} prefetch>View archived campaign</Link>
                             </Button>
                           </div>
                         ))
@@ -572,7 +573,7 @@ export default async function WorkspaceSettingsPage({
                               </p>
                             </div>
                             <Button asChild variant="outline">
-                              <Link href={`/campaigns/${campaign.id}`}>Open draft</Link>
+                              <Link href={`/campaigns/${campaign.id}`} prefetch>Open draft</Link>
                             </Button>
                           </div>
                         ))

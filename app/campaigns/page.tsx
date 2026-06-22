@@ -60,10 +60,10 @@ export default async function CampaignsPage() {
 
           <div className="flex gap-3">
             <Button asChild variant="outline" className="rounded-[18px] px-5">
-              <Link href="/workspace/settings?section=integrations">Review CRM handoff</Link>
+              <Link href="/workspace/settings?section=integrations" prefetch>Review CRM handoff</Link>
             </Button>
             <Button asChild className="rounded-[18px] px-5">
-              <Link href="/templates/new">New Campaign</Link>
+              <Link href="/templates/new" prefetch>New Campaign</Link>
             </Button>
           </div>
         </div>
@@ -71,7 +71,7 @@ export default async function CampaignsPage() {
         {publishedCampaigns.length || hasDrafts ? (
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
             {hasDrafts ? (
-              <Link href="/templates/drafts" className="block">
+              <Link href="/templates/drafts" prefetch className="block">
                 <Card className="group flex min-h-[12rem] items-center justify-center overflow-hidden rounded-[24px] border-[var(--line)] bg-white px-6 py-6 transition duration-200 hover:shadow-[0_8px_28px_rgba(16,24,40,0.06)]">
                   <div className="flex flex-col items-center gap-3 text-center">
                     <span className="flex h-16 w-16 items-center justify-center rounded-[20px] bg-[var(--soft-panel)] text-[var(--brand)] shadow-[0_8px_20px_rgba(109,94,248,0.08)]">
@@ -100,7 +100,7 @@ export default async function CampaignsPage() {
                 : null;
 
               return (
-                <Link key={campaign.id} href={`/campaigns/${campaign.id}`} className="block">
+                <Link key={campaign.id} href={`/campaigns/${campaign.id}`} prefetch className="block">
                   <Card className="group max-w-[22rem] overflow-hidden rounded-[24px] border-[var(--line)] bg-white transition duration-200 hover:shadow-[0_8px_28px_rgba(16,24,40,0.06)]">
                     <LazyFacebookAdPreview
                       template={template || undefined}
@@ -156,7 +156,7 @@ export default async function CampaignsPage() {
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Button asChild className="rounded-[18px] px-5">
-                <Link href="/templates">Browse templates</Link>
+                <Link href="/templates" prefetch>Browse templates</Link>
               </Button>
             </div>
           </Card>

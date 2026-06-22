@@ -23,7 +23,7 @@ export default async function NewWorkspacePage() {
             </p>
           </div>
           <Button asChild variant="outline">
-            <Link href="/workspaces">
+            <Link href="/workspaces" prefetch>
               <ArrowLeft className="h-4 w-4" />
               Back
             </Link>
@@ -161,7 +161,7 @@ export default async function NewWorkspacePage() {
               </p>
               <div className="flex gap-3">
                 <Button asChild variant="outline">
-                  <Link href="/workspaces">Cancel</Link>
+                  <Link href="/workspaces" prefetch>Cancel</Link>
                 </Button>
                 <AsyncSubmitButton label="Create workspace" pendingLabel="Creating..." />
               </div>

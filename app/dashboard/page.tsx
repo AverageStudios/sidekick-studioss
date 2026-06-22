@@ -169,13 +169,13 @@ function EmptyWorkspaceState() {
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="sm:min-w-48">
-                <Link href="/workspaces/new">
+                <Link href="/workspaces/new" prefetch>
                   Create workspace
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="sm:min-w-48">
-                <Link href="/academy/workspace-basics">Read workspace basics</Link>
+                <Link href="/academy/workspace-basics" prefetch>Read workspace basics</Link>
               </Button>
             </div>
           </div>
@@ -209,7 +209,7 @@ function MetaConnectionCallout() {
             </Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/workspace/settings?section=integrations">Open integrations</Link>
+            <Link href="/workspace/settings?section=integrations" prefetch>Open integrations</Link>
           </Button>
         </div>
       </div>
@@ -240,13 +240,13 @@ function BillingActivationState({ sessionId }: { sessionId?: string | null }) {
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Button asChild>
-                  <Link href="/pricing?startTrial=1">
+                  <Link href="/pricing?startTrial=1" prefetch>
                     Retry activation
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
                 <Button asChild variant="outline">
-                  <Link href="/support/new?from=/dashboard-billing-activation">Contact support</Link>
+                  <Link href="/support/new?from=/dashboard-billing-activation" prefetch>Contact support</Link>
                 </Button>
               </div>
             </div>
@@ -342,10 +342,10 @@ export default async function DashboardPage({
           actions={
             <>
               <Button asChild variant="outline">
-                <Link href="/performance">View performance</Link>
+                <Link href="/performance" prefetch>View performance</Link>
               </Button>
               <Button asChild>
-                <Link href="/templates/new">Create campaign</Link>
+                <Link href="/templates/new" prefetch>Create campaign</Link>
               </Button>
             </>
           }
@@ -353,7 +353,7 @@ export default async function DashboardPage({
 
         <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Button asChild variant="outline" className="justify-between rounded-[22px] px-5 py-6 text-left">
-            <Link href="/templates/new">
+            <Link href="/templates/new" prefetch>
               <span className="flex items-center gap-3">
                 <PlusCircle className="h-4.5 w-4.5 text-[var(--brand)]" />
                 Create campaign
@@ -362,7 +362,7 @@ export default async function DashboardPage({
             </Link>
           </Button>
           <Button asChild variant="outline" className="justify-between rounded-[22px] px-5 py-6 text-left">
-            <Link href="/templates">
+            <Link href="/templates" prefetch>
               <span className="flex items-center gap-3">
                 <Sparkles className="h-4.5 w-4.5 text-[var(--brand)]" />
                 View templates
@@ -371,7 +371,7 @@ export default async function DashboardPage({
             </Link>
           </Button>
           <Button asChild variant="outline" className="justify-between rounded-[22px] px-5 py-6 text-left">
-            <Link href="/workspace/settings?section=integrations">
+            <Link href="/workspace/settings?section=integrations" prefetch>
               <span className="flex items-center gap-3">
                 <RefreshCcw className="h-4.5 w-4.5 text-[var(--brand)]" />
                 Connect CRM
@@ -380,7 +380,7 @@ export default async function DashboardPage({
             </Link>
           </Button>
           <Button asChild variant="outline" className="justify-between rounded-[22px] px-5 py-6 text-left">
-            <Link href="/performance">
+            <Link href="/performance" prefetch>
               <span className="flex items-center gap-3">
                 <BarChart3 className="h-4.5 w-4.5 text-[var(--brand)]" />
                 View performance
@@ -441,7 +441,7 @@ export default async function DashboardPage({
                           Updated {formatRelativeTime(campaign.updated_at)}
                         </p>
                       </div>
-                      <Link href={`/campaigns/${campaign.id}`} className="text-sm font-medium text-[var(--brand)]">
+                      <Link href={`/campaigns/${campaign.id}`} prefetch className="text-sm font-medium text-[var(--brand)]">
                         Open
                       </Link>
                     </div>
@@ -454,7 +454,7 @@ export default async function DashboardPage({
                     Launch your first campaign from a template.
                   </p>
                   <Button asChild variant="outline" className="mt-5">
-                    <Link href="/templates">Browse templates</Link>
+                    <Link href="/templates" prefetch>Browse templates</Link>
                   </Button>
                 </div>
               )}
@@ -517,7 +517,7 @@ export default async function DashboardPage({
                   Delivery status
                 </h2>
               </div>
-              <Link href="/workspace/settings?section=integrations" className="text-sm font-medium text-[var(--brand)]">
+              <Link href="/workspace/settings?section=integrations" prefetch className="text-sm font-medium text-[var(--brand)]">
                 Open integrations
               </Link>
             </div>

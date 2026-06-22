@@ -59,7 +59,7 @@ export default async function SupportTicketDetailPage({
             </p>
           </div>
           <Button asChild className="rounded-[18px] bg-[var(--brand)] px-5 text-white hover:bg-[color-mix(in_oklab,var(--brand)_88%,black)]">
-            <Link href="/support">Back to tickets</Link>
+            <Link href="/support" prefetch>Back to tickets</Link>
           </Button>
         </div>
       </AppShell>
@@ -95,7 +95,7 @@ export default async function SupportTicketDetailPage({
           </div>
           <div className="flex gap-3">
             <Button asChild variant="outline" className="rounded-[18px] px-5">
-              <Link href="/support">Back to tickets</Link>
+              <Link href="/support" prefetch>Back to tickets</Link>
             </Button>
             <Button asChild variant="outline" className="rounded-[18px] px-5">
               <Link href={emailHref}>

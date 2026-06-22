@@ -495,10 +495,10 @@ export default async function PerformancePage() {
           actions={
             <>
               <Button asChild variant="outline">
-                <Link href="/campaigns">Open campaigns</Link>
+                <Link href="/campaigns" prefetch>Open campaigns</Link>
               </Button>
               <Button asChild>
-                <Link href="/templates/new">Launch campaign</Link>
+                <Link href="/templates/new" prefetch>Launch campaign</Link>
               </Button>
             </>
           }
@@ -649,7 +649,7 @@ export default async function PerformancePage() {
               <h2 className="mt-1 text-xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Campaign performance table</h2>
             </div>
             <Button asChild variant="outline">
-              <Link href="/campaigns">
+              <Link href="/campaigns" prefetch>
                 View all campaigns
                 <ArrowUpRight className="ml-2 h-4 w-4" />
               </Link>
@@ -678,7 +678,7 @@ export default async function PerformancePage() {
                         className="grid grid-cols-[2.3fr_1fr_0.8fr_0.8fr_0.9fr_1fr_1fr_0.9fr] items-center px-6 py-5 transition-colors hover:bg-[var(--surface)]"
                       >
                         <div className="min-w-0 pr-4">
-                          <Link href={`/campaigns/${campaign.id}`} className="block">
+                          <Link href={`/campaigns/${campaign.id}`} prefetch className="block">
                             <p className="truncate text-base font-semibold tracking-[-0.03em] text-[var(--ink)]">{campaign.name}</p>
                           </Link>
                         </div>
@@ -731,7 +731,7 @@ export default async function PerformancePage() {
                   </p>
                   <div className="mt-5">
                     <Button asChild>
-                      <Link href="/templates/new">Launch campaign</Link>
+                      <Link href="/templates/new" prefetch>Launch campaign</Link>
                     </Button>
                   </div>
                 </div>

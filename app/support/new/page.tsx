@@ -65,10 +65,10 @@ export default async function NewSupportTicketPage({
           </div>
           <div className="flex gap-3">
             <Button asChild variant="outline" className="rounded-[18px] px-5">
-              <Link href="/support">Back to tickets</Link>
+              <Link href="/support" prefetch>Back to tickets</Link>
             </Button>
             <Button asChild variant="outline" className="rounded-[18px] px-5">
-              <Link href="/academy">
+              <Link href="/academy" prefetch>
                 <BookOpenText className="h-4 w-4" />
                 Academy
               </Link>
