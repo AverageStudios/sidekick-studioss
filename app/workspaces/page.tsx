@@ -17,9 +17,6 @@ export default async function WorkspacesPage() {
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Workspace</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[var(--ink)]">All workspaces</h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Switch between business accounts and create a new workspace when you need a separate setup.
-          </p>
         </div>
         <Button asChild>
           <Link href="/workspaces/new">New workspace</Link>

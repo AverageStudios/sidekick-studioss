@@ -38,9 +38,9 @@ export default async function NewTemplateCampaignPage({
     return (
       <AppShell currentPath="/templates">
         <Card className="mx-auto mt-10 max-w-[34rem] rounded-[28px] border-[var(--line)] bg-white p-8 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
-          <h1 className="text-xl font-semibold tracking-[-0.04em] text-[var(--ink)]">No launch-ready templates yet</h1>
+          <h1 className="text-xl font-semibold tracking-[-0.04em] text-[var(--ink)]">No templates yet</h1>
           <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-            Campaign launch is unavailable until at least one published template is live in the library.
+            Publish a template to start launching campaigns.
           </p>
           <div className="mt-6">
             <Button asChild className="rounded-[18px] px-5">

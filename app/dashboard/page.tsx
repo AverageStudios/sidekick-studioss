@@ -160,23 +160,13 @@ function EmptyWorkspaceState() {
           variant="plain"
           badge="Home"
           title="Create your first workspace"
-          description="Set up a workspace first so SideKick can keep your campaigns, leads, and CRM handoff data isolated."
         />
 
         <Card className="overflow-hidden border-[var(--line)] bg-[rgba(255,255,255,0.8)] p-7 shadow-[0_10px_24px_rgba(16,24,40,0.03)] sm:p-8">
           <div className="space-y-5">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[rgba(109,94,248,0.18)] bg-[rgba(109,94,248,0.08)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand)]">
-              <Sparkles className="h-3.5 w-3.5" />
-              Launch setup
-            </div>
-            <div className="space-y-3">
-              <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)] sm:text-[2.15rem]">
-                Your home page is ready once a workspace exists
-              </h2>
-              <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-[15px]">
-                Create a workspace to unlock campaign launch, lead capture, CRM routing, and performance reporting.
-              </p>
-            </div>
+            <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-[15px]">
+              A workspace keeps your campaigns, leads, and CRM connections in one place.
+            </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="sm:min-w-48">
                 <Link href="/workspaces/new">
@@ -198,46 +188,29 @@ function EmptyWorkspaceState() {
 function MetaConnectionCallout() {
   return (
     <Card className="overflow-hidden border-[var(--line)] bg-[rgba(255,255,255,0.8)] p-6 shadow-[0_10px_24px_rgba(16,24,40,0.03)] sm:p-7">
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-        <div className="space-y-4">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[rgba(244,114,182,0.2)] bg-[rgba(244,114,182,0.08)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#b42373]">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            Meta not connected
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
-              Connect Meta when you are ready to launch and report
-            </h2>
-            <p className="max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              Your workspace metrics still work without Meta. Connect it next to unlock live campaign status, lead capture sync, and Meta delivery reporting.
-            </p>
-          </div>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Button asChild>
-              <Link href="/api/meta/connect?next=/dashboard">
-                Connect Meta
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/workspace/settings?section=integrations">Open integrations</Link>
-            </Button>
-          </div>
+      <div className="flex flex-col gap-4">
+        <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[rgba(244,114,182,0.2)] bg-[rgba(244,114,182,0.08)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#b42373]">
+          <ShieldCheck className="h-3.5 w-3.5" />
+          Meta not connected
         </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-          <div className="flex items-start gap-3 rounded-[22px] bg-[var(--soft-panel)] px-4 py-4">
-            <Sparkles className="mt-0.5 h-4 w-4 text-[var(--brand)]" />
-            <p className="text-sm leading-6 text-[var(--muted-strong)]">
-              Launch campaigns from templates, then sync status and reporting back here.
-            </p>
-          </div>
-          <div className="flex items-start gap-3 rounded-[22px] bg-[var(--soft-panel)] px-4 py-4">
-            <Users className="mt-0.5 h-4 w-4 text-[var(--brand)]" />
-            <p className="text-sm leading-6 text-[var(--muted-strong)]">
-              Meta lead capture can feed connected CRMs once the workspace connection is in place.
-            </p>
-          </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
+            Connect Meta to go live
+          </h2>
+          <p className="max-w-2xl text-sm leading-6 text-[var(--muted)]">
+            Connect Meta to unlock live campaign status, lead capture, and delivery reporting.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Button asChild>
+            <Link href="/api/meta/connect?next=/dashboard">
+              Connect Meta
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/workspace/settings?section=integrations">Open integrations</Link>
+          </Button>
         </div>
       </div>
     </Card>
@@ -366,7 +339,6 @@ export default async function DashboardPage({
           variant="plain"
           badge="Home"
           title="Workspace overview"
-          description="A launch-safe view of campaign activity, lead volume, and CRM handoff readiness for the current workspace."
           actions={
             <>
               <Button asChild variant="outline">
@@ -479,7 +451,7 @@ export default async function DashboardPage({
                 <div className="rounded-[24px] border border-dashed border-[var(--line)] px-5 py-10 text-center">
                   <p className="text-base font-medium text-[var(--ink)]">No campaigns yet</p>
                   <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
-                    Start from a template and this section will show your active, paused, and draft campaigns.
+                    Launch your first campaign from a template.
                   </p>
                   <Button asChild variant="outline" className="mt-5">
                     <Link href="/templates">Browse templates</Link>
@@ -524,9 +496,9 @@ export default async function DashboardPage({
                 ))
               ) : (
                 <div className="rounded-[24px] border border-dashed border-[var(--line)] px-5 py-10 text-center">
-                  <p className="text-base font-medium text-[var(--ink)]">No lead activity yet</p>
+                  <p className="text-base font-medium text-[var(--ink)]">No leads yet</p>
                   <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
-                    When leads arrive from live campaigns, they will show up here as recent activity.
+                    Leads from live campaigns appear here.
                   </p>
                 </div>
               )}
@@ -643,7 +615,7 @@ export default async function DashboardPage({
                 <div className="rounded-[24px] border border-dashed border-[var(--line)] px-5 py-10 text-center">
                   <p className="text-base font-medium text-[var(--ink)]">Nothing needs attention</p>
                   <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
-                    Campaigns are in good shape, and there are no sync issues or unfinished drafts right now.
+                    You&apos;re all caught up.
                   </p>
                 </div>
               )}

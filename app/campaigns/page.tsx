@@ -55,9 +55,7 @@ export default async function CampaignsPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-[2.2rem] font-semibold tracking-[-0.05em] text-[var(--ink)]">Campaigns</h1>
-            <p className="mt-2 text-sm text-[var(--muted)]">
-              Launch status, live campaign activity, and workspace-level campaign visibility.
-            </p>
+            <p className="mt-2 text-sm text-[var(--muted)]">Drafts, live campaigns, and recent activity.</p>
           </div>
 
           <div className="flex gap-3">
@@ -154,7 +152,7 @@ export default async function CampaignsPage() {
           <Card className="max-w-[32rem] rounded-[28px] border-[var(--line)] bg-white p-8 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
             <h2 className="text-xl font-semibold tracking-[-0.04em] text-[var(--ink)]">No live campaigns yet</h2>
             <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-              Start from a template and publish your first campaign. CRM delivery will be managed from Integrations.
+              Launch your first campaign from a template.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Button asChild className="rounded-[18px] px-5">

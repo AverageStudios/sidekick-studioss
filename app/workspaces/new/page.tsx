@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Briefcase, Building2, Globe } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { createWorkspaceAction } from "@/app/actions";
 import { AsyncSubmitButton } from "@/components/ui/async-submit-button";
@@ -19,7 +19,7 @@ export default async function NewWorkspacePage() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Workspace</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Create a new workspace</h1>
             <p className="mt-2 max-w-2xl text-sm leading-7 text-[var(--muted)]">
-              A workspace is a separate business environment with its own campaigns, leads, performance, settings, and Meta connection.
+              A separate business with its own campaigns, leads, and Meta connection.
             </p>
           </div>
           <Button asChild variant="outline">
@@ -155,38 +155,9 @@ export default async function NewWorkspacePage() {
               </select>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              {[
-                {
-                  icon: Building2,
-                  title: "Separate business identity",
-                  copy: "Keep the business name, website, and privacy defaults specific to this workspace.",
-                },
-                {
-                  icon: Briefcase,
-                  title: "Separate campaigns and leads",
-                  copy: "Drafts, launched campaigns, and lead inbox data stay isolated by workspace.",
-                },
-                {
-                  icon: Globe,
-                  title: "Separate integrations",
-                  copy: "Each workspace maintains its own Meta connection, selected page, and ad account.",
-                },
-              ].map((item) => {
-                const Icon = item.icon;
-                return (
-                  <div key={item.title} className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
-                    <Icon className="h-4.5 w-4.5 text-[var(--brand)]" />
-                    <p className="mt-3 text-sm font-semibold text-[var(--ink)]">{item.title}</p>
-                    <p className="mt-2 text-xs leading-6 text-[var(--muted)]">{item.copy}</p>
-                  </div>
-                );
-              })}
-            </div>
-
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] pt-6">
               <p className="text-sm text-[var(--muted)]">
-                After creation, we&apos;ll switch you into the new workspace and open workspace settings so you can connect Meta and finish defaults.
+                You&apos;ll be switched into the new workspace after creating it.
               </p>
               <div className="flex gap-3">
                 <Button asChild variant="outline">

@@ -33,9 +33,6 @@ export default async function DraftCampaignsPage() {
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Campaigns</p>
             <h1 className="mt-2 text-[2.2rem] font-semibold tracking-[-0.05em] text-[var(--ink)]">Drafts</h1>
-            <p className="mt-2 text-sm text-[var(--muted)]">
-              Saved campaigns that are still being edited before they go live.
-            </p>
           </div>
 
           <div className="flex gap-3">

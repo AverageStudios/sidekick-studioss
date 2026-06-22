@@ -18,7 +18,7 @@ export default async function TemplatesPage() {
           variant="plain"
           badge="Templates"
           title="Campaign templates"
-          description="Start from ready-to-launch campaign structures, then push leads into the CRM your business already uses."
+          description="Pick a template, preview it, and launch."
           actions={
             <>
               <Button asChild variant="outline">
@@ -39,9 +39,9 @@ export default async function TemplatesPage() {
           </div>
         ) : (
           <Card className="max-w-[32rem] rounded-[28px] border-[var(--line)] bg-white p-8 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
-            <h2 className="text-xl font-semibold tracking-[-0.04em] text-[var(--ink)]">No templates available yet</h2>
+            <h2 className="text-xl font-semibold tracking-[-0.04em] text-[var(--ink)]">No templates yet</h2>
             <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-              Add or publish templates and this library will become the launch surface for new campaigns.
+              Published templates will appear here.
             </p>
             <div className="mt-6">
               <Button asChild className="rounded-[18px] px-5">

@@ -305,8 +305,8 @@ function LeadVolumeChart({ buckets, totalLeads }: { buckets: ReturnType<typeof b
   if (!buckets.some((bucket) => bucket.total > 0)) {
     return (
       <EmptyChartState
-        title="No lead activity yet"
-        description="This chart will fill in as leads arrive. Once campaigns are live, you will see volume trend by week."
+        title="No leads yet"
+        description="Leads appear here once campaigns are live."
         ctaHref="/templates/new"
         ctaLabel="Launch campaign"
       />
@@ -371,11 +371,10 @@ function EmptyWorkspaceState() {
           variant="plain"
           badge="Performance"
           title="Performance will appear after workspace setup"
-          description="Create a workspace first so SideKick can isolate campaign and lead reporting correctly."
         />
         <EmptyChartState
           title="No workspace selected yet"
-          description="Create a workspace to unlock campaign launch, lead capture, CRM handoff reporting, and performance analytics."
+          description="Create a workspace to unlock performance reporting."
           ctaHref="/workspaces/new"
           ctaLabel="Create workspace"
         />
@@ -486,7 +485,6 @@ export default async function PerformancePage() {
           variant="plain"
           badge="Performance"
           title="Campaign reporting"
-          description="A launch-safe reporting view for lead volume, campaign progress, CRM delivery, and Meta account performance when available."
           actions={
             <>
               <Button asChild variant="outline">
@@ -580,9 +578,6 @@ export default async function PerformancePage() {
                 <h2 className="mt-2 text-xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
                   Leads over time
                 </h2>
-                <p className="mt-2 max-w-xl text-sm text-[var(--muted)]">
-                  Weekly lead volume based on real captured leads in the current workspace.
-                </p>
               </div>
               <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-right">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Last 8 weeks</p>
@@ -601,9 +596,6 @@ export default async function PerformancePage() {
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Pipeline progression</p>
             </div>
             <h2 className="mt-3 text-xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Lead quality flow</h2>
-            <p className="mt-2 text-sm text-[var(--muted)]">
-              A compact view of how real captured leads are moving from new to qualified.
-            </p>
 
             <div className="mt-6 space-y-4">
               {[
@@ -682,9 +674,6 @@ export default async function PerformancePage() {
                           <Link href={`/campaigns/${campaign.id}`} className="block">
                             <p className="truncate text-base font-semibold tracking-[-0.03em] text-[var(--ink)]">{campaign.name}</p>
                           </Link>
-                          <p className="mt-1 text-sm text-[var(--muted)]">
-                            Real workspace lead totals only
-                          </p>
                         </div>
 
                         <div>
@@ -731,7 +720,7 @@ export default async function PerformancePage() {
                 <div>
                   <h3 className="text-lg font-semibold tracking-[-0.03em] text-[var(--ink)]">No campaigns yet</h3>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-                    Launch a campaign and this table will start showing lead-backed campaign results.
+                    Launch a campaign to see results here.
                   </p>
                   <div className="mt-5">
                     <Button asChild>
@@ -751,9 +740,6 @@ export default async function PerformancePage() {
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">CRM delivery</p>
             </div>
             <h2 className="mt-3 text-xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Delivery health</h2>
-            <p className="mt-2 text-sm text-[var(--muted)]">
-              Recent CRM handoff status for this workspace. Each provider attempt is tracked independently.
-            </p>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-4">
@@ -805,7 +791,7 @@ export default async function PerformancePage() {
                 <div className="rounded-[24px] border border-dashed border-[var(--line)] px-5 py-10 text-center">
                   <p className="text-base font-medium text-[var(--ink)]">No major issues right now</p>
                   <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
-                    Campaigns, lead capture, and reporting look healthy for this workspace.
+                    Everything looks healthy.
                   </p>
                 </div>
               )}

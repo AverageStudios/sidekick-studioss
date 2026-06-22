@@ -80,9 +80,6 @@ export default async function SettingsPage({
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Account</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[var(--ink)]">Profile settings</h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Personal profile details for your account inside this workspace.
-          </p>
         </div>
         <div className="flex flex-wrap gap-3">
           <Button asChild variant="outline">
@@ -118,9 +115,6 @@ export default async function SettingsPage({
         <div className="mb-5">
           <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--muted)]">Account</p>
           <h2 className="mt-1 text-base font-semibold text-[var(--ink)]">Your profile</h2>
-          <p className="mt-0.5 text-sm text-[var(--muted)]">
-            Your personal account inside this workspace.
-          </p>
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
@@ -156,9 +150,8 @@ export default async function SettingsPage({
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Account notes</p>
             <div className="mt-4 space-y-2.5">
               {[
-                "Your profile name appears in the account dropdown.",
-                "Workspace/company settings now live in the dedicated workspace settings page.",
-                "Email is controlled by your authentication account.",
+                "Workspace and company settings live in workspace settings.",
+                "Email is managed by your login account.",
               ].map((tip) => (
                 <p key={tip} className="text-xs leading-5 text-[var(--muted)]">
                   — {tip}
@@ -173,7 +166,6 @@ export default async function SettingsPage({
         <div className="mb-5">
           <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--muted)]">Billing & account</p>
           <h2 className="mt-1 text-base font-semibold text-[var(--ink)]">Billing & account controls</h2>
-          <p className="mt-0.5 text-sm text-[var(--muted)]">Manage your SideKick subscription and account access.</p>
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">

@@ -237,9 +237,6 @@ export default async function WorkspaceSettingsPage({
               <h1 className="text-[1.7rem] font-semibold tracking-[-0.04em] text-[var(--ink)]">
                 {workspaceName}
               </h1>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                Real workspace settings for the business account behind your SideKick setup.
-              </p>
             </div>
 
             <nav className="mt-8 space-y-1.5">
@@ -281,17 +278,13 @@ export default async function WorkspaceSettingsPage({
 
             {section === "general" ? (
               <section className="max-w-3xl">
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">General</p>
-                <h2 className="mt-3 text-[2.2rem] font-semibold tracking-[-0.05em] text-[var(--ink)]">General</h2>
-                <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-                  Basic settings for your workspace and business identity.
-                </p>
+                <h2 className="text-[2.2rem] font-semibold tracking-[-0.05em] text-[var(--ink)]">General</h2>
 
                 {created === "1" ? (
                   <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
                     <p className="text-sm font-semibold text-emerald-800">Workspace created</p>
                     <p className="mt-1 text-sm leading-6 text-emerald-700">
-                      This is now a separate business environment. Next best steps: connect Meta, confirm your business defaults, and launch your first campaign from this workspace.
+                      Next: connect Meta and launch your first campaign.
                     </p>
                     <div className="mt-4 flex flex-wrap gap-3">
                       <Button asChild size="sm">
@@ -405,10 +398,9 @@ export default async function WorkspaceSettingsPage({
 
             {section === "icon" ? (
               <section className="max-w-3xl">
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Icon</p>
-                <h2 className="mt-3 text-[2.2rem] font-semibold tracking-[-0.05em] text-[var(--ink)]">Icon</h2>
+                <h2 className="text-[2.2rem] font-semibold tracking-[-0.05em] text-[var(--ink)]">Branding</h2>
                 <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-                  Update the workspace image and accent color used across your campaign setup.
+                  Workspace image and accent color.
                 </p>
 
                 <form action={updateWorkspaceIconAction} className="mt-8 space-y-6">
@@ -438,11 +430,7 @@ export default async function WorkspaceSettingsPage({
 
             {section === "campaigns" ? (
               <section className="max-w-5xl">
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Campaigns</p>
-                <h2 className="mt-3 text-[2.2rem] font-semibold tracking-[-0.05em] text-[var(--ink)]">Campaigns</h2>
-                <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-                  See every draft and published ad running inside this workspace.
-                </p>
+                <h2 className="text-[2.2rem] font-semibold tracking-[-0.05em] text-[var(--ink)]">Campaigns</h2>
 
                 <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
@@ -468,9 +456,6 @@ export default async function WorkspaceSettingsPage({
                     <div className="flex items-center justify-between gap-4">
                       <div>
                         <h3 className="text-base font-semibold text-[var(--ink)]">Published ads</h3>
-                        <p className="mt-1 text-sm text-[var(--muted)]">
-                          Live campaigns that are already running from this workspace.
-                        </p>
                       </div>
                     </div>
 
@@ -519,9 +504,6 @@ export default async function WorkspaceSettingsPage({
                     <div className="flex items-center justify-between gap-4">
                       <div>
                         <h3 className="text-base font-semibold text-[var(--ink)]">Archived campaigns</h3>
-                        <p className="mt-1 text-sm text-[var(--muted)]">
-                          Hidden from default views but still available for history and troubleshooting.
-                        </p>
                       </div>
                     </div>
 
@@ -565,9 +547,6 @@ export default async function WorkspaceSettingsPage({
                     <div className="flex items-center justify-between gap-4">
                       <div>
                         <h3 className="text-base font-semibold text-[var(--ink)]">Draft ads</h3>
-                        <p className="mt-1 text-sm text-[var(--muted)]">
-                          Campaigns still being prepared before they go live.
-                        </p>
                       </div>
                     </div>
 
@@ -612,9 +591,6 @@ export default async function WorkspaceSettingsPage({
               <section className="max-w-5xl">
                 <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Integrations</p>
                 <h2 className="mt-3 text-[2.2rem] font-semibold tracking-[-0.05em] text-[var(--ink)]">Connected accounts</h2>
-                <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-                  Connect the services this workspace uses to launch campaigns and send new leads into your CRM.
-                </p>
 
                 <div className="mt-8 space-y-6">
                   {workspaceContextMissing ? (
@@ -639,16 +615,7 @@ export default async function WorkspaceSettingsPage({
                   ) : null}
 
                   <div className="rounded-[1.75rem] border border-[var(--line)] bg-white p-6 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-semibold text-[var(--ink)]">Connected accounts</p>
-                        <p className="mt-1 text-sm text-[var(--muted)]">
-                          Manage the services this workspace uses for campaign launch and CRM handoff.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mt-6 space-y-4">
+                    <div className="space-y-4">
                       <details
                         open={metaConnected || needsLeadFormReconnect}
                         className="group rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)]"
@@ -774,7 +741,7 @@ export default async function WorkspaceSettingsPage({
                           <div>
                             <p className="text-base font-semibold text-[var(--ink)]">CRM Connections</p>
                             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-                              Connect the CRMs SideKick should deliver leads into, then manage test delivery and provider-specific setup from one place.
+                              Connect the CRMs SideKick should send new leads to.
                             </p>
                           </div>
                           <PendingLinkButton
@@ -823,7 +790,7 @@ export default async function WorkspaceSettingsPage({
                           </div>
                         ) : (
                           <div className="mt-5 rounded-[1.2rem] border border-dashed border-[var(--line)] bg-white px-5 py-5 text-sm text-[var(--muted)]">
-                            No CRMs are connected yet. Start with GoHighLevel, HubSpot, Pipedrive, or any other provider in the CRM library.
+                            No CRMs connected yet. Connect one from the CRM library.
                           </div>
                         )}
                       </div>
@@ -844,7 +811,7 @@ export default async function WorkspaceSettingsPage({
                         </span>
                       </div>
                       <p className="mt-2 text-sm text-[var(--muted)]">
-                        SideKick automatically sends Meta lead form submissions to every connected CRM in this workspace. No default CRM selection is required.
+                        Leads are sent to every connected CRM. No default selection needed.
                       </p>
                       {providerDestinations.length ? (
                         <div className="mt-4 flex flex-wrap gap-2">

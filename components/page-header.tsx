@@ -12,7 +12,7 @@ export function PageHeader({
 }: {
   badge?: string;
   title: string;
-  description: string;
+  description?: string;
   actions?: React.ReactNode;
   className?: string;
   variant?: "card" | "plain";
@@ -20,12 +20,14 @@ export function PageHeader({
   if (variant === "plain") {
     return (
       <div className={cn("flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between", className)}>
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {badge ? <Badge>{badge}</Badge> : null}
           <h1 className="max-w-3xl text-3xl font-semibold tracking-[-0.055em] text-[var(--ink)] sm:text-[2.3rem]">
             {title}
           </h1>
-          <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-[15px]">{description}</p>
+          {description ? (
+            <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-[15px]">{description}</p>
+          ) : null}
         </div>
         {actions ? <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">{actions}</div> : null}
       </div>
@@ -40,14 +42,16 @@ export function PageHeader({
       )}
     >
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {badge ? <Badge>{badge}</Badge> : null}
           <h1 className="max-w-3xl text-3xl font-semibold tracking-[-0.055em] text-[var(--ink)] sm:text-[2.35rem]">
             {title}
           </h1>
-          <p className="max-w-2xl text-sm leading-6 text-[var(--muted-strong)] sm:text-[15px]">
-            {description}
-          </p>
+          {description ? (
+            <p className="max-w-2xl text-sm leading-6 text-[var(--muted-strong)] sm:text-[15px]">
+              {description}
+            </p>
+          ) : null}
         </div>
         {actions ? <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">{actions}</div> : null}
       </div>

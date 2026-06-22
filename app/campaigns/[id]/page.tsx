@@ -104,7 +104,7 @@ function SectionTitle({
   icon: Icon,
 }: {
   title: string;
-  description: string;
+  description?: string;
   icon: ComponentType<{ className?: string }>;
 }) {
   return (
@@ -114,7 +114,7 @@ function SectionTitle({
       </div>
       <div>
         <h2 className="text-lg font-semibold tracking-[-0.03em] text-[var(--ink)]">{title}</h2>
-        <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{description}</p>
+        {description ? <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{description}</p> : null}
       </div>
     </div>
   );
@@ -271,10 +271,10 @@ export default async function CampaignPage({
 
   const baseDescription =
     isDraft
-      ? "Review what is configured, see what is still missing, and jump back into the editor when you are ready to launch."
+      ? "Review the setup and jump back into the editor when you're ready to launch."
       : isPublished
-        ? "This campaign is live. Use the sections below to inspect setup, sync state, and the current Meta status."
-        : "Inspect the saved campaign instance, its launch state, and the current publishing details.";
+        ? "This campaign is live. Inspect setup, sync state, and Meta status below."
+        : "Inspect the saved campaign, its launch state, and publishing details.";
   const openInMetaHref = "https://business.facebook.com/adsmanager";
 
   return (
@@ -415,7 +415,6 @@ export default async function CampaignPage({
           <Card className="p-6 sm:p-7">
             <SectionTitle
               title="Campaign configuration"
-              description="A concise summary of how this instance is currently configured."
               icon={LayoutTemplate}
             />
 
@@ -490,7 +489,6 @@ export default async function CampaignPage({
           <Card className="p-6 sm:p-7">
             <SectionTitle
               title="Creative summary"
-              description="The ad copy and preview that are tied to this saved campaign instance."
               icon={FileText}
             />
 
@@ -562,7 +560,6 @@ export default async function CampaignPage({
           <Card className="p-6 sm:p-7">
             <SectionTitle
               title="Publishing status"
-              description="How this instance is currently represented in SideKick and in Meta."
               icon={Rocket}
             />
 
@@ -657,7 +654,6 @@ export default async function CampaignPage({
           <Card className="p-6 sm:p-7">
             <SectionTitle
               title="Activity / timeline"
-              description="A compact history of the campaign instance from draft to the latest sync."
               icon={Clock3}
             />
 
@@ -688,7 +684,7 @@ export default async function CampaignPage({
         <Card className="p-6 sm:p-7">
           <SectionTitle
             title="Technical details"
-            description="Secondary identifiers and internal references that help with debugging or Meta support."
+            description="Identifiers for debugging or Meta support."
             icon={SquarePen}
           />
 
