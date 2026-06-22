@@ -18,11 +18,13 @@ export function PricingBase({
   hasProductAccess,
   autoStartTrial = false,
   checkoutCancelled = false,
+  pricingActionLabel = "Start 14-day free trial",
 }: {
   loggedIn: boolean;
   hasProductAccess: boolean;
   autoStartTrial?: boolean;
   checkoutCancelled?: boolean;
+  pricingActionLabel?: string;
 }) {
   return (
     <section className="site-container pb-24 pt-36 sm:pb-28 sm:pt-44">
@@ -81,6 +83,7 @@ export function PricingBase({
                   loggedIn={loggedIn}
                   nextPath="checkout"
                   autoStart={autoStartTrial}
+                  label={pricingActionLabel}
                   className="site-cta-primary w-full justify-center"
                 />
               )}

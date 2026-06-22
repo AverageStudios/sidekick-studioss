@@ -4,7 +4,7 @@ import { ManageBillingButton, StartTrialButton } from "@/components/billing-acti
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getCurrentUser, requireUser } from "@/lib/auth";
-import { getBillingDisplayState, getUserBillingStatus } from "@/lib/billing";
+import { formatBillingDate, getBillingDisplayState, getUserBillingStatus } from "@/lib/billing";
 
 function getBillingRequiredHeadline(key: ReturnType<typeof getBillingDisplayState>["key"]) {
   switch (key) {
@@ -63,7 +63,7 @@ export default async function BillingRequiredPage({
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
             {billingDisplayState.key === "not_started"
-              ? "Activate SideKick Core to launch campaigns, capture leads, and manage unlimited workspaces."
+              ? "Start your 14-day free trial to unlock SideKick across unlimited workspaces."
               : billingDisplayState.description}
           </p>
 
@@ -86,6 +86,17 @@ export default async function BillingRequiredPage({
                 <p className="mt-1 text-base font-semibold text-[var(--ink)]">{billingDisplayState.label}</p>
               </div>
             </div>
+            {billingDisplayState.importantDateLabel && billingDisplayState.importantDateValue ? (
+              <div className="mt-4 rounded-2xl border border-[var(--line)] bg-white px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-semibold text-[var(--ink)]">{billingDisplayState.importantDateLabel}</span>
+                  <span className="text-[var(--muted)]">{formatBillingDate(billingDisplayState.importantDateValue)}</span>
+                </div>
+                {billingDisplayState.countdownLabel ? (
+                  <p className="mt-1 text-sm font-medium text-[var(--muted-strong)]">{billingDisplayState.countdownLabel}</p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">

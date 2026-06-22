@@ -9,19 +9,8 @@ import { signOutAction, updateProfileSettingsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getCurrentProfile, getUserAvatarUrl, requireUser } from "@/lib/auth";
-import { getBillingDisplayState, getUserBillingStatus } from "@/lib/billing";
+import { formatBillingDate, getBillingDisplayState, getUserBillingStatus } from "@/lib/billing";
 import { getCurrentWorkspaceContext, getUserDisplayNameFromProfile, getUserInitialsFromProfile } from "@/lib/workspaces";
-
-function formatBillingDate(value?: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "";
-  return date.toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 function getBillingPillClass(key: ReturnType<typeof getBillingDisplayState>["key"]) {
   switch (key) {
@@ -208,9 +197,14 @@ export default async function SettingsPage({
                   <div className="mt-4 rounded-2xl border border-[var(--line)] bg-white px-4 py-3">
                     <p className="text-sm leading-6 text-[var(--muted-strong)]">{billingDisplayState.description}</p>
                     {billingDisplayState.importantDateLabel && billingDate ? (
-                      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-                        <span className="font-semibold text-[var(--ink)]">{billingDisplayState.importantDateLabel}</span>
-                        <span className="text-[var(--muted)]">{billingDate}</span>
+                      <div className="mt-3 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2 text-sm">
+                          <span className="font-semibold text-[var(--ink)]">{billingDisplayState.importantDateLabel}</span>
+                          <span className="text-[var(--muted)]">{billingDate}</span>
+                        </div>
+                        {billingDisplayState.countdownLabel ? (
+                          <p className="text-sm font-medium text-[var(--muted-strong)]">{billingDisplayState.countdownLabel}</p>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>

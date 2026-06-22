@@ -67,6 +67,7 @@ export type BillingDisplayState = {
   secondaryActionType?: BillingPrimaryActionType;
   importantDateLabel?: string;
   importantDateValue?: string | null;
+  countdownLabel?: string | null;
 };
 
 type BillingStatusRetryOptions = {
@@ -154,6 +155,35 @@ function isFutureDate(value: string | null | undefined) {
   return Number.isFinite(timestamp) && timestamp > Date.now();
 }
 
+function getDateDifferenceInDays(value: string | null | undefined) {
+  if (!value) return null;
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return null;
+
+  const diffMs = timestamp - Date.now();
+  return Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+}
+
+export function formatBillingDate(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+export function getBillingCountdownLabel(prefix: string, value?: string | null) {
+  const days = getDateDifferenceInDays(value);
+  if (days === null) return null;
+  if (days < 0) return "Access ended";
+  if (days === 0) return "Ends today";
+  if (days === 1) return `${prefix} in 1 day`;
+  return `${prefix} in ${days} days`;
+}
+
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -180,6 +210,20 @@ export function getBillingDisplayState(
     };
   }
 
+  if (subscriptionStatus === "trialing" && cancelAtPeriodEnd && !isFutureDate(status.trialEndsAt)) {
+    return {
+      key: "canceled",
+      label: "Canceled",
+      accessAllowed: false,
+      primaryActionLabel: "Restart subscription",
+      primaryActionType: "checkout",
+      description: "Your SideKick access has ended. Restart your subscription to continue using campaigns, leads, and integrations.",
+      importantDateLabel: "Access ended",
+      importantDateValue: status.trialEndsAt,
+      countdownLabel: "Access ended",
+    };
+  }
+
   if (subscriptionStatus === "trialing" && cancelAtPeriodEnd) {
     return {
       key: "trial_cancels_soon",
@@ -189,7 +233,8 @@ export function getBillingDisplayState(
       primaryActionType: "portal",
       importantDateLabel: "Access ends",
       importantDateValue: status.trialEndsAt,
-      description: "Your trial has been canceled. You can keep using SideKick until the trial ends.",
+      countdownLabel: getBillingCountdownLabel("Access ends", status.trialEndsAt),
+      description: "Your trial has been canceled. You can keep using SideKick until the trial ends, and you will not be charged.",
     };
   }
 
@@ -202,7 +247,22 @@ export function getBillingDisplayState(
       primaryActionType: "portal",
       importantDateLabel: "Trial ends",
       importantDateValue: status.trialEndsAt,
+      countdownLabel: getBillingCountdownLabel("Trial ends", status.trialEndsAt),
       description: "You will not be charged until your trial ends. You can cancel anytime before billing.",
+    };
+  }
+
+  if (subscriptionStatus === "active" && cancelAtPeriodEnd && !isFutureDate(status.currentPeriodEnd)) {
+    return {
+      key: "canceled",
+      label: "Canceled",
+      accessAllowed: false,
+      primaryActionLabel: "Restart subscription",
+      primaryActionType: "checkout",
+      description: "Your SideKick access has ended. Restart your subscription to continue using campaigns, leads, and integrations.",
+      importantDateLabel: "Access ended",
+      importantDateValue: status.currentPeriodEnd,
+      countdownLabel: "Access ended",
     };
   }
 
@@ -215,6 +275,7 @@ export function getBillingDisplayState(
       primaryActionType: "portal",
       importantDateLabel: "Access ends",
       importantDateValue: status.currentPeriodEnd,
+      countdownLabel: getBillingCountdownLabel("Access ends", status.currentPeriodEnd),
       description: "Your subscription has been canceled. You can keep using SideKick until the end of your current billing period.",
     };
   }
@@ -228,7 +289,8 @@ export function getBillingDisplayState(
       primaryActionType: "portal",
       importantDateLabel: "Next billing date",
       importantDateValue: status.currentPeriodEnd,
-      description: "Your account unlocks SideKick across unlimited workspaces.",
+      countdownLabel: getBillingCountdownLabel("Renews", status.currentPeriodEnd),
+      description: "Your SideKick Core subscription is active.",
     };
   }
 
@@ -241,6 +303,7 @@ export function getBillingDisplayState(
       primaryActionType: "portal",
       importantDateLabel: "Access continues until",
       importantDateValue: status.currentPeriodEnd,
+      countdownLabel: getBillingCountdownLabel("Access continues", status.currentPeriodEnd),
       description: "We could not process your latest payment. Update your billing details to avoid losing access.",
     };
   }
@@ -253,6 +316,9 @@ export function getBillingDisplayState(
       primaryActionLabel: "Restart subscription",
       primaryActionType: "checkout",
       description: "Your SideKick access has ended. Restart your subscription to continue using campaigns, leads, and integrations.",
+      importantDateLabel: status.currentPeriodEnd || status.trialEndsAt ? "Access ended" : undefined,
+      importantDateValue: status.currentPeriodEnd || status.trialEndsAt || null,
+      countdownLabel: status.currentPeriodEnd || status.trialEndsAt ? "Access ended" : null,
     };
   }
 
@@ -287,7 +353,7 @@ export function getBillingDisplayState(
       primaryActionType: "portal",
       description:
         subscriptionStatus === "unpaid"
-          ? "Your subscription is unpaid. Update billing to regain access."
+          ? "Your payment could not be processed. Update your billing details to continue using SideKick."
           : "Your payment could not be processed. Update your billing details to continue using SideKick.",
     };
   }
