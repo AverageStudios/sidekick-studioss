@@ -100,6 +100,7 @@ export async function AppShell({
               <div className="space-y-1">
                 <Link
                   href="/workspace/settings"
+                  prefetch
                   className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
                 >
                   <SlidersHorizontal className="h-4 w-4 text-[var(--muted)]" />
@@ -116,6 +117,7 @@ export async function AppShell({
               <div className="space-y-1">
                 <Link
                   href="/workspaces"
+                  prefetch
                   className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
                 >
                   <LayoutGrid className="h-4 w-4 text-[var(--muted)]" />
@@ -167,6 +169,7 @@ export async function AppShell({
 
                 <Link
                   href="/workspaces/new"
+                  prefetch
                   className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
                 >
                     <span className="flex h-6 w-6 items-center justify-center rounded-lg border border-[var(--line)] bg-white text-[var(--muted)]">
@@ -187,6 +190,7 @@ export async function AppShell({
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch
                   className={cn(
                     "inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-150 active:translate-y-px",
                     active
@@ -239,6 +243,7 @@ export async function AppShell({
               <div className="space-y-1">
                 <Link
                   href="/settings"
+                  prefetch
                   className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
                 >
                   <UserCircle2 className="h-4 w-4 text-[var(--muted)]" />
@@ -246,6 +251,7 @@ export async function AppShell({
                 </Link>
                 <Link
                   href="/support"
+                  prefetch
                   className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
                 >
                   <LifeBuoy className="h-4 w-4 text-[var(--muted)]" />
@@ -253,6 +259,7 @@ export async function AppShell({
                 </Link>
                 <Link
                   href="/academy"
+                  prefetch
                   className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
                 >
                   <BookOpenText className="h-4 w-4 text-[var(--muted)]" />
