@@ -396,19 +396,23 @@ export default async function PerformancePage() {
   }
 
   let campaigns: CampaignRecord[] = [];
-  let campaignLoadError = false;
   try {
     campaigns = await getWorkspaceCampaignsForUser(user.id, true, false);
-  } catch {
-    campaignLoadError = true;
+  } catch (error) {
+    console.error("[performance] campaign metrics load failed", {
+      userId: user.id,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
   }
 
   let allLeads: LeadRecord[] = [];
-  let leadsLoadError = false;
   try {
     allLeads = (await getLeads(user.id, "all", { allowDemo: false })) as LeadRecord[];
-  } catch {
-    leadsLoadError = true;
+  } catch (error) {
+    console.error("[performance] lead metrics load failed", {
+      userId: user.id,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
   }
 
   const metaConnected = Boolean(
@@ -482,12 +486,6 @@ export default async function PerformancePage() {
   return (
     <AppShell currentPath="/performance">
       <div className="space-y-8">
-        {campaignLoadError || leadsLoadError ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Some performance data is temporarily unavailable. The page is showing safe fallback states until reporting loads again.
-          </div>
-        ) : null}
-
         <PageHeader
           variant="plain"
           badge="Performance"

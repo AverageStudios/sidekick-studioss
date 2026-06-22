@@ -37,6 +37,7 @@ import { isMetaConfigured } from "@/lib/meta";
 import { getWorkspaceMetaIntegrationState } from "@/lib/meta-integration";
 import { getWorkspaceLeadSyncHealth } from "@/lib/meta-leads";
 import { isSupabaseServerConfigured } from "@/lib/env";
+import { getWorkspaceBranding } from "@/lib/workspace-branding";
 
 const workspaceSections = [
   { id: "general", label: "General", icon: Settings2 },
@@ -104,6 +105,7 @@ export default async function WorkspaceSettingsPage({
   const workspaceName = workspaceContext?.activeWorkspace.name || "My Workspace";
   const businessProfile = workspaceContext?.businessProfile;
   const workspaceId = workspaceContext?.activeWorkspace.id || null;
+  const workspaceBranding = workspaceId ? await getWorkspaceBranding(workspaceId).catch(() => null) : null;
   const workspaceContextMissing = !workspaceContext && isSupabaseServerConfigured();
   const admin = createSupabaseAdminClient();
   let integrationError: string | null = null;
@@ -401,30 +403,81 @@ export default async function WorkspaceSettingsPage({
               <section className="max-w-3xl">
                 <h2 className="text-[2.2rem] font-semibold tracking-[-0.05em] text-[var(--ink)]">Branding</h2>
                 <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-                  Workspace image and accent color.
+                  Your brand, your leads. This is the business name, logo, and color system shown inside the workspace.
                 </p>
 
                 <form action={updateWorkspaceIconAction} className="mt-8 space-y-6">
-                  <WorkspaceLogoField
-                    currentLogoUrl={businessProfile?.logo_url || null}
-                    initials={workspaceName.charAt(0).toUpperCase()}
-                    label={workspaceName}
-                  />
-
-                  <div className="max-w-[12rem]">
-                    <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="brandColor">
-                      Brand color
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="brandingBusinessName">
+                      Business name
                     </label>
                     <Input
-                      id="brandColor"
-                      name="brandColor"
-                      type="color"
-                      defaultValue={businessProfile?.brand_color || "#6D5EF8"}
-                      className="h-11 p-1.5"
+                      id="brandingBusinessName"
+                      name="brandingBusinessName"
+                      defaultValue={workspaceBranding?.business_name || businessProfile?.business_name || workspaceName}
+                      placeholder="Your detailing business"
                     />
                   </div>
 
-                  <AsyncSubmitButton label="Save icon settings" pendingLabel="Saving..." />
+                  <WorkspaceLogoField
+                    currentLogoUrl={workspaceBranding?.logo_url || businessProfile?.logo_url || null}
+                    initials={(workspaceBranding?.business_name || workspaceName).charAt(0).toUpperCase()}
+                    label={workspaceBranding?.business_name || workspaceName}
+                  />
+
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="primaryColor">
+                        Primary color
+                      </label>
+                      <Input
+                        id="primaryColor"
+                        name="primaryColor"
+                        type="color"
+                        defaultValue={workspaceBranding?.primary_color || businessProfile?.brand_color || "#6D5EF8"}
+                        className="h-11 p-1.5"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="accentColor">
+                        Accent color
+                      </label>
+                      <Input
+                        id="accentColor"
+                        name="accentColor"
+                        type="color"
+                        defaultValue={workspaceBranding?.accent_color || "#11B981"}
+                        className="h-11 p-1.5"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="brandingWebsiteUrl">
+                        Website URL
+                      </label>
+                      <Input
+                        id="brandingWebsiteUrl"
+                        name="brandingWebsiteUrl"
+                        defaultValue={workspaceBranding?.website_url || businessProfile?.website || ""}
+                        placeholder="https://yourbusiness.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="brandingPhone">
+                        Phone
+                      </label>
+                      <Input
+                        id="brandingPhone"
+                        name="brandingPhone"
+                        defaultValue={workspaceBranding?.phone || businessProfile?.phone || ""}
+                        placeholder="(555) 123-4567"
+                      />
+                    </div>
+                  </div>
+
+                  <AsyncSubmitButton label="Save branding" pendingLabel="Saving..." />
                 </form>
               </section>
             ) : null}

@@ -31,6 +31,7 @@ export const env = {
   supabaseStorageBucket: readEnv("SUPABASE_STORAGE_BUCKET") || "assets",
   resendApiKey: readEnv("RESEND_API_KEY"),
   resendFromEmail: readEnv("RESEND_FROM_EMAIL"),
+  doneForYouNotifyEmail: readEnv("DONE_FOR_YOU_NOTIFY_EMAIL") || "contact@sidekickstudioss.net",
   stripeSecretKey: readEnv("STRIPE_SECRET_KEY"),
   stripeWebhookSecret: readEnv("STRIPE_WEBHOOK_SECRET"),
   stripePriceId: readEnv("STRIPE_PRICE_ID"),

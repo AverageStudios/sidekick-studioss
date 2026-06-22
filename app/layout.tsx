@@ -14,7 +14,7 @@ const sora = Sora({
 
 export const metadata: Metadata = {
   title: "SideKick Studioss",
-  description: "Software for small businesses to choose templates, launch faster, and manage leads and follow-up in one place.",
+  description: "A campaign system for car detailers to launch offers, capture more local leads, and keep follow-up organized.",
 };
 
 export default function RootLayout({

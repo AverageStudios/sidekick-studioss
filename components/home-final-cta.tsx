@@ -5,8 +5,8 @@ import { ArrowRight } from "lucide-react";
 import { Reveal } from "@/components/ui/reveal";
 
 export function HomeFinalCta({
-  title = "Pick a template. Go live this week.",
-  subtitle = "Start the trial, open the template library for your industry, and launch your first Meta campaign before it ends.",
+  title = "Get more booked details from one campaign system.",
+  subtitle = "Apply for Done-For-You and we can help set up the workflow, or start Self-Serve if you want to run it yourself.",
   secondaryLabel = "See pricing",
   secondaryHref = "/pricing",
 }: {
@@ -37,8 +37,8 @@ export function HomeFinalCta({
             </p>
 
             <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link href="/pricing" className="site-cta-on-dark">
-                Start free trial
+              <Link href="/done-for-you" className="site-cta-on-dark">
+                Apply for Done-For-You
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link href={secondaryHref} className="site-cta-ghost-on-dark">
@@ -47,7 +47,7 @@ export function HomeFinalCta({
             </div>
 
             <p className="mt-6 text-sm text-white/45">
-              14-day free trial. Cancel anytime before billing.
+              Done for you or self-serve. Ad spend is paid separately to Meta.
             </p>
           </div>
         </div>

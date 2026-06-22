@@ -90,12 +90,12 @@ export function PublicProductDetailPage({ item }: { item: PublicProductItem }) {
             <p className="site-lead mx-auto mt-5">{item.subheadline}</p>
 
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link href="/pricing" className="site-cta-primary">
-                Start free trial
+              <Link href="/done-for-you" className="site-cta-primary">
+                Apply for Done-For-You
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link href="/product" className="site-cta-secondary">
-                All product areas
+              <Link href="/pricing?startTrial=1" className="site-cta-secondary">
+                Start 14-day free trial
               </Link>
             </div>
           </div>

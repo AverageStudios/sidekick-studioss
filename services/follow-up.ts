@@ -87,3 +87,43 @@ export async function sendCrmIntegrationRequestEmail(input: {
 
   return { skipped: false };
 }
+
+export async function sendDoneForYouRequestEmail(input: {
+  name?: string | null;
+  email: string;
+  phone?: string | null;
+  businessName?: string | null;
+  businessUrl?: string | null;
+  serviceArea?: string | null;
+  monthlyJobs?: string | null;
+  message?: string | null;
+  submittedAtIso: string;
+  requestId?: string | null;
+}) {
+  if (!isResendConfigured()) {
+    return { skipped: true };
+  }
+
+  const resend = new Resend(env.resendApiKey!);
+  const businessName = input.businessName?.trim() || "Unknown business";
+
+  await resend.emails.send({
+    from: env.resendFromEmail!,
+    to: env.doneForYouNotifyEmail,
+    subject: `New Done-For-You request — ${businessName}`,
+    text: [
+      `Name: ${input.name?.trim() || "Not provided"}`,
+      `Email: ${input.email}`,
+      `Phone: ${input.phone?.trim() || "Not provided"}`,
+      `Business name: ${businessName}`,
+      `Website/social: ${input.businessUrl?.trim() || "Not provided"}`,
+      `Service area: ${input.serviceArea?.trim() || "Not provided"}`,
+      `Current monthly details/jobs: ${input.monthlyJobs?.trim() || "Not provided"}`,
+      `Message: ${input.message?.trim() || "No message provided."}`,
+      `Submitted at: ${input.submittedAtIso}`,
+      `Request ID: ${input.requestId || "Unavailable"}`,
+    ].join("\n"),
+  });
+
+  return { skipped: false };
+}

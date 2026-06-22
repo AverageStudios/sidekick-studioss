@@ -100,7 +100,7 @@ export const academyArticles: AcademyArticle[] = [
     section: "getting-started",
     summary: "Start here to understand the product model, navigation, and where key work happens.",
     description:
-      "SideKick is a campaign and lead-response workspace. It helps you launch campaigns, capture new leads, track simple statuses, and send leads to a connected CRM when you need deeper pipeline management.",
+      "SideKick is a campaign and lead-response workspace. It helps you launch campaigns, capture new leads, keep simple status visibility, and send leads to connected CRMs for long-term follow-up.",
     readTime: "5 min read",
     updatedLabel: "Updated June 2026",
     blocks: [
@@ -108,7 +108,7 @@ export const academyArticles: AcademyArticle[] = [
         heading: "What SideKick is built for",
         body: [
           "SideKick helps small businesses move faster from idea to live campaign. The product covers campaign setup, launch, previewing, performance tracking, lead capture, and the integrations that keep the workflow connected.",
-          "SideKick is not a heavy CRM replacement. It gives you simple lead management — capture, status tracking, and follow-up — and can send leads to connected CRMs like Pipedrive, Zoho CRM, monday CRM, Keap, and Close when you need deeper pipeline management.",
+          "SideKick is not a heavy CRM replacement. It keeps lead capture and basic status visibility close to the campaign, then sends leads to connected CRMs like Pipedrive, Zoho CRM, monday CRM, Keap, and Close when you need deeper pipeline management.",
         ],
         bullets: [
           "Create and manage campaigns",
@@ -131,8 +131,8 @@ export const academyArticles: AcademyArticle[] = [
       {
         heading: "What happens to leads",
         body: [
-          "For Meta Lead Form campaigns, SideKick captures the form submission, normalizes the data, keeps it in your workspace, and sends it to the connected CRM destinations for that workspace.",
-          "SideKick keeps simple lead management in the workspace, while your connected CRM remains the place for deeper pipeline stages, follow-up ownership, and long-term customer management when you need it.",
+          "For Meta Lead Form campaigns, SideKick captures the form submission, normalizes the data, keeps the delivery activity visible in your workspace, and sends it to the connected CRM destinations for that workspace.",
+          "Your connected CRM remains the place for deeper pipeline stages, follow-up ownership, and long-term customer management.",
         ],
         note: "If multiple CRM providers are connected for a workspace, SideKick sends eligible leads to each connected provider and logs each delivery independently.",
       },
@@ -364,7 +364,7 @@ export const academyArticles: AcademyArticle[] = [
     section: "performance",
     summary: "Understand what the Performance area shows and how to interpret campaign results.",
     description:
-      "Performance reporting in SideKick is focused on campaign outcomes and delivery visibility, not full CRM lifecycle reporting.",
+      "Performance reporting in SideKick is focused on campaign outcomes and delivery visibility, not replacing your CRM reporting.",
     readTime: "5 min read",
     updatedLabel: "Updated June 2026",
     blocks: [
@@ -607,7 +607,7 @@ export const academyArticles: AcademyArticle[] = [
       {
         heading: "Does SideKick replace my CRM?",
         body: [
-          "No. SideKick gives you simple lead management for your campaigns — capture, status tracking, and follow-up. For deeper pipeline management, connect a CRM like Pipedrive, Zoho CRM, monday CRM, Keap, or Close and SideKick will send new leads there too.",
+          "No. SideKick gives you campaign launch, lead capture, and delivery visibility. For deeper pipeline management, connect a CRM like Pipedrive, Zoho CRM, monday CRM, Keap, or Close and SideKick will send new leads there too.",
         ],
       },
       {

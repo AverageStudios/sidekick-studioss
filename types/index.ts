@@ -639,6 +639,18 @@ export type WorkspaceContext = {
   workspaceInitial: string;
 };
 
+export type WorkspaceBrandingRecord = {
+  workspace_id: string;
+  business_name: string | null;
+  logo_url: string | null;
+  primary_color: string | null;
+  accent_color: string | null;
+  website_url: string | null;
+  phone: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type WorkspaceMember = {
   membershipId: string;
   userId: string;

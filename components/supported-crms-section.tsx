@@ -10,7 +10,7 @@ export function SupportedCrmsSection({
   className,
   eyebrow = "Integrations",
   title = "Connect the CRM your team already uses.",
-  subtitle = "SideKick keeps new campaign leads organized in your workspace, then sends them to your connected CRM so your sales process can keep moving.",
+  subtitle = "SideKick captures new campaign leads, keeps the handoff visible in your workspace, and delivers each lead into your connected CRM.",
   showCta = true,
 }: {
   className?: string;
@@ -65,8 +65,8 @@ export function SupportedCrmsSection({
 
       {showCta ? (
         <Reveal className="mt-12 flex justify-center" delay={0.1}>
-          <Link href="/pricing" className="site-cta-secondary">
-            Start free trial
+          <Link href="/done-for-you" className="site-cta-secondary">
+            Apply for Done-For-You
             <ArrowRight className="h-4 w-4" />
           </Link>
         </Reveal>

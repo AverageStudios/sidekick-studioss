@@ -2,36 +2,36 @@ export const publicFaqs = [
   {
     question: "What is SideKick Studioss?",
     answer:
-      "SideKick is a software platform for small businesses to choose their industry, pick a ready-to-go template, launch faster, and manage leads and follow-up from one system.",
+      "SideKick is a campaign system for car detailers. It helps you launch ready-to-use offers, capture more local leads, keep follow-up organized, and hand leads to the CRM you already use.",
   },
   {
-    question: "Who is SideKick for?",
+    question: "What is the difference between Self-Serve and Done-For-You?",
     answer:
-      "It is built for small service businesses that want a cleaner way to launch offers, manage leads, and keep outreach moving without a bloated tool stack.",
+      "Self-Serve gives you the SideKick platform so you can launch and manage campaigns yourself. Done-For-You includes the same system, but we help set up your workspace, prepare the campaign, launch it, and monitor the lead flow.",
   },
   {
-    question: "How does SideKick work?",
+    question: "Do I have to learn the software?",
     answer:
-      "Choose your industry, pick a template, customize the essentials, launch, then manage leads and follow-up inside the platform.",
+      "Not with Done-For-You. You get visibility into the system, but we handle setup and launch. Your job is to respond to new leads.",
   },
   {
-    question: "What do I get in the free trial?",
+    question: "Can my business logo show inside SideKick?",
     answer:
-      "You get 14 days to explore the template library, test the launch flow, and see how lead management and follow-up work inside SideKick before billing starts.",
+      "Yes. SideKick supports workspace branding, so your business name and logo can appear inside your workspace.",
   },
   {
-    question: "Do I need to build campaigns from scratch?",
+    question: "Is SideKick only for car detailers?",
     answer:
-      "No. SideKick starts you from ready-to-go campaign templates, so you can customize the important details instead of building the ad, offer, and lead flow from zero.",
+      "Car detailers are the first focus. SideKick is built for small service businesses, but the current templates and offer are focused on detailing first.",
   },
   {
-    question: "Can I manage leads inside SideKick?",
+    question: "Does SideKick run the ads for me?",
     answer:
-      "Yes. Leads are captured inside the platform so you can view them, update status, and keep the next step clear from one place.",
+      "On Done-For-You, we help set up and launch the campaign workflow. On Self-Serve, you use the platform and launch campaigns yourself.",
   },
   {
-    question: "Does SideKick support outreach and follow-up?",
+    question: "What happens during the 14-day trial?",
     answer:
-      "Yes. SideKick is built to keep follow-up moving after a lead comes in, so outreach stays tied to the same launch flow instead of getting pushed into a disconnected tool.",
+      "The 14-day trial applies to Self-Serve. You can explore the platform, set up your workspace, and launch your first campaign. You can cancel before the trial ends and you will not be charged.",
   },
 ] as const;

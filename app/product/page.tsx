@@ -9,7 +9,7 @@ import { publicProductItems } from "@/data/public-product-pages";
 export const metadata: Metadata = {
   title: "Product | SideKick Studioss",
   description:
-    "Templates, campaign launch, lead capture, lead management, outreach, and CRM delivery: the SideKick platform for small businesses.",
+    "Templates, campaign launch, lead capture, reporting, and CRM delivery: the SideKick campaign system for car detailers.",
 };
 
 export default function ProductPage() {
@@ -24,7 +24,7 @@ export default function ProductPage() {
           </h1>
           <p className="site-lead mx-auto mt-5">
             SideKick covers the whole arc of a local Meta campaign: the template
-            you start from, the launch, the leads, and the follow-up they need.
+            you start from, the launch, the leads you capture, and the CRM handoff that keeps follow-up moving.
           </p>
         </div>
 
@@ -55,8 +55,8 @@ export default function ProductPage() {
       </section>
 
       <HomeFinalCta
-        title="See the whole flow on a real campaign."
-        subtitle="Start the trial, pick a template for your industry, and follow it from launch to the first lead."
+        title="Run it yourself or let us set it up."
+        subtitle="SideKick is one campaign system with Self-Serve and Done-For-You service levels."
       />
 
       <PublicSiteFooter />

@@ -9,6 +9,7 @@ import { AlertTriangle, BookOpenText, CreditCard, LifeBuoy } from "lucide-react"
 import { signOutAction, updateProfileSettingsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getAccountPlanDescription, getAccountPlanForUser, getAccountPlanLabel } from "@/lib/account-plans";
 import { getCurrentProfile, getUserAvatarUrl, requireUser } from "@/lib/auth";
 import {
   formatBillingDate,
@@ -42,10 +43,11 @@ export default async function SettingsPage({
   searchParams: Promise<{ saved?: string; error?: string; billing?: string }>;
 }) {
   const user = await requireUser();
-  const [{ saved, error, billing }, workspaceContext, accountProfile] = await Promise.all([
+  const [{ saved, error, billing }, workspaceContext, accountProfile, accountPlan] = await Promise.all([
     searchParams,
     getCurrentWorkspaceContext(),
     getCurrentProfile(),
+    getAccountPlanForUser(user.id),
   ]);
   if (billing === "updated") {
     try {
@@ -191,7 +193,7 @@ export default async function SettingsPage({
                   <div className="mt-5 grid gap-3 rounded-2xl border border-[var(--line)] bg-[var(--soft-panel)] p-4 sm:grid-cols-3">
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Plan</p>
-                      <p className="mt-1 text-sm font-semibold text-[var(--ink)]">SideKick Core</p>
+                      <p className="mt-1 text-sm font-semibold text-[var(--ink)]">{getAccountPlanLabel(accountPlan)}</p>
                     </div>
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Price</p>
@@ -203,6 +205,7 @@ export default async function SettingsPage({
                     </div>
                   </div>
                   <div className="mt-4 rounded-2xl border border-[var(--line)] bg-white px-4 py-3">
+                    <p className="mb-2 text-sm font-semibold text-[var(--ink)]">{getAccountPlanDescription(accountPlan)}</p>
                     <p className="text-sm leading-6 text-[var(--muted-strong)]">{billingDisplayState.description}</p>
                     {billingDisplayState.importantDateLabel && billingDate ? (
                       <div className="mt-3 space-y-1">

@@ -16,10 +16,11 @@ import { createCampaignBlueprint } from "@/lib/template-engine";
 import { env, isDemoModeEnabled, isSupabasePublicConfigured, isSupabaseServerConfigured } from "@/lib/env";
 import { getPublishedTemplateBySlug } from "@/lib/template-repository";
 import { slugify } from "@/lib/utils";
-import { sendCrmIntegrationRequestEmail, sendLeadConfirmationEmail, sendWorkspaceInvitationEmail } from "@/services/follow-up";
+import { sendCrmIntegrationRequestEmail, sendDoneForYouRequestEmail, sendLeadConfirmationEmail, sendWorkspaceInvitationEmail } from "@/services/follow-up";
 import { deleteStoragePaths, deleteStoragePrefix, getStoragePathFromPublicUrl, uploadAsset } from "@/services/storage";
 import { storageBucketName } from "@/services/storage";
 import { checkRateLimit, getIpFromHeaders, logRateLimitHit } from "@/lib/rate-limit";
+import { upsertWorkspaceBranding } from "@/lib/workspace-branding";
 import {
   createWorkspaceForUser,
   ensureWorkspaceContextForUser,
@@ -103,6 +104,19 @@ const publicLeadSubmissionSchema = z.object({
     .regex(/^[+()\d\s.-]+$/, "Enter a valid phone number."),
   serviceInterest: z.string().trim().min(1).max(160),
   message: z.string().trim().max(1000).optional().default(""),
+});
+const doneForYouRequestSchema = z.object({
+  name: z.string().trim().min(2, "Add your name.").max(120),
+  email: z.string().trim().email("Add a valid email.").max(254),
+  phone: z.string().trim().max(40).optional().default(""),
+  businessName: z.string().trim().min(2, "Add your business name.").max(160),
+  businessUrl: z.preprocess(
+    normalizeOptionalUrlInput,
+    z.string().max(240).refine((value) => !value || isSafeHttpUrl(value), "Add a valid website or social URL."),
+  ),
+  serviceArea: z.string().trim().min(2, "Add your city or service area.").max(160),
+  monthlyJobs: z.string().trim().max(120).optional().default(""),
+  message: z.string().trim().max(1500).optional().default(""),
 });
 
 const crmRequestSchema = z.object({
@@ -483,6 +497,28 @@ function createAvatarFileFromDataUrl(dataUrl: string) {
 
 function createWorkspaceLogoFileFromDataUrl(dataUrl: string) {
   return createImageFileFromDataUrl(dataUrl, "workspace-logo", "workspace logo");
+}
+
+function normalizeHexColor(value: string, fallback: string) {
+  const trimmed = value.trim();
+  return /^#[0-9A-Fa-f]{6}$/.test(trimmed) ? trimmed : fallback;
+}
+
+function normalizeOptionalUrlInput(value: unknown) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (!trimmed) return "";
+  if (/^www\./i.test(trimmed)) return `https://${trimmed}`;
+  return trimmed;
+}
+
+function isSafeHttpUrl(value: string) {
+  if (!value) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
 }
 
 const optionalText = z.string().trim().optional().default("");
@@ -2843,6 +2879,102 @@ export async function submitLeadAction(formData: FormData) {
   redirect(successRedirect);
 }
 
+export async function submitDoneForYouRequestAction(formData: FormData) {
+  const rawPayload = {
+    name: String(formData.get("name") || ""),
+    email: String(formData.get("email") || ""),
+    phone: String(formData.get("phone") || ""),
+    businessName: String(formData.get("businessName") || ""),
+    businessUrl: String(formData.get("businessUrl") || ""),
+    serviceArea: String(formData.get("serviceArea") || ""),
+    monthlyJobs: String(formData.get("monthlyJobs") || ""),
+    message: String(formData.get("message") || ""),
+  };
+  const parsed = doneForYouRequestSchema.safeParse(rawPayload);
+  const errorRedirect = "/done-for-you?error=Please%20check%20the%20form%20and%20try%20again.";
+  if (!parsed.success) {
+    redirect(errorRedirect);
+  }
+
+  const payload = parsed.data;
+  await enforceActionRateLimit({
+    key: "done-for-you-request",
+    limit: 5,
+    windowMs: 60 * 60 * 1000,
+    redirectTo: "/done-for-you",
+    email: payload.email,
+  });
+
+  if (!isSupabaseServerConfigured()) {
+    redirect("/done-for-you?error=Requests%20are%20temporarily%20unavailable.");
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    redirect("/done-for-you?error=Requests%20are%20temporarily%20unavailable.");
+  }
+
+  const user = await getCurrentUser().catch(() => null);
+  const submittedAtIso = new Date().toISOString();
+  const { data, error } = await admin
+    .from("done_for_you_requests")
+    .insert({
+      user_id: user?.id || null,
+      name: payload.name,
+      email: payload.email,
+      phone: payload.phone || null,
+      business_name: payload.businessName,
+      business_url: payload.businessUrl || null,
+      service_area: payload.serviceArea,
+      monthly_jobs: payload.monthlyJobs || null,
+      message: payload.message || null,
+      status: "new",
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    logActionError("done for you request insert", error);
+    redirect("/done-for-you?error=Requests%20are%20temporarily%20unavailable.");
+  }
+
+  if (user?.id) {
+    await admin
+      .from("account_plans")
+      .upsert(
+        {
+          user_id: user.id,
+          tier: "done_for_you",
+          status: "requested",
+          source: "manual",
+        },
+        { onConflict: "user_id" },
+      )
+      .then((result) => {
+        if (result.error) {
+          logActionError("done for you account plan upsert", result.error);
+        }
+      });
+  }
+
+  await sendDoneForYouRequestEmail({
+    name: payload.name,
+    email: payload.email,
+    phone: payload.phone,
+    businessName: payload.businessName,
+    businessUrl: payload.businessUrl,
+    serviceArea: payload.serviceArea,
+    monthlyJobs: payload.monthlyJobs,
+    message: payload.message,
+    submittedAtIso,
+    requestId: typeof data?.id === "string" ? data.id : null,
+  }).catch((emailError) => {
+    logActionError("done for you request email", emailError);
+  });
+
+  redirect("/done-for-you?submitted=1");
+}
+
 export async function updateLeadStatusAction(formData: FormData) {
   const redirectTo = String(formData.get("redirectTo") || "/leads");
   const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/leads";
@@ -3010,7 +3142,8 @@ export async function updateWorkspaceGeneralAction(formData: FormData) {
   const businessName = String(formData.get("businessName") || "").trim() || workspaceContext.businessProfile?.business_name || workspaceName;
   const businessEmail = String(formData.get("businessEmail") || "").trim() || workspaceContext.businessProfile?.email || user.email || "";
   const businessPhone = String(formData.get("businessPhone") || "").trim() || workspaceContext.businessProfile?.phone || "";
-  const website = String(formData.get("website") || "").trim() || workspaceContext.businessProfile?.website || "";
+  const websiteInput = normalizeOptionalUrlInput(String(formData.get("website") || ""));
+  const website = (isSafeHttpUrl(websiteInput) ? websiteInput : "") || workspaceContext.businessProfile?.website || "";
   const industry = String(formData.get("industry") || "").trim() || workspaceContext.businessProfile?.industry || "";
   const privacyPolicyUrl =
     String(formData.get("privacyPolicyUrl") || "").trim() || workspaceContext.businessProfile?.privacy_policy_url || "";
@@ -3034,6 +3167,15 @@ export async function updateWorkspaceGeneralAction(formData: FormData) {
       brand_color: workspaceContext.businessProfile?.brand_color || "#6D5EF8",
       default_cta: workspaceContext.businessProfile?.default_cta || "Get My Quote",
     }),
+    upsertWorkspaceBranding({
+      workspaceId: workspaceContext.activeWorkspace.id,
+      businessName,
+      logoUrl: workspaceContext.businessProfile?.logo_url || null,
+      primaryColor: normalizeHexColor(workspaceContext.businessProfile?.brand_color || "#6D5EF8", "#6D5EF8"),
+      accentColor: "#11B981",
+      websiteUrl: website,
+      phone: businessPhone,
+    }),
   ]);
 
   revalidateWorkspaceSettingsPaths();
@@ -3053,6 +3195,21 @@ export async function updateWorkspaceIconAction(formData: FormData) {
   const existingLogoUrl = workspaceContext.businessProfile?.logo_url || "";
   let nextLogoUrl = removeLogo ? "" : existingLogoUrl;
   let logoUploadFile: File | null = null;
+  const businessName =
+    String(formData.get("brandingBusinessName") || "").trim() ||
+    workspaceContext.businessProfile?.business_name ||
+    workspaceContext.activeWorkspace.name;
+  const websiteUrlInput = normalizeOptionalUrlInput(String(formData.get("brandingWebsiteUrl") || ""));
+  const websiteUrl =
+    (isSafeHttpUrl(websiteUrlInput) ? websiteUrlInput : "") ||
+    workspaceContext.businessProfile?.website ||
+    "";
+  const phone = String(formData.get("brandingPhone") || "").trim() || workspaceContext.businessProfile?.phone || "";
+  const primaryColor = normalizeHexColor(
+    String(formData.get("primaryColor") || formData.get("brandColor") || workspaceContext.businessProfile?.brand_color || "#6D5EF8"),
+    "#6D5EF8",
+  );
+  const accentColor = normalizeHexColor(String(formData.get("accentColor") || "#11B981"), "#11B981");
 
   if (!removeLogo && croppedLogoDataUrl) {
     try {
@@ -3096,14 +3253,27 @@ export async function updateWorkspaceIconAction(formData: FormData) {
   await upsertWorkspaceBusinessProfile(admin, {
     user_id: user.id,
     workspace_id: workspaceContext.activeWorkspace.id,
-    business_name: workspaceContext.businessProfile?.business_name || workspaceContext.activeWorkspace.name,
+    business_name: businessName,
     location: workspaceContext.businessProfile?.location || "",
-    phone: workspaceContext.businessProfile?.phone || "",
+    phone,
     email: workspaceContext.businessProfile?.email || user.email || "",
     description: workspaceContext.businessProfile?.description || "",
     logo_url: nextLogoUrl || null,
-    brand_color: String(formData.get("brandColor") || workspaceContext.businessProfile?.brand_color || "#6D5EF8"),
+    brand_color: primaryColor,
+    website: websiteUrl,
+    industry: workspaceContext.businessProfile?.industry || "",
+    privacy_policy_url: workspaceContext.businessProfile?.privacy_policy_url || "",
     default_cta: workspaceContext.businessProfile?.default_cta || "Get My Quote",
+  });
+
+  await upsertWorkspaceBranding({
+    workspaceId: workspaceContext.activeWorkspace.id,
+    businessName,
+    logoUrl: nextLogoUrl || null,
+    primaryColor,
+    accentColor,
+    websiteUrl,
+    phone,
   });
 
   revalidateWorkspaceSettingsPaths();
@@ -3520,11 +3690,11 @@ export async function saveCrmConnectionAction(formData: FormData) {
   const locationId = String(formData.get("locationId") || "").trim();
 
   if (provider === "gohighlevel") {
-    redirect("/workspace/settings?section=integrations&error=Connect%20GoHighLevel%20through%20the%20OAuth%20install%20flow.");
+    redirect("/workspace/settings?section=integrations&error=Reconnect%20this%20legacy%20CRM%20through%20the%20OAuth%20install%20flow.");
   }
 
   if (provider === "hubspot") {
-    redirect("/workspace/settings?section=integrations&error=Connect%20HubSpot%20through%20the%20OAuth%20flow.");
+    redirect("/workspace/settings?section=integrations&error=Reconnect%20this%20legacy%20CRM%20through%20the%20OAuth%20flow.");
   }
 
   if (provider === "zoho") {

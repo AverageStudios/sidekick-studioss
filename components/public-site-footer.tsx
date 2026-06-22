@@ -27,7 +27,8 @@ const columns = [
     title: "Account",
     links: [
       { label: "Log in", href: "/login" },
-      { label: "Start free trial", href: "/pricing" },
+      { label: "Apply for Done-For-You", href: "/done-for-you" },
+      { label: "Start Self-Serve trial", href: "/pricing?startTrial=1" },
     ],
   },
 ];
@@ -40,7 +41,7 @@ export function PublicSiteFooter() {
           <Logo tone="dark" />
           <p className="mt-4 text-sm leading-relaxed text-[rgba(15,17,22,0.62)]">
             Ready-to-launch Meta campaigns, lead capture, and simple follow-up
-            for small businesses.
+            for car detailers.
           </p>
         </div>
 

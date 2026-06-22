@@ -6,6 +6,7 @@ import { signOutAction, switchWorkspaceAction } from "@/app/actions";
 import { getCurrentProfile, getUserAvatarUrl } from "@/lib/auth";
 import { getSupabaseFallbackMessage } from "@/lib/env";
 import { cn } from "@/lib/utils";
+import { getWorkspaceBranding } from "@/lib/workspace-branding";
 import {
   getCurrentWorkspaceContext,
   getUserDisplayNameFromProfile,
@@ -35,6 +36,9 @@ export async function AppShell({
     getCurrentWorkspaceContext(),
     getCurrentProfile(),
   ]);
+  const workspaceBranding = workspaceContext?.activeWorkspace.id
+    ? await getWorkspaceBranding(workspaceContext.activeWorkspace.id).catch(() => null)
+    : null;
   const identityUser = {
     id: accountProfile?.user_id || "unknown-user",
     email: workspaceContext?.userEmail || null,
@@ -47,9 +51,11 @@ export async function AppShell({
     workspaceContext?.userDisplayName ||
     "Workspace owner";
   const workspaceName =
+    workspaceBranding?.business_name ||
     workspaceContext?.activeWorkspace.name ||
     getWorkspaceDisplayName(undefined, userDisplayName);
   const workspaceAvatarUrl =
+    workspaceBranding?.logo_url ||
     workspaceContext?.activeWorkspace.logo_url ||
     workspaceContext?.businessProfile?.logo_url ||
     null;
@@ -127,14 +133,16 @@ export async function AppShell({
                 {currentWorkspace ? (
                   <div key={currentWorkspace.id} className="flex items-center gap-3 rounded-2xl bg-[var(--soft-panel)] px-3 py-3">
                     <InitialsAvatar
-                      initials={currentWorkspace.name.charAt(0).toUpperCase()}
-                      label={currentWorkspace.name}
-                      src={currentWorkspace.logo_url || null}
+                      initials={(workspaceBranding?.business_name || currentWorkspace.name).charAt(0).toUpperCase()}
+                      label={workspaceBranding?.business_name || currentWorkspace.name}
+                      src={workspaceBranding?.logo_url || currentWorkspace.logo_url || null}
                       size="sm"
                       tone="brand"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-[var(--ink)]">{currentWorkspace.name}</p>
+                      <p className="truncate text-sm font-semibold text-[var(--ink)]">
+                        {workspaceBranding?.business_name || currentWorkspace.name}
+                      </p>
                       <p className="truncate text-xs text-[var(--muted)]">
                         {currentWorkspace.business_name || "Current workspace"}
                       </p>

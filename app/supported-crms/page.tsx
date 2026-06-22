@@ -19,7 +19,7 @@ export default function SupportedCrmsPage() {
 
       <HomeFinalCta
         title="Launch the campaign, keep the CRM you already use."
-        subtitle="Start the trial, capture leads in SideKick, and send them to your connected CRM so your sales process keeps moving."
+        subtitle="Apply for Done-For-You and we can help set up the lead flow, or use Self-Serve to connect your CRM yourself."
       />
 
       <PublicSiteFooter />

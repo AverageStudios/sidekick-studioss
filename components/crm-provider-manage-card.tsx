@@ -132,7 +132,7 @@ export function CrmProviderManageCard({
           : "Connect";
   const helperText =
     provider.key === "hubspot" && state === "needs_setup"
-      ? "Reconnect HubSpot to replace the older manual token connection with OAuth."
+      ? "Reconnect this legacy CRM to replace the older manual token connection with OAuth."
       : provider.key === "monday" && state === "needs_setup"
         ? "Choose a monday board before sending a test lead."
         : !envConfigured

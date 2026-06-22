@@ -201,6 +201,56 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function ensureSelfServeAccountPlan(userId: string, subscriptionStatus?: UserBillingSubscriptionStatus | null) {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return;
+
+  const { data: existing, error: lookupError } = await admin
+    .from("account_plans")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (lookupError) {
+    if (
+      lookupError.message.includes("account_plans") &&
+      (lookupError.message.includes("schema cache") || lookupError.message.includes("does not exist"))
+    ) {
+      return;
+    }
+    console.warn("[billing] account plan lookup failed", {
+      userId,
+      message: lookupError.message,
+    });
+    return;
+  }
+
+  if (existing?.user_id) return;
+
+  const planStatus =
+    subscriptionStatus === "trialing"
+      ? "trialing"
+      : subscriptionStatus === "canceled"
+        ? "canceled"
+        : subscriptionStatus === "active"
+          ? "active"
+          : "active";
+
+  const { error } = await admin.from("account_plans").insert({
+    user_id: userId,
+    tier: "self_serve",
+    status: planStatus,
+    source: "stripe",
+  });
+
+  if (error && !error.message.includes("duplicate key")) {
+    console.warn("[billing] account plan insert failed", {
+      userId,
+      message: error.message,
+    });
+  }
+}
+
 export function getBillingDisplayState(
   input: UserBillingStatus | UserBillingRecord | null | undefined,
 ): BillingDisplayState {
@@ -628,6 +678,10 @@ export async function upsertUserBillingRow(
       throw new Error("Billing is not available until the latest database migration is applied.");
     }
     throw new Error(error.message);
+  }
+
+  if (input.subscription_status) {
+    await ensureSelfServeAccountPlan(userId, input.subscription_status);
   }
 
   return normalizeBillingRow(data as UserBillingRecord) as UserBillingRecord;

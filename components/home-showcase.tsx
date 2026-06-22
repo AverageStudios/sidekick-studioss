@@ -28,27 +28,27 @@ const tabs = [
   {
     id: "leads",
     label: "Leads",
-    title: "Every lead in one list, with a clear next step",
+    title: "Every lead visible, with a clear CRM handoff",
     description:
-      "Leads from Meta forms land in SideKick within seconds, tied to the campaign that produced them.",
+      "Leads from Meta forms land in SideKick within seconds, tied to the campaign that produced them and ready for CRM delivery.",
     bullets: [
-      "Status tracking from new to booked",
+      "Delivery visibility from new to sent",
       "Campaign source on every lead",
       "Export to CSV whenever you want",
     ],
     href: "/product/lead-management",
-    cta: "See lead management",
+    cta: "See lead visibility",
     mockup: LeadsMockup,
   },
   {
     id: "follow-up",
     label: "Follow-up",
-    title: "Follow-up that keeps new leads from going cold",
+    title: "Follow-up context that keeps new leads from going cold",
     description:
-      "SideKick keeps every new lead visible with a clear next step, so your team can respond faster.",
+      "SideKick keeps every new lead visible with the campaign context your team needs to respond faster.",
     bullets: [
       "New leads flagged the moment they arrive",
-      "Mark each lead's status and next step",
+      "Keep CRM delivery and next steps visible",
       "Keep the lead tied to the campaign that produced it",
     ],
     href: "/product/outreach",
@@ -68,8 +68,8 @@ export function HomeShowcase() {
       <Reveal className="mx-auto max-w-2xl text-center">
         <h2 className="site-h2">One place to launch, track, and follow up</h2>
         <p className="site-lead mx-auto mt-4">
-          The campaign, the leads it produces, and the follow-up they need live on
-          the same screen, not across five tools.
+          The campaign, the leads it produces, and the CRM handoff they need stay
+          connected in one system, not scattered across five tools.
         </p>
       </Reveal>
 
