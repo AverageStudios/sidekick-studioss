@@ -131,10 +131,6 @@ const adminClientInviteSchema = z.object({
   ),
   tier: z.literal("done_for_you").default("done_for_you"),
   status: z.literal("active").default("active"),
-  logoUrl: z.preprocess(
-    normalizeOptionalUrlInput,
-    z.string().max(500).refine((value) => !value || isSafeHttpUrl(value), "Add a valid logo URL."),
-  ),
   primaryColor: z.string().trim().optional().default("#6D5EF8"),
   accentColor: z.string().trim().optional().default("#11B981"),
 });
@@ -3204,7 +3200,6 @@ export async function adminCreateClientInviteAction(formData: FormData) {
     websiteUrl: String(formData.get("websiteUrl") || ""),
     tier: String(formData.get("tier") || "done_for_you"),
     status: String(formData.get("status") || "active"),
-    logoUrl: String(formData.get("logoUrl") || ""),
     primaryColor: String(formData.get("primaryColor") || "#6D5EF8"),
     accentColor: String(formData.get("accentColor") || "#11B981"),
   });
@@ -3223,6 +3218,7 @@ export async function adminCreateClientInviteAction(formData: FormData) {
   const lastName = nameParts.lastName || fullName.split(/\s+/).slice(1).join(" ");
   const primaryColor = normalizeHexColor(payload.primaryColor, "#6D5EF8");
   const accentColor = normalizeHexColor(payload.accentColor, "#11B981");
+  const logoFile = formData.get("logoFile");
 
   try {
     const existingUser = await findAuthUserByEmail(admin, email);
@@ -3274,6 +3270,19 @@ export async function adminCreateClientInviteAction(formData: FormData) {
       );
     }
 
+    let logoUrl: string | null = null;
+    if (logoFile instanceof File && logoFile.size > 0) {
+      if (!allowedWorkspaceLogoTypes.has(logoFile.type)) {
+        redirect(`${redirectBase}?error=${encodeURIComponent("Use a JPG, PNG, WEBP, or GIF image for the client logo.")}`);
+      }
+
+      if (logoFile.size > profileAvatarMaxBytes) {
+        redirect(`${redirectBase}?error=${encodeURIComponent("Client logos must be 5 MB or smaller.")}`);
+      }
+
+      logoUrl = await uploadAsset(logoFile, `logos/workspaces/${workspace.id}`);
+    }
+
     await upsertWorkspaceBusinessProfile(admin, {
       user_id: userId,
       workspace_id: workspace.id,
@@ -3285,7 +3294,7 @@ export async function adminCreateClientInviteAction(formData: FormData) {
       phone: payload.phone || "",
       email,
       description: "",
-      logo_url: payload.logoUrl || null,
+      logo_url: logoUrl,
       brand_color: primaryColor,
       default_cta: "Get My Quote",
     });
@@ -3293,7 +3302,7 @@ export async function adminCreateClientInviteAction(formData: FormData) {
     await upsertWorkspaceBranding({
       workspaceId: workspace.id,
       businessName: payload.businessName,
-      logoUrl: payload.logoUrl || null,
+      logoUrl,
       primaryColor,
       accentColor,
       websiteUrl: payload.websiteUrl || null,

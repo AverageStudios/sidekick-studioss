@@ -40,7 +40,7 @@ export default async function AdminNewClientPage({
       ) : null}
 
       <Card className="max-w-4xl p-6 sm:p-7">
-        <form action={adminCreateClientInviteAction} className="space-y-7">
+        <form action={adminCreateClientInviteAction} encType="multipart/form-data" className="space-y-7">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Client</p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -75,8 +75,11 @@ export default async function AdminNewClientPage({
                 <Input id="workspaceName" name="workspaceName" required maxLength={120} placeholder="Precision Auto Detail" />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="logoUrl">Logo URL</label>
-                <Input id="logoUrl" name="logoUrl" maxLength={500} placeholder="https://..." />
+                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="logoFile">Logo</label>
+                <Input id="logoFile" name="logoFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" />
+                <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
+                  Upload a JPG, PNG, WEBP, or GIF up to 5 MB.
+                </p>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
