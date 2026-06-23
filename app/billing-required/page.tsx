@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { ManageBillingButton, StartTrialButton } from "@/components/billing-action-buttons";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getCurrentUser, requireUser } from "@/lib/auth";
-import { formatBillingDate, getBillingDisplayState, getUserBillingStatus } from "@/lib/billing";
+import { formatBillingDate, getBillingDisplayState, getUserBillingStatus, hasActiveDoneForYouAccess } from "@/lib/billing";
 
 function getBillingRequiredHeadline(key: ReturnType<typeof getBillingDisplayState>["key"]) {
   switch (key) {
@@ -26,9 +27,10 @@ export default async function BillingRequiredPage({
 }) {
   await requireUser();
   const user = await getCurrentUser();
-  const [{ returnTo }, billingStatus] = await Promise.all([
+  const [{ returnTo }, billingStatus, hasDoneForYouAccess] = await Promise.all([
     searchParams,
     user ? getUserBillingStatus(user.id) : Promise.resolve(null),
+    user ? hasActiveDoneForYouAccess(user.id) : Promise.resolve(false),
   ]);
 
   if (!user || !billingStatus) {
@@ -36,6 +38,9 @@ export default async function BillingRequiredPage({
   }
 
   const safeReturnTo = returnTo?.startsWith("/") ? returnTo : "/dashboard";
+  if (hasDoneForYouAccess) {
+    redirect(safeReturnTo);
+  }
   const billingDisplayState = getBillingDisplayState(billingStatus);
   const headline = getBillingRequiredHeadline(billingDisplayState.key);
   const primaryAction =

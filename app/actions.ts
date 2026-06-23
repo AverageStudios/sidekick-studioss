@@ -16,7 +16,7 @@ import { createCampaignBlueprint } from "@/lib/template-engine";
 import { env, isDemoModeEnabled, isSupabasePublicConfigured, isSupabaseServerConfigured } from "@/lib/env";
 import { getPublishedTemplateBySlug } from "@/lib/template-repository";
 import { slugify } from "@/lib/utils";
-import { sendCrmIntegrationRequestEmail, sendDoneForYouRequestEmail, sendLeadConfirmationEmail, sendWorkspaceInvitationEmail } from "@/services/follow-up";
+import { sendClientInviteEmail, sendCrmIntegrationRequestEmail, sendDoneForYouRequestEmail, sendLeadConfirmationEmail, sendWorkspaceInvitationEmail } from "@/services/follow-up";
 import { deleteStoragePaths, deleteStoragePrefix, getStoragePathFromPublicUrl, uploadAsset } from "@/services/storage";
 import { storageBucketName } from "@/services/storage";
 import { checkRateLimit, getIpFromHeaders, logRateLimitHit } from "@/lib/rate-limit";
@@ -117,6 +117,34 @@ const doneForYouRequestSchema = z.object({
   serviceArea: z.string().trim().min(2, "Add your city or service area.").max(160),
   monthlyJobs: z.string().trim().max(120).optional().default(""),
   message: z.string().trim().max(1500).optional().default(""),
+});
+
+const adminClientInviteSchema = z.object({
+  email: z.string().trim().email().max(254),
+  name: z.string().trim().max(120).optional().default(""),
+  businessName: z.string().trim().min(2).max(160),
+  workspaceName: z.string().trim().min(2).max(120),
+  phone: z.string().trim().max(40).optional().default(""),
+  websiteUrl: z.preprocess(
+    normalizeOptionalUrlInput,
+    z.string().max(240).refine((value) => !value || isSafeHttpUrl(value), "Add a valid website or social URL."),
+  ),
+  tier: z.literal("done_for_you").default("done_for_you"),
+  status: z.literal("active").default("active"),
+  logoUrl: z.preprocess(
+    normalizeOptionalUrlInput,
+    z.string().max(500).refine((value) => !value || isSafeHttpUrl(value), "Add a valid logo URL."),
+  ),
+  primaryColor: z.string().trim().optional().default("#6D5EF8"),
+  accentColor: z.string().trim().optional().default("#11B981"),
+});
+
+const invitedPasswordSchema = z.object({
+  password: z.string().min(8, "Use at least 8 characters.").max(128),
+  confirmPassword: z.string().min(8).max(128),
+}).refine((value) => value.password === value.confirmPassword, {
+  message: "Passwords do not match.",
+  path: ["confirmPassword"],
 });
 
 const crmRequestSchema = z.object({
@@ -925,6 +953,171 @@ async function requireAdminActionUser() {
 }
 
 type AdminSupabaseClient = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
+
+function splitClientName(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] || "",
+    lastName: parts.slice(1).join(" "),
+    fullName: parts.join(" "),
+  };
+}
+
+function buildInviteRedirectUrl() {
+  return `${env.appUrl}/auth/callback?next=${encodeURIComponent("/invite/accept")}`;
+}
+
+async function findAuthUserByEmail(admin: AdminSupabaseClient, email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  for (let page = 1; page <= 5; page += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const user = data.users.find((entry) => entry.email?.trim().toLowerCase() === normalizedEmail);
+    if (user) return user;
+    if (data.users.length < 1000) return null;
+  }
+
+  return null;
+}
+
+async function createClientInviteLink({
+  admin,
+  email,
+  fullName,
+  firstName,
+  lastName,
+  existingUserId,
+}: {
+  admin: AdminSupabaseClient;
+  email: string;
+  fullName: string;
+  firstName: string;
+  lastName: string;
+  existingUserId?: string | null;
+}) {
+  const redirectTo = buildInviteRedirectUrl();
+
+  if (existingUserId) {
+    const recovery = await admin.auth.admin.generateLink({
+      type: "recovery",
+      email,
+      options: { redirectTo },
+    });
+    if (recovery.error) {
+      throw new Error(recovery.error.message);
+    }
+    return {
+      userId: existingUserId,
+      inviteUrl: recovery.data.properties.action_link,
+      inviteType: "recovery" as const,
+    };
+  }
+
+  const invite = await admin.auth.admin.generateLink({
+    type: "invite",
+    email,
+    options: {
+      redirectTo,
+      data: {
+        first_name: firstName,
+        last_name: lastName,
+        full_name: fullName,
+      },
+    },
+  });
+
+  if (!invite.error && invite.data.user?.id && invite.data.properties.action_link) {
+    return {
+      userId: invite.data.user.id,
+      inviteUrl: invite.data.properties.action_link,
+      inviteType: "invite" as const,
+    };
+  }
+
+  const existing = await findAuthUserByEmail(admin, email);
+  if (!existing?.id) {
+    throw new Error(invite.error?.message || "Invite link could not be generated.");
+  }
+
+  const recovery = await admin.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: { redirectTo },
+  });
+  if (recovery.error) {
+    throw new Error(recovery.error.message);
+  }
+
+  return {
+    userId: existing.id,
+    inviteUrl: recovery.data.properties.action_link,
+    inviteType: "recovery" as const,
+  };
+}
+
+async function findOrCreateClientWorkspace({
+  admin,
+  userId,
+  workspaceName,
+}: {
+  admin: AdminSupabaseClient;
+  userId: string;
+  workspaceName: string;
+}) {
+  const { data: existingWorkspaces, error: workspacesError } = await admin
+    .from("workspaces")
+    .select("id, name, owner_user_id, created_at, updated_at")
+    .eq("owner_user_id", userId)
+    .order("created_at", { ascending: true });
+
+  if (workspacesError) {
+    throw new Error(workspacesError.message);
+  }
+
+  const normalizedWorkspaceName = workspaceName.trim();
+  const existing = existingWorkspaces || [];
+  const exactWorkspace = existing.find(
+    (workspace) => String(workspace.name || "").trim().toLowerCase() === normalizedWorkspaceName.toLowerCase(),
+  );
+  if (exactWorkspace?.id) {
+    return exactWorkspace;
+  }
+
+  const genericWorkspace = existing.find((workspace) =>
+    ["", "my workspace"].includes(String(workspace.name || "").trim().toLowerCase()),
+  );
+  if (genericWorkspace?.id) {
+    await admin.from("workspaces").update({ name: normalizedWorkspaceName }).eq("id", genericWorkspace.id);
+    return { ...genericWorkspace, name: normalizedWorkspaceName };
+  }
+
+  const takenNames = new Set(existing.map((workspace) => String(workspace.name || "").trim().toLowerCase()).filter(Boolean));
+  let nextWorkspaceName = normalizedWorkspaceName;
+  let counter = 2;
+  while (takenNames.has(nextWorkspaceName.toLowerCase())) {
+    nextWorkspaceName = `${normalizedWorkspaceName} (${counter})`;
+    counter += 1;
+  }
+
+  const { data, error } = await admin
+    .from("workspaces")
+    .insert({
+      name: nextWorkspaceName,
+      owner_user_id: userId,
+    })
+    .select("id, name, owner_user_id, created_at, updated_at")
+    .single();
+
+  if (error || !data?.id) {
+    throw new Error(error?.message || "Workspace could not be created.");
+  }
+
+  return data;
+}
 
 function createAdminLibraryRedirect({
   industryId,
@@ -2973,6 +3166,229 @@ export async function submitDoneForYouRequestAction(formData: FormData) {
   });
 
   redirect("/done-for-you?submitted=1");
+}
+
+export async function adminCreateClientInviteAction(formData: FormData) {
+  const adminUser = await requireAdminActionUser();
+  const redirectBase = "/admin/clients/new";
+  const parsed = adminClientInviteSchema.safeParse({
+    email: String(formData.get("email") || ""),
+    name: String(formData.get("name") || ""),
+    businessName: String(formData.get("businessName") || ""),
+    workspaceName: String(formData.get("workspaceName") || ""),
+    phone: String(formData.get("phone") || ""),
+    websiteUrl: String(formData.get("websiteUrl") || ""),
+    tier: String(formData.get("tier") || "done_for_you"),
+    status: String(formData.get("status") || "active"),
+    logoUrl: String(formData.get("logoUrl") || ""),
+    primaryColor: String(formData.get("primaryColor") || "#6D5EF8"),
+    accentColor: String(formData.get("accentColor") || "#11B981"),
+  });
+
+  if (!parsed.success) {
+    redirect(`${redirectBase}?error=${encodeURIComponent("Check the client details and try again.")}`);
+  }
+
+  const admin = await requireSupabaseAdminForAction(redirectBase);
+  const payload = parsed.data;
+  const email = payload.email.trim().toLowerCase();
+  const nameParts = splitClientName(payload.name);
+  const fallbackName = email.split("@")[0]?.replace(/[._-]+/g, " ").trim() || payload.businessName;
+  const fullName = nameParts.fullName || fallbackName;
+  const firstName = nameParts.firstName || fullName.split(/\s+/)[0] || "";
+  const lastName = nameParts.lastName || fullName.split(/\s+/).slice(1).join(" ");
+  const primaryColor = normalizeHexColor(payload.primaryColor, "#6D5EF8");
+  const accentColor = normalizeHexColor(payload.accentColor, "#11B981");
+
+  try {
+    const existingUser = await findAuthUserByEmail(admin, email);
+    const invite = await createClientInviteLink({
+      admin,
+      email,
+      fullName,
+      firstName,
+      lastName,
+      existingUserId: existingUser?.id || null,
+    });
+    const userId = invite.userId;
+    const workspace = await findOrCreateClientWorkspace({
+      admin,
+      userId,
+      workspaceName: payload.workspaceName,
+    });
+
+    await admin.from("profiles").upsert(
+      {
+        user_id: userId,
+        role: "user",
+        first_name: firstName || null,
+        last_name: lastName || null,
+        active_workspace_id: workspace.id,
+        selected_industry: "auto-detailing",
+        onboarding_completed_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+
+    await admin.from("workspace_memberships").upsert(
+      {
+        workspace_id: workspace.id,
+        user_id: userId,
+        role: "owner",
+      },
+      { onConflict: "workspace_id,user_id" },
+    );
+
+    if (adminUser.id !== userId) {
+      await admin.from("workspace_memberships").upsert(
+        {
+          workspace_id: workspace.id,
+          user_id: adminUser.id,
+          role: "admin",
+        },
+        { onConflict: "workspace_id,user_id" },
+      );
+    }
+
+    await upsertWorkspaceBusinessProfile(admin, {
+      user_id: userId,
+      workspace_id: workspace.id,
+      business_name: payload.businessName,
+      website: payload.websiteUrl || "",
+      industry: "Auto Detailing",
+      privacy_policy_url: "",
+      location: "",
+      phone: payload.phone || "",
+      email,
+      description: "",
+      logo_url: payload.logoUrl || null,
+      brand_color: primaryColor,
+      default_cta: "Get My Quote",
+    });
+
+    await upsertWorkspaceBranding({
+      workspaceId: workspace.id,
+      businessName: payload.businessName,
+      logoUrl: payload.logoUrl || null,
+      primaryColor,
+      accentColor,
+      websiteUrl: payload.websiteUrl || null,
+      phone: payload.phone || null,
+    });
+
+    await admin.from("account_plans").upsert(
+      {
+        user_id: userId,
+        tier: "done_for_you",
+        status: "active",
+        source: "admin",
+      },
+      { onConflict: "user_id" },
+    );
+
+    const inviteInsert = await admin
+      .from("client_invites")
+      .insert({
+        email,
+        user_id: userId,
+        workspace_id: workspace.id,
+        invited_by: adminUser.id,
+        role: "owner",
+        tier: "done_for_you",
+        status: "pending",
+        invite_type: invite.inviteType,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      })
+      .select("id")
+      .maybeSingle();
+
+    if (inviteInsert.error && !isMissingTableError(inviteInsert.error.message, "client_invites")) {
+      throw new Error(inviteInsert.error.message);
+    }
+
+    const emailResult = await sendClientInviteEmail({
+      to: email,
+      name: fullName,
+      businessName: payload.businessName,
+      inviteUrl: invite.inviteUrl,
+    }).catch((emailError) => {
+      console.warn("[admin clients] invite email failed", {
+        message: emailError instanceof Error ? emailError.message : "unknown_error",
+      });
+      return { skipped: false, failed: true };
+    });
+
+    const inviteStatus = "failed" in emailResult && emailResult.failed
+      ? "email_failed"
+      : emailResult.skipped
+        ? "email_skipped"
+        : "sent";
+    if (inviteInsert.data?.id) {
+      await admin.from("client_invites").update({ status: inviteStatus }).eq("id", inviteInsert.data.id);
+    }
+
+    revalidatePath("/admin/clients");
+    revalidatePath("/admin/clients/new");
+    redirect(
+      `/admin/clients?saved=${encodeURIComponent(
+        inviteStatus === "email_failed"
+          ? "Client created, but invite email failed. Check Resend and send a new invite."
+          : emailResult.skipped
+          ? "Client created. Invite email was skipped because Resend is not configured."
+          : "Client created and invite email sent.",
+      )}`,
+    );
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    console.warn("[admin clients] invite failed", {
+      message: error instanceof Error ? error.message : "unknown_error",
+    });
+    redirect(`${redirectBase}?error=${encodeURIComponent("Client invite could not be completed.")}`);
+  }
+}
+
+export async function setInvitedClientPasswordAction(formData: FormData) {
+  const user = await requireAuthenticatedActionUser("/login");
+  const parsed = invitedPasswordSchema.safeParse({
+    password: String(formData.get("password") || ""),
+    confirmPassword: String(formData.get("confirmPassword") || ""),
+  });
+
+  if (!parsed.success) {
+    redirect(`/invite/accept?error=${encodeURIComponent(parsed.error.issues[0]?.message || "Password could not be saved.")}`);
+  }
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    redirect(`/invite/accept?error=${encodeURIComponent("Auth is not configured yet.")}`);
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
+  if (error) {
+    redirect(`/invite/accept?error=${encodeURIComponent(formatAuthErrorMessage(error.message))}`);
+  }
+
+  const admin = createSupabaseAdminClient();
+  if (admin) {
+    await admin
+      .from("client_invites")
+      .update({
+        status: "accepted",
+        accepted_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.id)
+      .in("status", ["pending", "sent", "email_skipped", "email_failed"])
+      .then((result) => {
+        if (result.error && !isMissingTableError(result.error.message, "client_invites")) {
+          console.warn("[invite accept] invite status update failed", { message: result.error.message });
+        }
+      });
+  }
+
+  revalidatePath("/dashboard");
+  redirect("/dashboard?success=Your%20SideKick%20workspace%20is%20ready.");
 }
 
 export async function updateLeadStatusAction(formData: FormData) {

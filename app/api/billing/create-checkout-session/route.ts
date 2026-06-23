@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentProfile, getCurrentUser } from "@/lib/auth";
-import { getBillingDisplayState, getUserBillingStatus, upsertUserBillingRow } from "@/lib/billing";
+import { getBillingDisplayState, getUserBillingStatus, hasActiveDoneForYouAccess, upsertUserBillingRow } from "@/lib/billing";
 import { env, isStripeConfigured, isSupabaseServerConfigured } from "@/lib/env";
 import { checkRateLimit, createRateLimitResponse, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
 import { getStripeServerClient } from "@/lib/stripe";
@@ -46,6 +46,10 @@ export async function POST(request: Request) {
   }
 
   const billingStatus = await getUserBillingStatus(user.id);
+  if (await hasActiveDoneForYouAccess(user.id)) {
+    return NextResponse.json({ url: buildAbsoluteUrl("/dashboard") });
+  }
+
   const billingDisplayState = getBillingDisplayState(billingStatus);
   const shouldOpenPortal =
     billingDisplayState.primaryActionType === "portal" ||

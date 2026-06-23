@@ -73,7 +73,7 @@ export default async function AdminPage() {
               <Link href="/admin/templates">Open template manager</Link>
             </Button>
             <Button asChild variant="outline" className="sm:flex-1">
-              <Link href="/admin/templates/new">Create new blueprint</Link>
+              <Link href="/admin/clients">Manage clients</Link>
             </Button>
           </div>
         </Card>

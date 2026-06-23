@@ -1,6 +1,15 @@
 import { Resend } from "resend";
 import { env, isResendConfigured } from "@/lib/env";
 
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 export async function sendLeadConfirmationEmail(input: {
   to: string;
   businessName: string;
@@ -123,6 +132,55 @@ export async function sendDoneForYouRequestEmail(input: {
       `Submitted at: ${input.submittedAtIso}`,
       `Request ID: ${input.requestId || "Unavailable"}`,
     ].join("\n"),
+  });
+
+  return { skipped: false };
+}
+
+export async function sendClientInviteEmail(input: {
+  to: string;
+  name?: string | null;
+  businessName?: string | null;
+  inviteUrl: string;
+}) {
+  const from = env.clientInviteFromEmail || env.resendFromEmail;
+  if (!env.resendApiKey || !from) {
+    return { skipped: true };
+  }
+
+  const resend = new Resend(env.resendApiKey);
+  const greetingName = input.name?.trim() || input.businessName?.trim() || "there";
+  const safeGreetingName = escapeHtml(greetingName);
+  const safeInviteUrl = escapeHtml(input.inviteUrl);
+
+  await resend.emails.send({
+    from,
+    to: input.to,
+    subject: "Your SideKick workspace is ready",
+    text: [
+      `Hi ${greetingName},`,
+      "",
+      "Your SideKick workspace is ready.",
+      "",
+      "We set up your account so you can see your campaign system, leads, and workspace in one place.",
+      "",
+      "Click below to set your password and open your workspace:",
+      "",
+      input.inviteUrl,
+      "",
+      "If you were not expecting this invite, you can ignore this email.",
+      "",
+      "— SideKick Studioss",
+    ].join("\n"),
+    html: `<div style="font-family:Arial,sans-serif;line-height:1.55;color:#15151f">
+      <p style="margin:0 0 14px">Hi ${safeGreetingName},</p>
+      <p style="margin:0 0 14px">Your SideKick workspace is ready.</p>
+      <p style="margin:0 0 18px">We set up your account so you can see your campaign system, leads, and workspace in one place.</p>
+      <p style="margin:0 0 18px">Click below to set your password and open your workspace:</p>
+      <p style="margin:0 0 22px"><a href="${safeInviteUrl}" style="display:inline-block;border-radius:12px;background:#5b3df5;color:white;padding:12px 18px;text-decoration:none;font-weight:700">Set up my account</a></p>
+      <p style="margin:0 0 18px;color:#555">If you were not expecting this invite, you can ignore this email.</p>
+      <p style="margin:0">— SideKick Studioss</p>
+    </div>`,
   });
 
   return { skipped: false };
