@@ -119,7 +119,14 @@ const doneForYouRequestSchema = z.object({
   message: z.string().trim().max(1500).optional().default(""),
 });
 
-const adminClientInviteSchema = z.object({
+const adminClientUserInviteSchema = z.object({
+  email: z.string().trim().email().max(254),
+  name: z.string().trim().max(120).optional().default(""),
+  workspaceId: z.string().uuid(),
+  role: z.enum(["owner", "admin", "member"]).default("owner"),
+});
+
+const legacyAdminClientInviteSchema = z.object({
   email: z.string().trim().email().max(254),
   name: z.string().trim().max(120).optional().default(""),
   businessName: z.string().trim().min(2).max(160),
@@ -133,6 +140,23 @@ const adminClientInviteSchema = z.object({
   status: z.literal("active").default("active"),
   primaryColor: z.string().trim().optional().default("#6D5EF8"),
   accentColor: z.string().trim().optional().default("#11B981"),
+});
+
+const adminClientSubaccountSchema = z.object({
+  businessName: z.string().trim().min(2).max(160),
+  workspaceName: z.string().trim().min(2).max(120),
+  industry: z.string().trim().max(120).optional().default("Auto Detailing"),
+  phone: z.string().trim().max(40).optional().default(""),
+  serviceArea: z.string().trim().max(160).optional().default(""),
+  websiteUrl: z.preprocess(
+    normalizeOptionalUrlInput,
+    z.string().max(240).refine((value) => !value || isSafeHttpUrl(value), "Add a valid website or social URL."),
+  ),
+  tier: z.literal("done_for_you").default("done_for_you"),
+  status: z.enum(["active", "inactive", "requested", "canceled"]).default("active"),
+  primaryColor: z.string().trim().optional().default("#6D5EF8"),
+  accentColor: z.string().trim().optional().default("#11B981"),
+  notes: z.string().trim().max(1000).optional().default(""),
 });
 
 const invitedPasswordSchema = z.object({
@@ -3188,10 +3212,309 @@ export async function submitDoneForYouRequestAction(formData: FormData) {
   redirect("/done-for-you?submitted=1");
 }
 
+export async function adminCreateClientSubaccountAction(formData: FormData) {
+  const adminUser = await requireAdminActionUser();
+  const redirectBase = "/admin/clients/new";
+  const parsed = adminClientSubaccountSchema.safeParse({
+    businessName: String(formData.get("businessName") || ""),
+    workspaceName: String(formData.get("workspaceName") || ""),
+    industry: String(formData.get("industry") || "Auto Detailing"),
+    phone: String(formData.get("phone") || ""),
+    serviceArea: String(formData.get("serviceArea") || ""),
+    websiteUrl: String(formData.get("websiteUrl") || ""),
+    tier: String(formData.get("tier") || "done_for_you"),
+    status: String(formData.get("status") || "active"),
+    primaryColor: String(formData.get("primaryColor") || "#6D5EF8"),
+    accentColor: String(formData.get("accentColor") || "#11B981"),
+    notes: String(formData.get("notes") || ""),
+  });
+
+  if (!parsed.success) {
+    redirect(`${redirectBase}?error=${encodeURIComponent("Check the subaccount details and try again.")}`);
+  }
+
+  const admin = await requireSupabaseAdminForAction(redirectBase);
+  const payload = parsed.data;
+  const primaryColor = normalizeHexColor(payload.primaryColor, "#6D5EF8");
+  const accentColor = normalizeHexColor(payload.accentColor, "#11B981");
+  const logoFile = formData.get("logoFile");
+
+  try {
+    const { data: workspace, error: workspaceError } = await admin
+      .from("workspaces")
+      .insert({
+        name: payload.workspaceName,
+        owner_user_id: adminUser.id,
+      })
+      .select("id, name")
+      .single();
+
+    if (workspaceError || !workspace?.id) {
+      throw new Error(workspaceError?.message || "Subaccount workspace could not be created.");
+    }
+
+    await admin.from("workspace_memberships").upsert(
+      {
+        workspace_id: workspace.id,
+        user_id: adminUser.id,
+        role: "admin",
+      },
+      { onConflict: "workspace_id,user_id" },
+    );
+
+    let logoUrl: string | null = null;
+    if (logoFile instanceof File && logoFile.size > 0) {
+      if (!allowedWorkspaceLogoTypes.has(logoFile.type)) {
+        redirect(`${redirectBase}?error=${encodeURIComponent("Use a JPG, PNG, WEBP, or GIF image for the client logo.")}`);
+      }
+
+      if (logoFile.size > profileAvatarMaxBytes) {
+        redirect(`${redirectBase}?error=${encodeURIComponent("Client logos must be 5 MB or smaller.")}`);
+      }
+
+      logoUrl = await uploadAsset(logoFile, `logos/workspaces/${workspace.id}`);
+    }
+
+    await upsertWorkspaceBusinessProfile(admin, {
+      user_id: adminUser.id,
+      workspace_id: workspace.id,
+      business_name: payload.businessName,
+      website: payload.websiteUrl || "",
+      industry: payload.industry || "Auto Detailing",
+      privacy_policy_url: "",
+      location: payload.serviceArea || "",
+      phone: payload.phone || "",
+      email: adminUser.email || "",
+      description: payload.notes || "",
+      logo_url: logoUrl,
+      brand_color: primaryColor,
+      default_cta: "Get My Quote",
+    });
+
+    await upsertWorkspaceBranding({
+      workspaceId: workspace.id,
+      businessName: payload.businessName,
+      logoUrl,
+      primaryColor,
+      accentColor,
+      websiteUrl: payload.websiteUrl || null,
+      phone: payload.phone || null,
+    });
+
+    const { error: subaccountError } = await admin
+      .from("client_subaccounts")
+      .upsert(
+        {
+          workspace_id: workspace.id,
+          tier: payload.tier,
+          status: payload.status,
+          industry: payload.industry || "Auto Detailing",
+          service_area: payload.serviceArea || null,
+          notes: payload.notes || null,
+          created_by: adminUser.id,
+        },
+        { onConflict: "workspace_id" },
+      );
+
+    if (subaccountError) {
+      throw new Error(subaccountError.message);
+    }
+
+    revalidatePath("/admin/clients");
+    revalidatePath("/admin/clients/new");
+    revalidatePath(`/admin/clients/${workspace.id}`);
+    redirect(`/admin/clients/${workspace.id}?created=1`);
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    console.warn("[admin clients] subaccount create failed", {
+      message: error instanceof Error ? error.message : "unknown_error",
+    });
+    redirect(`${redirectBase}?error=${encodeURIComponent("Client subaccount could not be created.")}`);
+  }
+}
+
+export async function adminInviteClientUserAction(formData: FormData) {
+  const adminUser = await requireAdminActionUser();
+  const fallbackWorkspaceId = String(formData.get("workspaceId") || "");
+  const redirectBase = fallbackWorkspaceId ? `/admin/clients/${fallbackWorkspaceId}/users` : "/admin/clients";
+  const parsed = adminClientUserInviteSchema.safeParse({
+    email: String(formData.get("email") || ""),
+    name: String(formData.get("name") || ""),
+    workspaceId: fallbackWorkspaceId,
+    role: String(formData.get("role") || "owner"),
+  });
+
+  if (!parsed.success) {
+    redirect(`${redirectBase}?error=${encodeURIComponent("Check the invite details and try again.")}`);
+  }
+
+  const admin = await requireSupabaseAdminForAction(redirectBase);
+  const payload = parsed.data;
+  const email = payload.email.trim().toLowerCase();
+  const nameParts = splitClientName(payload.name);
+  const fallbackName = email.split("@")[0]?.replace(/[._-]+/g, " ").trim() || email;
+  const fullName = nameParts.fullName || fallbackName;
+  const firstName = nameParts.firstName || fullName.split(/\s+/)[0] || "";
+  const lastName = nameParts.lastName || fullName.split(/\s+/).slice(1).join(" ");
+
+  try {
+    const [workspaceResult, subaccountResult, existingInviteResult] = await Promise.all([
+      admin.from("workspaces").select("id, name").eq("id", payload.workspaceId).maybeSingle(),
+      admin
+        .from("client_subaccounts")
+        .select("workspace_id, tier, status")
+        .eq("workspace_id", payload.workspaceId)
+        .maybeSingle(),
+      admin
+        .from("client_invites")
+        .select("id")
+        .eq("workspace_id", payload.workspaceId)
+        .eq("email", email)
+        .in("status", ["pending", "sent", "email_skipped", "email_failed"])
+        .maybeSingle(),
+    ]);
+
+    if (workspaceResult.error || !workspaceResult.data?.id) {
+      redirect(`${redirectBase}?error=${encodeURIComponent("Subaccount not found.")}`);
+    }
+    if (subaccountResult.error) {
+      throw new Error(subaccountResult.error.message);
+    }
+    if (existingInviteResult.error && !isMissingTableError(existingInviteResult.error.message, "client_invites")) {
+      throw new Error(existingInviteResult.error.message);
+    }
+    if (existingInviteResult.data?.id) {
+      redirect(`${redirectBase}?error=${encodeURIComponent("An invite is already pending for this email.")}`);
+    }
+
+    const existingUser = await findAuthUserByEmail(admin, email);
+    if (existingUser?.id) {
+      const existingMembership = await admin
+        .from("workspace_memberships")
+        .select("id")
+        .eq("workspace_id", payload.workspaceId)
+        .eq("user_id", existingUser.id)
+        .maybeSingle();
+
+      if (existingMembership.data?.id) {
+        redirect(`${redirectBase}?error=${encodeURIComponent("This user is already in the subaccount.")}`);
+      }
+    }
+
+    const invite = await createClientInviteLink({
+      admin,
+      email,
+      fullName,
+      firstName,
+      lastName,
+      existingUserId: existingUser?.id || null,
+    });
+    const userId = invite.userId;
+
+    await admin.from("profiles").upsert(
+      {
+        user_id: userId,
+        role: "user",
+        first_name: firstName || null,
+        last_name: lastName || null,
+        active_workspace_id: payload.workspaceId,
+        selected_industry: "auto-detailing",
+        onboarding_completed_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+
+    await admin.from("workspace_memberships").upsert(
+      {
+        workspace_id: payload.workspaceId,
+        user_id: userId,
+        role: payload.role,
+      },
+      { onConflict: "workspace_id,user_id" },
+    );
+
+    if (subaccountResult.data?.tier === "done_for_you" && subaccountResult.data.status === "active") {
+      await admin.from("account_plans").upsert(
+        {
+          user_id: userId,
+          tier: "done_for_you",
+          status: "active",
+          source: "admin",
+        },
+        { onConflict: "user_id" },
+      );
+    }
+
+    const inviteInsert = await admin
+      .from("client_invites")
+      .insert({
+        email,
+        user_id: userId,
+        workspace_id: payload.workspaceId,
+        invited_by: adminUser.id,
+        role: payload.role,
+        tier: "done_for_you",
+        status: "pending",
+        invite_type: invite.inviteType,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      })
+      .select("id")
+      .maybeSingle();
+
+    if (inviteInsert.error && !isMissingTableError(inviteInsert.error.message, "client_invites")) {
+      throw new Error(inviteInsert.error.message);
+    }
+
+    const emailResult = await sendClientInviteEmail({
+      to: email,
+      name: fullName,
+      businessName: workspaceResult.data.name,
+      inviteUrl: invite.inviteUrl,
+    }).catch((emailError) => {
+      console.warn("[admin clients] invite email failed", {
+        message: emailError instanceof Error ? emailError.message : "unknown_error",
+      });
+      return { skipped: false, failed: true };
+    });
+
+    const inviteStatus = "failed" in emailResult && emailResult.failed
+      ? "email_failed"
+      : emailResult.skipped
+        ? "email_skipped"
+        : "sent";
+    if (inviteInsert.data?.id) {
+      await admin.from("client_invites").update({ status: inviteStatus }).eq("id", inviteInsert.data.id);
+    }
+
+    revalidatePath("/admin/clients");
+    revalidatePath(`/admin/clients/${payload.workspaceId}`);
+    revalidatePath(`/admin/clients/${payload.workspaceId}/users`);
+    redirect(
+      `${redirectBase}?saved=${encodeURIComponent(
+        inviteStatus === "email_failed"
+          ? "User added, but invite email failed. Check Resend and send a new invite."
+          : inviteStatus === "email_skipped"
+            ? "User added. Invite email was skipped because Resend is not configured."
+            : "User invited to this subaccount.",
+      )}`,
+    );
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    console.warn("[admin clients] user invite failed", {
+      message: error instanceof Error ? error.message : "unknown_error",
+    });
+    redirect(`${redirectBase}?error=${encodeURIComponent("User invite could not be completed.")}`);
+  }
+}
+
 export async function adminCreateClientInviteAction(formData: FormData) {
   const adminUser = await requireAdminActionUser();
   const redirectBase = "/admin/clients/new";
-  const parsed = adminClientInviteSchema.safeParse({
+  const parsed = legacyAdminClientInviteSchema.safeParse({
     email: String(formData.get("email") || ""),
     name: String(formData.get("name") || ""),
     businessName: String(formData.get("businessName") || ""),

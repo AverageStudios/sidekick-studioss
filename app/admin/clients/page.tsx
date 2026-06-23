@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Building2, Mail, UsersRound } from "lucide-react";
+import { ArrowRight, Building2, Eye, UsersRound } from "lucide-react";
 import { switchWorkspaceAction } from "@/app/actions";
 import { AdminShell } from "@/components/admin-shell";
 import { PageHeader } from "@/components/page-header";
@@ -39,12 +39,12 @@ export default async function AdminClientsPage({
     <AdminShell currentPath="/admin/clients">
       <PageHeader
         badge="Admin"
-        title="Done-For-You clients"
-        description="Create managed client workspaces, approve access, and send password setup invites without handling client passwords."
+        title="Client accounts"
+        description="Create and manage client subaccounts, then invite users from each subaccount when you are ready."
         actions={
           <Button asChild size="lg">
             <Link href="/admin/clients/new">
-              Invite client
+              New client account
               <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
@@ -74,9 +74,9 @@ export default async function AdminClientsPage({
           </p>
         </Card>
         <Card className="p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Accepted invites</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Pending invites</p>
           <p className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-[var(--ink)]">
-            {clients.filter((client) => client.inviteStatus === "accepted").length}
+            {clients.reduce((total, client) => total + client.pendingInviteCount, 0)}
           </p>
         </Card>
       </div>
@@ -89,15 +89,24 @@ export default async function AdminClientsPage({
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <UsersRound className="h-4 w-4 text-[var(--brand)]" />
-                    <p className="truncate text-sm font-semibold text-[var(--ink)]">{client.businessName}</p>
+                    <Link href={`/admin/clients/${client.workspaceId}`} className="truncate text-sm font-semibold text-[var(--ink)] hover:text-[var(--brand)]">
+                      {client.businessName}
+                    </Link>
                   </div>
                   <p className="mt-1 truncate text-sm text-[var(--muted)]">{client.workspaceName}</p>
+                  {client.serviceArea || client.industry ? (
+                    <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                      {[client.industry, client.serviceArea].filter(Boolean).join(" · ")}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-sm text-[var(--muted-strong)]">
-                    <Mail className="h-4 w-4 text-[var(--muted)]" />
-                    <span className="truncate">{client.email}</span>
-                  </div>
+                  <p className="text-sm font-medium text-[var(--muted-strong)]">
+                    {client.memberCount} {client.memberCount === 1 ? "user" : "users"}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    {client.pendingInviteCount} pending {client.pendingInviteCount === 1 ? "invite" : "invites"}
+                  </p>
                   <p className="mt-1 text-xs text-[var(--muted)]">Created {formatDate(client.createdAt)}</p>
                 </div>
                 <div className="flex flex-wrap gap-2 lg:justify-end">
@@ -105,10 +114,20 @@ export default async function AdminClientsPage({
                   <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] ${statusTone(client.status)}`}>
                     {client.status}
                   </span>
-                  <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] ${statusTone(client.inviteStatus)}`}>
-                    Invite {client.inviteStatus.replaceAll("_", " ")}
-                  </span>
                   {client.workspaceId ? (
+                    <>
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={`/admin/clients/${client.workspaceId}`}>
+                        <Eye className="h-4 w-4" />
+                        Details
+                      </Link>
+                    </Button>
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={`/admin/clients/${client.workspaceId}/users`}>
+                        <UsersRound className="h-4 w-4" />
+                        Users
+                      </Link>
+                    </Button>
                     <form action={switchWorkspaceAction}>
                       <input type="hidden" name="workspaceId" value={client.workspaceId} />
                       <input type="hidden" name="redirectTo" value="/dashboard" />
@@ -117,6 +136,7 @@ export default async function AdminClientsPage({
                         Manage subaccount
                       </Button>
                     </form>
+                    </>
                   ) : null}
                 </div>
               </div>
@@ -125,12 +145,12 @@ export default async function AdminClientsPage({
         ) : (
           <div className="px-6 py-14 text-center">
             <UsersRound className="mx-auto h-8 w-8 text-[var(--brand)]" />
-            <p className="mt-4 font-semibold text-[var(--ink)]">No client invites yet</p>
+            <p className="mt-4 font-semibold text-[var(--ink)]">No client accounts yet</p>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
-              Create your first Done-For-You client workspace and send a password setup invite.
+              Create your first client subaccount, then invite users from its Users page.
             </p>
             <Button asChild className="mt-5">
-              <Link href="/admin/clients/new">Invite client</Link>
+              <Link href="/admin/clients/new">New client account</Link>
             </Button>
           </div>
         )}

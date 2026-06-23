@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { ArrowLeft, Send } from "lucide-react";
-import { adminCreateClientInviteAction } from "@/app/actions";
+import { ArrowLeft, Building2 } from "lucide-react";
+import { adminCreateClientSubaccountAction } from "@/app/actions";
 import { AdminShell } from "@/components/admin-shell";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { requireAdmin } from "@/lib/auth";
 
 export default async function AdminNewClientPage({
@@ -20,9 +21,9 @@ export default async function AdminNewClientPage({
   return (
     <AdminShell currentPath="/admin/clients">
       <PageHeader
-        badge="New client"
-        title="Invite a Done-For-You client"
-        description="Create the client account, workspace, plan, and branding, then send a password setup email."
+        badge="New client account"
+        title="Create a client subaccount"
+        description="Set up the business workspace, branding, plan, and operating details first. You can invite users from the subaccount after it is created."
         actions={
           <Button asChild variant="outline">
             <Link href="/admin/clients">
@@ -40,31 +41,9 @@ export default async function AdminNewClientPage({
       ) : null}
 
       <Card className="max-w-4xl p-6 sm:p-7">
-        <form action={adminCreateClientInviteAction} encType="multipart/form-data" className="space-y-7">
+        <form action={adminCreateClientSubaccountAction} encType="multipart/form-data" className="space-y-7">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Client</p>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="email">Client email</label>
-                <Input id="email" name="email" type="email" required maxLength={254} placeholder="client@example.com" />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="name">Client name</label>
-                <Input id="name" name="name" maxLength={120} placeholder="Jane Detailer" />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="phone">Phone</label>
-                <Input id="phone" name="phone" maxLength={40} placeholder="(555) 123-4567" />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="websiteUrl">Website or social link</label>
-                <Input id="websiteUrl" name="websiteUrl" maxLength={240} placeholder="https://clientbusiness.com" />
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Workspace</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Subaccount</p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="businessName">Business name</label>
@@ -73,6 +52,22 @@ export default async function AdminNewClientPage({
               <div>
                 <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="workspaceName">Workspace name</label>
                 <Input id="workspaceName" name="workspaceName" required maxLength={120} placeholder="Precision Auto Detail" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="industry">Industry / niche</label>
+                <Input id="industry" name="industry" maxLength={120} defaultValue="Auto Detailing" placeholder="Auto Detailing" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="serviceArea">Service area / city</label>
+                <Input id="serviceArea" name="serviceArea" maxLength={160} placeholder="Austin, TX" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="phone">Phone</label>
+                <Input id="phone" name="phone" maxLength={40} placeholder="(555) 123-4567" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="websiteUrl">Website or social link</label>
+                <Input id="websiteUrl" name="websiteUrl" maxLength={240} placeholder="https://clientbusiness.com" />
               </div>
               <div>
                 <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="logoFile">Logo</label>
@@ -91,6 +86,10 @@ export default async function AdminNewClientPage({
                   <Input id="accentColor" name="accentColor" type="color" defaultValue="#11B981" className="h-11 p-1.5" />
                 </div>
               </div>
+            </div>
+            <div className="mt-4">
+              <label className="mb-2 block text-sm font-medium text-[var(--ink)]" htmlFor="notes">Notes</label>
+              <Textarea id="notes" name="notes" maxLength={1000} placeholder="Internal setup notes, launch context, or onboarding details." />
             </div>
           </div>
 
@@ -114,8 +113,8 @@ export default async function AdminNewClientPage({
 
           <div className="flex flex-col gap-3 border-t border-[var(--line)] pt-6 sm:flex-row">
             <Button type="submit" size="lg">
-              <Send className="h-4 w-4" />
-              Create and send invite
+              <Building2 className="h-4 w-4" />
+              Create subaccount
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/admin/clients">Cancel</Link>
