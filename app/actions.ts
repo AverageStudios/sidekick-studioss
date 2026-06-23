@@ -555,7 +555,8 @@ function normalizeHexColor(value: string, fallback: string) {
 function normalizeOptionalUrlInput(value: unknown) {
   const trimmed = typeof value === "string" ? value.trim() : "";
   if (!trimmed) return "";
-  if (/^www\./i.test(trimmed)) return `https://${trimmed}`;
+  if (/^[a-z][a-z\d+\-.]*:\/\//i.test(trimmed)) return trimmed;
+  if (/^[^\s]+\.[^\s]{2,}(?:[/?#].*)?$/i.test(trimmed)) return `https://${trimmed}`;
   return trimmed;
 }
 
@@ -3230,7 +3231,9 @@ export async function adminCreateClientSubaccountAction(formData: FormData) {
   });
 
   if (!parsed.success) {
-    redirect(`${redirectBase}?error=${encodeURIComponent("Check the subaccount details and try again.")}`);
+    const firstIssue = parsed.error.issues[0];
+    const errorMessage = firstIssue?.message || "Check the subaccount details and try again.";
+    redirect(`${redirectBase}?error=${encodeURIComponent(errorMessage)}`);
   }
 
   const admin = await requireSupabaseAdminForAction(redirectBase);
