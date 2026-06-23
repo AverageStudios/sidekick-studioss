@@ -68,7 +68,7 @@ export default async function BillingRequiredPage({
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
             {billingDisplayState.key === "not_started"
-              ? "Start your 14-day free trial to unlock SideKick across unlimited workspaces."
+              ? "Start your 14-day free trial to unlock SideKick for your business workspace."
               : billingDisplayState.description}
           </p>
 
@@ -84,7 +84,7 @@ export default async function BillingRequiredPage({
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Workspaces</p>
-                <p className="mt-1 text-base font-semibold text-[var(--ink)]">Unlimited</p>
+                <p className="mt-1 text-base font-semibold text-[var(--ink)]">One business workspace</p>
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Status</p>

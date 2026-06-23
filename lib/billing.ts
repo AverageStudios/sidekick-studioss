@@ -302,7 +302,7 @@ export function getBillingDisplayState(
       accessAllowed: false,
       primaryActionLabel: "Start 14-day free trial",
       primaryActionType: "checkout",
-      description: "Start your 14-day free trial to unlock SideKick across unlimited workspaces.",
+      description: "Start your 14-day free trial to unlock SideKick for your business workspace.",
     };
   }
 
@@ -471,7 +471,7 @@ export function getBillingDisplayState(
     accessAllowed: false,
     primaryActionLabel: "Start 14-day free trial",
     primaryActionType: "checkout",
-    description: "Start your 14-day free trial to unlock SideKick across unlimited workspaces.",
+    description: "Start your 14-day free trial to unlock SideKick for your business workspace.",
   };
 }
 

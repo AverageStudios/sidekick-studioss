@@ -4,7 +4,7 @@ import { ManageBillingButton, StartTrialButton } from "@/components/billing-acti
 
 const doneForYouFeatures = [
   "Everything in Self-Serve",
-  "Workspace setup",
+  "Client workspace setup",
   "Logo and branding setup",
   "Campaign setup",
   "Campaign launch support",
@@ -20,7 +20,7 @@ const selfServeFeatures = [
   "Simple lead status tracking",
   "CRM integrations",
   "Email alerts and CSV export",
-  "Unlimited workspaces",
+  "One business workspace",
   "Workspace branding",
 ];
 

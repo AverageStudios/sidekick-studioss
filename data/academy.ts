@@ -164,15 +164,14 @@ export const academyArticles: AcademyArticle[] = [
         ],
       },
       {
-        heading: "How to create or switch workspaces",
+        heading: "How to switch workspaces",
         body: [
-          "Use the workspace switcher in the top-left area of the app to move between existing workspaces or create a new one.",
-          "When you create a new workspace, start by setting the name and basic business profile so campaigns and connected assets reflect the right brand from the beginning.",
+          "Use the workspace switcher in the top-left area of the app to move between existing workspaces you belong to.",
+          "Self-Serve accounts usually have one business workspace. SideKick admins create client subaccounts for managed Done-For-You clients.",
         ],
         steps: [
           "Open the workspace switcher from the app header.",
-          "Select an existing workspace or choose New workspace.",
-          "Complete the workspace name and business details.",
+          "Select an existing workspace you belong to.",
           "Open Workspace Settings to finish branding and integrations.",
         ],
       },

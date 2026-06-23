@@ -2217,6 +2217,7 @@ export async function switchWorkspaceAction(formData: FormData) {
     redirect(redirectTo);
   }
 
+  const isAdmin = (await getCurrentRole()) === "admin";
   const membership = await admin
     .from("workspace_memberships")
     .select("workspace_id")
@@ -2224,7 +2225,30 @@ export async function switchWorkspaceAction(formData: FormData) {
     .eq("workspace_id", workspaceId)
     .maybeSingle();
 
-  if (!membership.data) {
+  let canSwitchWorkspace = Boolean(membership.data);
+  if (!canSwitchWorkspace && isAdmin) {
+    const { data: workspaceExists } = await admin
+      .from("workspaces")
+      .select("id")
+      .eq("id", workspaceId)
+      .maybeSingle();
+
+    if (workspaceExists?.id) {
+      const { error: membershipError } = await admin
+        .from("workspace_memberships")
+        .upsert(
+          {
+            workspace_id: workspaceId,
+            user_id: user.id,
+            role: "admin",
+          },
+          { onConflict: "workspace_id,user_id" },
+        );
+      canSwitchWorkspace = !membershipError;
+    }
+  }
+
+  if (!canSwitchWorkspace) {
     redirect("/dashboard");
   }
 
@@ -2247,10 +2271,10 @@ export async function switchWorkspaceAction(formData: FormData) {
 
 export async function createWorkspaceAction(formData: FormData) {
   const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=general&created=1");
-  const user = await requireProductActionUser("/workspaces/new");
+  const user = await requireAdminActionUser();
   const workspaceName = String(formData.get("workspaceName") || "").trim();
   if (!workspaceName) {
-    redirect("/workspaces/new?error=Workspace%20name%20is%20required.");
+    redirect("/admin/clients/new?error=Client%20account%20name%20is%20required.");
   }
 
   await createWorkspaceForUser(user, {

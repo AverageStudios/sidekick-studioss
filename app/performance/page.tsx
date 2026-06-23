@@ -374,9 +374,9 @@ function EmptyWorkspaceState() {
         />
         <EmptyChartState
           title="No workspace selected yet"
-          description="Create a workspace to unlock performance reporting."
-          ctaHref="/workspaces/new"
-          ctaLabel="Create workspace"
+          description="Open business settings to confirm your workspace setup."
+          ctaHref="/workspace/settings"
+          ctaLabel="Open settings"
         />
       </div>
     </AppShell>

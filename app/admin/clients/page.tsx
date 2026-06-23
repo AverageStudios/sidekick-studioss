@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, Mail, UsersRound } from "lucide-react";
+import { ArrowRight, Building2, Mail, UsersRound } from "lucide-react";
+import { switchWorkspaceAction } from "@/app/actions";
 import { AdminShell } from "@/components/admin-shell";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -107,6 +108,16 @@ export default async function AdminClientsPage({
                   <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] ${statusTone(client.inviteStatus)}`}>
                     Invite {client.inviteStatus.replaceAll("_", " ")}
                   </span>
+                  {client.workspaceId ? (
+                    <form action={switchWorkspaceAction}>
+                      <input type="hidden" name="workspaceId" value={client.workspaceId} />
+                      <input type="hidden" name="redirectTo" value="/dashboard" />
+                      <Button type="submit" size="sm" variant="outline">
+                        <Building2 className="h-4 w-4" />
+                        Manage subaccount
+                      </Button>
+                    </form>
+                  ) : null}
                 </div>
               </div>
             ))}

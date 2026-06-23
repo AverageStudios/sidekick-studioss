@@ -159,18 +159,18 @@ function EmptyWorkspaceState() {
         <PageHeader
           variant="plain"
           badge="Home"
-          title="Create your first workspace"
+          title="Finish your business workspace setup"
         />
 
         <Card className="overflow-hidden border-[var(--line)] bg-[rgba(255,255,255,0.8)] p-7 shadow-[0_10px_24px_rgba(16,24,40,0.03)] sm:p-8">
           <div className="space-y-5">
             <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-[15px]">
-              A workspace keeps your campaigns, leads, and CRM connections in one place.
+              Your business workspace keeps campaigns, leads, and CRM connections in one place.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="sm:min-w-48">
-                <Link href="/workspaces/new" prefetch>
-                  Create workspace
+                <Link href="/workspace/settings" prefetch>
+                  Open business settings
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>

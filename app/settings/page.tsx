@@ -193,7 +193,7 @@ export default async function SettingsPage({
                     </span>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">
-                    One SideKick subscription unlocks every workspace on your account.
+                    One SideKick subscription unlocks your business workspace.
                   </p>
                   <div className="mt-5 grid gap-3 rounded-2xl border border-[var(--line)] bg-[var(--soft-panel)] p-4 sm:grid-cols-3">
                     <div>
@@ -208,7 +208,7 @@ export default async function SettingsPage({
                     </div>
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Workspaces</p>
-                      <p className="mt-1 text-sm font-semibold text-[var(--ink)]">Unlimited</p>
+                      <p className="mt-1 text-sm font-semibold text-[var(--ink)]">One business workspace</p>
                     </div>
                   </div>
                   <div className="mt-4 rounded-2xl border border-[var(--line)] bg-white px-4 py-3">
