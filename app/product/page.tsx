@@ -55,8 +55,8 @@ export default function ProductPage() {
       </section>
 
       <HomeFinalCta
-        title="Run it yourself or let us set it up."
-        subtitle="SideKick is one campaign system with Self-Serve and Done-For-You service levels."
+        title="Run your campaigns from one focused workspace."
+        subtitle="SideKick Core gives you the templates, launch flow, lead capture, and CRM handoff for $97/month after a 14-day free trial."
       />
 
       <PublicSiteFooter />

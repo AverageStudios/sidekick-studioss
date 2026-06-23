@@ -167,7 +167,7 @@ export const academyArticles: AcademyArticle[] = [
         heading: "How to switch workspaces",
         body: [
           "Use the workspace switcher in the top-left area of the app to move between existing workspaces you belong to.",
-          "Self-Serve accounts usually have one business workspace. SideKick admins create client subaccounts for managed Done-For-You clients.",
+          "SideKick Core includes unlimited workspaces, so paid and trialing users can create separate workspaces for each business, brand, or campaign context they manage.",
         ],
         steps: [
           "Open the workspace switcher from the app header.",

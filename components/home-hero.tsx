@@ -9,7 +9,7 @@ import { SITE_EASE } from "@/components/ui/reveal";
 import { TiltFrame, Parallax } from "@/components/ui/scroll-motion";
 import { LaunchMockup } from "@/components/home-mockups";
 
-const HEADLINE = ["More booked details", "without chasing leads."];
+const HEADLINE = ["Ready-to-launch campaigns", "for small businesses."];
 
 function HeadlineLine({ line, lineIndex, instant }: { line: string; lineIndex: number; instant: boolean }) {
   const words = line.split(" ");
@@ -107,21 +107,21 @@ export function HomeHero() {
           </h1>
 
           <motion.p {...fadeUp(0.5)} className="site-lead mx-auto mt-6 max-w-[36rem] text-balance">
-            SideKick gives car detailers a ready-to-run campaign system that launches offers, captures leads, and keeps follow-up organized. Run it yourself or let us set it up for you.
+            SideKick helps you launch Facebook and Instagram campaigns, capture leads, and keep follow-up organized from one simple workspace.
           </motion.p>
 
           <motion.div {...fadeUp(0.62)} className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link href="/done-for-you" className="site-cta-primary">
-              Apply for Done-For-You
+            <Link href="/pricing?startTrial=1" className="site-cta-primary">
+              Start 14-day free trial
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <Link href="/pricing?startTrial=1" className="site-cta-secondary">
-              Start 14-day free trial
+            <Link href="/product/templates" className="site-cta-secondary">
+              View templates
             </Link>
           </motion.div>
 
           <motion.p {...fadeUp(0.72)} className="mt-5 text-sm text-[rgba(15,17,22,0.55)]">
-            Done for you or self-serve. Your brand, your leads.
+            14-day free trial. Payment method required. Ad spend billed separately by Meta.
           </motion.p>
         </motion.div>
 

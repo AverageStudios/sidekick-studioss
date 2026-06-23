@@ -16,7 +16,7 @@ import { createCampaignBlueprint } from "@/lib/template-engine";
 import { env, isDemoModeEnabled, isSupabasePublicConfigured, isSupabaseServerConfigured } from "@/lib/env";
 import { getPublishedTemplateBySlug } from "@/lib/template-repository";
 import { slugify } from "@/lib/utils";
-import { sendClientInviteEmail, sendCrmIntegrationRequestEmail, sendDoneForYouRequestEmail, sendLeadConfirmationEmail, sendWorkspaceInvitationEmail } from "@/services/follow-up";
+import { sendClientInviteEmail, sendCrmIntegrationRequestEmail, sendLeadConfirmationEmail, sendWorkspaceInvitationEmail } from "@/services/follow-up";
 import { deleteStoragePaths, deleteStoragePrefix, getStoragePathFromPublicUrl, uploadAsset } from "@/services/storage";
 import { storageBucketName } from "@/services/storage";
 import { checkRateLimit, getIpFromHeaders, logRateLimitHit } from "@/lib/rate-limit";
@@ -105,20 +105,6 @@ const publicLeadSubmissionSchema = z.object({
   serviceInterest: z.string().trim().min(1).max(160),
   message: z.string().trim().max(1000).optional().default(""),
 });
-const doneForYouRequestSchema = z.object({
-  name: z.string().trim().min(2, "Add your name.").max(120),
-  email: z.string().trim().email("Add a valid email.").max(254),
-  phone: z.string().trim().max(40).optional().default(""),
-  businessName: z.string().trim().min(2, "Add your business name.").max(160),
-  businessUrl: z.preprocess(
-    normalizeOptionalUrlInput,
-    z.string().max(240).refine((value) => !value || isSafeHttpUrl(value), "Add a valid website or social URL."),
-  ),
-  serviceArea: z.string().trim().min(2, "Add your city or service area.").max(160),
-  monthlyJobs: z.string().trim().max(120).optional().default(""),
-  message: z.string().trim().max(1500).optional().default(""),
-});
-
 const adminClientUserInviteSchema = z.object({
   email: z.string().trim().email().max(254),
   name: z.string().trim().max(120).optional().default(""),
@@ -2292,10 +2278,10 @@ export async function switchWorkspaceAction(formData: FormData) {
 
 export async function createWorkspaceAction(formData: FormData) {
   const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=general&created=1");
-  const user = await requireAdminActionUser();
+  const user = await requireProductActionUser("/workspaces/new");
   const workspaceName = String(formData.get("workspaceName") || "").trim();
   if (!workspaceName) {
-    redirect("/admin/clients/new?error=Client%20account%20name%20is%20required.");
+    redirect("/workspaces/new?error=Workspace%20name%20is%20required.");
   }
 
   await createWorkspaceForUser(user, {
@@ -3118,99 +3104,8 @@ export async function submitLeadAction(formData: FormData) {
 }
 
 export async function submitDoneForYouRequestAction(formData: FormData) {
-  const rawPayload = {
-    name: String(formData.get("name") || ""),
-    email: String(formData.get("email") || ""),
-    phone: String(formData.get("phone") || ""),
-    businessName: String(formData.get("businessName") || ""),
-    businessUrl: String(formData.get("businessUrl") || ""),
-    serviceArea: String(formData.get("serviceArea") || ""),
-    monthlyJobs: String(formData.get("monthlyJobs") || ""),
-    message: String(formData.get("message") || ""),
-  };
-  const parsed = doneForYouRequestSchema.safeParse(rawPayload);
-  const errorRedirect = "/done-for-you?error=Please%20check%20the%20form%20and%20try%20again.";
-  if (!parsed.success) {
-    redirect(errorRedirect);
-  }
-
-  const payload = parsed.data;
-  await enforceActionRateLimit({
-    key: "done-for-you-request",
-    limit: 5,
-    windowMs: 60 * 60 * 1000,
-    redirectTo: "/done-for-you",
-    email: payload.email,
-  });
-
-  if (!isSupabaseServerConfigured()) {
-    redirect("/done-for-you?error=Requests%20are%20temporarily%20unavailable.");
-  }
-
-  const admin = createSupabaseAdminClient();
-  if (!admin) {
-    redirect("/done-for-you?error=Requests%20are%20temporarily%20unavailable.");
-  }
-
-  const user = await getCurrentUser().catch(() => null);
-  const submittedAtIso = new Date().toISOString();
-  const { data, error } = await admin
-    .from("done_for_you_requests")
-    .insert({
-      user_id: user?.id || null,
-      name: payload.name,
-      email: payload.email,
-      phone: payload.phone || null,
-      business_name: payload.businessName,
-      business_url: payload.businessUrl || null,
-      service_area: payload.serviceArea,
-      monthly_jobs: payload.monthlyJobs || null,
-      message: payload.message || null,
-      status: "new",
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    logActionError("done for you request insert", error);
-    redirect("/done-for-you?error=Requests%20are%20temporarily%20unavailable.");
-  }
-
-  if (user?.id) {
-    await admin
-      .from("account_plans")
-      .upsert(
-        {
-          user_id: user.id,
-          tier: "done_for_you",
-          status: "requested",
-          source: "manual",
-        },
-        { onConflict: "user_id" },
-      )
-      .then((result) => {
-        if (result.error) {
-          logActionError("done for you account plan upsert", result.error);
-        }
-      });
-  }
-
-  await sendDoneForYouRequestEmail({
-    name: payload.name,
-    email: payload.email,
-    phone: payload.phone,
-    businessName: payload.businessName,
-    businessUrl: payload.businessUrl,
-    serviceArea: payload.serviceArea,
-    monthlyJobs: payload.monthlyJobs,
-    message: payload.message,
-    submittedAtIso,
-    requestId: typeof data?.id === "string" ? data.id : null,
-  }).catch((emailError) => {
-    logActionError("done for you request email", emailError);
-  });
-
-  redirect("/done-for-you?submitted=1");
+  void formData;
+  redirect("/pricing");
 }
 
 export async function adminCreateClientSubaccountAction(formData: FormData) {

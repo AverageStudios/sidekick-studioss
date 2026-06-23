@@ -9,13 +9,11 @@ import { AlertTriangle, BookOpenText, CreditCard, LifeBuoy } from "lucide-react"
 import { signOutAction, updateProfileSettingsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getAccountPlanDescription, getAccountPlanForUser, getAccountPlanLabel } from "@/lib/account-plans";
 import { getCurrentProfile, getUserAvatarUrl, requireUser } from "@/lib/auth";
 import {
   formatBillingDate,
   getBillingDisplayState,
   getUserBillingStatus,
-  hasActiveDoneForYouAccess,
   syncBillingSubscriptionForUser,
 } from "@/lib/billing";
 import { getCurrentWorkspaceContext, getUserDisplayNameFromProfile, getUserInitialsFromProfile } from "@/lib/workspaces";
@@ -44,11 +42,10 @@ export default async function SettingsPage({
   searchParams: Promise<{ saved?: string; error?: string; billing?: string }>;
 }) {
   const user = await requireUser();
-  const [{ saved, error, billing }, workspaceContext, accountProfile, accountPlan] = await Promise.all([
+  const [{ saved, error, billing }, workspaceContext, accountProfile] = await Promise.all([
     searchParams,
     getCurrentWorkspaceContext(),
     getCurrentProfile(),
-    getAccountPlanForUser(user.id),
   ]);
   if (billing === "updated") {
     try {
@@ -60,13 +57,9 @@ export default async function SettingsPage({
       });
     }
   }
-  const [billingStatus, hasDoneForYouAccess] = await Promise.all([
-    getUserBillingStatus(user.id),
-    hasActiveDoneForYouAccess(user.id),
-  ]);
+  const billingStatus = await getUserBillingStatus(user.id);
   const billingDisplayState = getBillingDisplayState(billingStatus);
   const billingDate = formatBillingDate(billingDisplayState.importantDateValue);
-  const isDoneForYouActive = accountPlan?.tier === "done_for_you" && accountPlan.status === "active" && hasDoneForYouAccess;
   const resolvedProfile = accountProfile || workspaceContext?.profile || null;
   const resolvedName =
     getUserDisplayNameFromProfile(resolvedProfile, user) ||
@@ -79,7 +72,7 @@ export default async function SettingsPage({
   const resolvedEmail = user.email || workspaceContext?.userEmail || "";
   const resolvedAvatarUrl = getUserAvatarUrl(resolvedProfile, user);
   const savedMessage = saved && saved !== "1" ? saved : saved ? "Settings saved." : "";
-  const hasActiveBilling = billingStatus.hasAccess || isDoneForYouActive;
+  const hasActiveBilling = billingStatus.hasAccess;
 
   return (
     <AppShell currentPath="/settings">
@@ -188,35 +181,33 @@ export default async function SettingsPage({
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Billing</p>
                       <h3 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-[var(--ink)]">SideKick Core</h3>
                     </div>
-                    <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${isDoneForYouActive ? "border-emerald-200 bg-emerald-50 text-emerald-700" : getBillingPillClass(billingDisplayState.key)}`}>
-                      {isDoneForYouActive ? "Active" : billingDisplayState.label}
+                    <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${getBillingPillClass(billingDisplayState.key)}`}>
+                      {billingDisplayState.label}
                     </span>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">
-                    One SideKick subscription unlocks your business workspace.
+                    One SideKick Core subscription unlocks unlimited workspaces.
                   </p>
                   <div className="mt-5 grid gap-3 rounded-2xl border border-[var(--line)] bg-[var(--soft-panel)] p-4 sm:grid-cols-3">
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Plan</p>
-                      <p className="mt-1 text-sm font-semibold text-[var(--ink)]">{getAccountPlanLabel(accountPlan)}</p>
+                      <p className="mt-1 text-sm font-semibold text-[var(--ink)]">SideKick Core</p>
                     </div>
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Price</p>
-                      <p className="mt-1 text-sm font-semibold text-[var(--ink)]">
-                        {isDoneForYouActive ? "Managed manually" : "$97/month"}
-                      </p>
+                      <p className="mt-1 text-sm font-semibold text-[var(--ink)]">$97/month</p>
                     </div>
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Workspaces</p>
-                      <p className="mt-1 text-sm font-semibold text-[var(--ink)]">One business workspace</p>
+                      <p className="mt-1 text-sm font-semibold text-[var(--ink)]">Unlimited</p>
                     </div>
                   </div>
                   <div className="mt-4 rounded-2xl border border-[var(--line)] bg-white px-4 py-3">
-                    <p className="mb-2 text-sm font-semibold text-[var(--ink)]">{getAccountPlanDescription(accountPlan)}</p>
+                    <p className="mb-2 text-sm font-semibold text-[var(--ink)]">Self-Serve platform access</p>
                     <p className="text-sm leading-6 text-[var(--muted-strong)]">
-                      {isDoneForYouActive ? "Billing is managed manually for your Done-For-You workspace." : billingDisplayState.description}
+                      {billingDisplayState.description}
                     </p>
-                    {!isDoneForYouActive && billingDisplayState.importantDateLabel && billingDate ? (
+                    {billingDisplayState.importantDateLabel && billingDate ? (
                       <div className="mt-3 space-y-1">
                         <div className="flex flex-wrap items-center gap-2 text-sm">
                           <span className="font-semibold text-[var(--ink)]">{billingDisplayState.importantDateLabel}</span>
@@ -228,40 +219,32 @@ export default async function SettingsPage({
                       </div>
                     ) : null}
                   </div>
-                  {isDoneForYouActive ? (
-                    <p className="mt-4 text-xs leading-5 text-[var(--muted)]">
-                      Your SideKick workspace is managed with setup support. Ad spend is billed separately by Meta.
-                    </p>
-                  ) : (
-                    <>
-                      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                        {billingDisplayState.primaryActionType === "portal" && billingStatus.stripeCustomerId ? (
-                          <ManageBillingButton
-                            label={billingDisplayState.primaryActionLabel}
-                            variant="primary"
-                            className="sm:min-w-48"
-                          />
-                        ) : (
-                          <StartTrialButton
-                            loggedIn
-                            nextPath="/settings#account-controls"
-                            label={billingDisplayState.primaryActionLabel}
-                            pendingLabel="Opening checkout..."
-                            className="sm:min-w-48"
-                          />
-                        )}
-                        {!billingStatus.isStripeConfigured ? (
-                          <Button asChild variant="outline">
-                            <Link href="/support/new?from=/settings-billing" prefetch>Contact support</Link>
-                          </Button>
-                        ) : null}
-                        <BillingRefreshButton />
-                      </div>
-                      <p className="mt-4 text-xs leading-5 text-[var(--muted)]">
-                        Payment method required. Ad spend is billed separately by Meta.
-                      </p>
-                    </>
-                  )}
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                    {billingDisplayState.primaryActionType === "portal" && billingStatus.stripeCustomerId ? (
+                      <ManageBillingButton
+                        label={billingDisplayState.primaryActionLabel}
+                        variant="primary"
+                        className="sm:min-w-48"
+                      />
+                    ) : (
+                      <StartTrialButton
+                        loggedIn
+                        nextPath="/settings#account-controls"
+                        label={billingDisplayState.primaryActionLabel}
+                        pendingLabel="Opening checkout..."
+                        className="sm:min-w-48"
+                      />
+                    )}
+                    {!billingStatus.isStripeConfigured ? (
+                      <Button asChild variant="outline">
+                        <Link href="/support/new?from=/settings-billing" prefetch>Contact support</Link>
+                      </Button>
+                    ) : null}
+                    <BillingRefreshButton />
+                  </div>
+                  <p className="mt-4 text-xs leading-5 text-[var(--muted)]">
+                    Payment method required. Ad spend is billed separately by Meta.
+                  </p>
                 </div>
               </div>
             </div>

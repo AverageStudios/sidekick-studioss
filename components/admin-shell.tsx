@@ -1,9 +1,8 @@
-import { LayoutTemplate, LifeBuoy, Shield, UsersRound } from "lucide-react";
+import { LayoutTemplate, LifeBuoy, Shield } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 
 const adminNavItems = [
   { href: "/admin", label: "Admin", icon: Shield },
-  { href: "/admin/clients", label: "Clients", icon: UsersRound },
   { href: "/admin/templates", label: "Manage templates", icon: LayoutTemplate },
   { href: "/admin/support", label: "Support tickets", icon: LifeBuoy },
 ];

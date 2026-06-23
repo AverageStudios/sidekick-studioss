@@ -27,8 +27,7 @@ const columns = [
     title: "Account",
     links: [
       { label: "Log in", href: "/login" },
-      { label: "Apply for Done-For-You", href: "/done-for-you" },
-      { label: "Start Self-Serve trial", href: "/pricing?startTrial=1" },
+      { label: "Start 14-day free trial", href: "/pricing?startTrial=1" },
     ],
   },
 ];

@@ -1,7 +1,6 @@
 import { MarketingNav } from "@/components/marketing-nav";
 import { PublicSiteFooter } from "@/components/public-site-footer";
 import { HomeHero } from "@/components/home-hero";
-import { HomeTwoWays } from "@/components/home-two-ways";
 import { HomeStatement } from "@/components/home-statement";
 import { HomeHowItWorks } from "@/components/home-how-it-works";
 import { HomeWhyTemplates } from "@/components/home-why-templates";
@@ -14,7 +13,6 @@ export default function HomePage() {
     <main className="public-site min-h-screen">
       <MarketingNav />
       <HomeHero />
-      <HomeTwoWays />
       <HomeStatement />
       <HomeHowItWorks />
       <HomeWhyTemplates />

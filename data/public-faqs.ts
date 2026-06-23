@@ -5,14 +5,14 @@ export const publicFaqs = [
       "SideKick is a campaign system for car detailers. It helps you launch ready-to-use offers, capture more local leads, keep follow-up organized, and hand leads to the CRM you already use.",
   },
   {
-    question: "What is the difference between Self-Serve and Done-For-You?",
+    question: "What does SideKick Core include?",
     answer:
-      "Self-Serve gives you the SideKick platform so you can launch and manage campaigns yourself. Done-For-You includes the same system, but we help set up your workspace, prepare the campaign, launch it, and monitor the lead flow.",
+      "SideKick Core includes ready-to-launch campaign templates, Meta campaign launch tools, lead capture, lead status tracking, workspace branding, CRM integrations, CSV export, and unlimited workspaces.",
   },
   {
     question: "Do I have to learn the software?",
     answer:
-      "Not with Done-For-You. You get visibility into the system, but we handle setup and launch. Your job is to respond to new leads.",
+      "SideKick is built as a self-serve SaaS product. The app keeps the main campaign workflow focused so you can choose a template, connect accounts, capture leads, and follow up without a complex setup process.",
   },
   {
     question: "Can my business logo show inside SideKick?",
@@ -27,11 +27,11 @@ export const publicFaqs = [
   {
     question: "Does SideKick run the ads for me?",
     answer:
-      "On Done-For-You, we help set up and launch the campaign workflow. On Self-Serve, you use the platform and launch campaigns yourself.",
+      "No. SideKick Core is self-serve software. It helps you prepare and launch Meta campaigns, while your ad spend is billed separately by Meta.",
   },
   {
     question: "What happens during the 14-day trial?",
     answer:
-      "The 14-day trial applies to Self-Serve. You can explore the platform, set up your workspace, and launch your first campaign. You can cancel before the trial ends and you will not be charged.",
+      "You can explore the platform, set up workspaces, connect accounts, and launch your first campaign. A payment method is required, and you can cancel before the trial ends.",
   },
 ] as const;

@@ -251,39 +251,6 @@ async function ensureSelfServeAccountPlan(userId: string, subscriptionStatus?: U
   }
 }
 
-function isMissingAccountPlansTableError(message: string | null | undefined) {
-  if (!message) return false;
-  return message.includes("account_plans") && (
-    message.includes("Could not find the table") ||
-    message.includes("relation") ||
-    message.includes("schema cache")
-  );
-}
-
-export async function hasActiveDoneForYouAccess(userId: string) {
-  if (!userId || !isSupabaseServerConfigured()) return false;
-
-  const admin = createSupabaseAdminClient();
-  if (!admin) return false;
-
-  const { data, error } = await admin
-    .from("account_plans")
-    .select("tier, status, source")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error) {
-    if (isMissingAccountPlansTableError(error.message)) return false;
-    console.warn("[billing] account plan access lookup failed", {
-      userId,
-      message: error.message,
-    });
-    return false;
-  }
-
-  return data?.tier === "done_for_you" && data.status === "active";
-}
-
 export function getBillingDisplayState(
   input: UserBillingStatus | UserBillingRecord | null | undefined,
 ): BillingDisplayState {
@@ -594,7 +561,7 @@ export async function getUserBillingStatusWithRetry(
   userId: string,
   options: BillingStatusRetryOptions = {},
 ) {
-  if ((await isBillingBypassUser(userId)) || (await hasActiveDoneForYouAccess(userId))) {
+  if (await isBillingBypassUser(userId)) {
     return {
       ...(await getUserBillingStatus(userId)),
       hasAccess: true,
@@ -629,7 +596,7 @@ export function buildBillingRequiredHref(returnTo = "/dashboard") {
 }
 
 export async function requireActiveUserBilling(userId: string, returnTo = "/dashboard") {
-  if ((await isBillingBypassUser(userId)) || (await hasActiveDoneForYouAccess(userId))) {
+  if (await isBillingBypassUser(userId)) {
     return {
       ...(await getUserBillingStatus(userId)),
       hasAccess: true,
@@ -644,7 +611,7 @@ export async function requireActiveUserBilling(userId: string, returnTo = "/dash
 }
 
 export async function assertActiveUserBilling(userId: string) {
-  if ((await isBillingBypassUser(userId)) || (await hasActiveDoneForYouAccess(userId))) {
+  if (await isBillingBypassUser(userId)) {
     return {
       ...(await getUserBillingStatus(userId)),
       hasAccess: true,

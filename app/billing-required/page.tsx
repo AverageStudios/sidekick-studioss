@@ -1,11 +1,10 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { ManageBillingButton, StartTrialButton } from "@/components/billing-action-buttons";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getCurrentUser, requireUser } from "@/lib/auth";
-import { formatBillingDate, getBillingDisplayState, getUserBillingStatus, hasActiveDoneForYouAccess } from "@/lib/billing";
+import { formatBillingDate, getBillingDisplayState, getUserBillingStatus } from "@/lib/billing";
 
 function getBillingRequiredHeadline(key: ReturnType<typeof getBillingDisplayState>["key"]) {
   switch (key) {
@@ -27,10 +26,9 @@ export default async function BillingRequiredPage({
 }) {
   await requireUser();
   const user = await getCurrentUser();
-  const [{ returnTo }, billingStatus, hasDoneForYouAccess] = await Promise.all([
+  const [{ returnTo }, billingStatus] = await Promise.all([
     searchParams,
     user ? getUserBillingStatus(user.id) : Promise.resolve(null),
-    user ? hasActiveDoneForYouAccess(user.id) : Promise.resolve(false),
   ]);
 
   if (!user || !billingStatus) {
@@ -38,9 +36,6 @@ export default async function BillingRequiredPage({
   }
 
   const safeReturnTo = returnTo?.startsWith("/") ? returnTo : "/dashboard";
-  if (hasDoneForYouAccess) {
-    redirect(safeReturnTo);
-  }
   const billingDisplayState = getBillingDisplayState(billingStatus);
   const headline = getBillingRequiredHeadline(billingDisplayState.key);
   const primaryAction =
@@ -68,7 +63,7 @@ export default async function BillingRequiredPage({
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
             {billingDisplayState.key === "not_started"
-              ? "Start your 14-day free trial to unlock SideKick for your business workspace."
+              ? "Start your 14-day free trial to unlock SideKick across unlimited workspaces."
               : billingDisplayState.description}
           </p>
 
@@ -84,7 +79,7 @@ export default async function BillingRequiredPage({
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Workspaces</p>
-                <p className="mt-1 text-base font-semibold text-[var(--ink)]">One business workspace</p>
+                <p className="mt-1 text-base font-semibold text-[var(--ink)]">Unlimited</p>
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Status</p>

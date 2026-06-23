@@ -5,8 +5,8 @@ import { ArrowRight } from "lucide-react";
 import { Reveal } from "@/components/ui/reveal";
 
 export function HomeFinalCta({
-  title = "Get more booked details from one campaign system.",
-  subtitle = "Apply for Done-For-You and we can help set up the workflow, or start Self-Serve if you want to run it yourself.",
+  title = "Launch your next campaign from one simple workspace.",
+  subtitle = "Start a 14-day free trial of SideKick Core, then keep unlimited workspaces organized under one self-serve subscription.",
   secondaryLabel = "See pricing",
   secondaryHref = "/pricing",
 }: {
@@ -37,8 +37,8 @@ export function HomeFinalCta({
             </p>
 
             <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link href="/done-for-you" className="site-cta-on-dark">
-                Apply for Done-For-You
+              <Link href="/pricing?startTrial=1" className="site-cta-on-dark">
+                Start 14-day free trial
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link href={secondaryHref} className="site-cta-ghost-on-dark">
@@ -47,7 +47,7 @@ export function HomeFinalCta({
             </div>
 
             <p className="mt-6 text-sm text-white/45">
-              Done for you or self-serve. Ad spend is paid separately to Meta.
+              Payment method required. Ad spend is paid separately to Meta.
             </p>
           </div>
         </div>

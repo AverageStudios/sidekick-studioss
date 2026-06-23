@@ -19,7 +19,7 @@ export default function SupportedCrmsPage() {
 
       <HomeFinalCta
         title="Launch the campaign, keep the CRM you already use."
-        subtitle="Apply for Done-For-You and we can help set up the lead flow, or use Self-Serve to connect your CRM yourself."
+        subtitle="SideKick Core lets you connect supported CRMs from workspace settings and keep new campaign leads moving without changing your sales process."
       />
 
       <PublicSiteFooter />

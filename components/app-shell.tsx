@@ -95,9 +95,7 @@ export async function AppShell({
                 tone="brand"
               />
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">
-                  {isAdmin ? "Subaccount" : "Business"}
-                </p>
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">Workspace</p>
                 <div className="mt-0.5 flex items-center gap-1.5">
                   <span className="truncate text-sm font-semibold text-[var(--ink)]">{workspaceName}</span>
                   <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" />
@@ -113,7 +111,7 @@ export async function AppShell({
                   className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
                 >
                   <SlidersHorizontal className="h-4 w-4 text-[var(--muted)]" />
-                  <span>{isAdmin ? "Subaccount settings" : "Business settings"}</span>
+                  <span>Workspace settings</span>
                 </Link>
               </div>
 
@@ -121,21 +119,19 @@ export async function AppShell({
 
               <div className="px-3 pb-2 pt-1">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                  {isAdmin ? "Switch subaccount" : "Business workspace"}
+                  Switch workspace
                 </p>
               </div>
 
               <div className="space-y-1">
-                {isAdmin ? (
-                  <Link
-                    href="/admin/clients"
-                    prefetch
-                    className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
-                  >
-                    <LayoutGrid className="h-4 w-4 text-[var(--muted)]" />
-                    <span>Client accounts</span>
-                  </Link>
-                ) : null}
+                <Link
+                  href="/workspaces"
+                  prefetch
+                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
+                >
+                  <LayoutGrid className="h-4 w-4 text-[var(--muted)]" />
+                  <span>All workspaces</span>
+                </Link>
 
                 {currentWorkspace ? (
                   <div key={currentWorkspace.id} className="flex items-center gap-3 rounded-2xl bg-[var(--soft-panel)] px-3 py-3">
@@ -151,7 +147,7 @@ export async function AppShell({
                         {workspaceBranding?.business_name || currentWorkspace.name}
                       </p>
                       <p className="truncate text-xs text-[var(--muted)]">
-                        {currentWorkspace.business_name || (isAdmin ? "Current subaccount" : "Current business")}
+                        {currentWorkspace.business_name || "Current workspace"}
                       </p>
                     </div>
                     <Building2 className="h-4 w-4 text-[var(--ink)]" />
@@ -182,18 +178,16 @@ export async function AppShell({
                     </form>
                 ))}
 
-                {isAdmin ? (
-                  <Link
-                    href="/admin/clients/new"
-                    prefetch
-                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
-                  >
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg border border-[var(--line)] bg-white text-[var(--muted)]">
-                      <Plus className="h-3.5 w-3.5" />
-                    </span>
-                    <span>New client account</span>
-                  </Link>
-                ) : null}
+                <Link
+                  href="/workspaces/new"
+                  prefetch
+                  className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
+                >
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg border border-[var(--line)] bg-white text-[var(--muted)]">
+                    <Plus className="h-3.5 w-3.5" />
+                  </span>
+                  <span>New workspace</span>
+                </Link>
               </div>
             </div>
           </details>
@@ -250,7 +244,7 @@ export async function AppShell({
                   <p className="truncate text-base font-semibold text-[var(--ink)]">{userDisplayName}</p>
                   <p className="mt-1 truncate text-sm text-[var(--muted)]">{userEmail || "Workspace account"}</p>
                   <p className="mt-3 text-sm font-medium text-[var(--muted-strong)]">
-                    {isAdmin ? "Agency account" : "Business account"} <span className="text-[var(--muted)]">• {workspaceName}</span>
+                    Workspace account <span className="text-[var(--muted)]">• {workspaceName}</span>
                   </p>
                 </div>
               </div>
