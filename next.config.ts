@@ -173,25 +173,18 @@ const nextConfig: NextConfig = {
         ]
       : [],
   },
-  async rewrites() {
-    // Clean URL: /funnel serves the static public/funnel.html
-    return [{ source: "/funnel", destination: "/funnel.html" }];
-  },
   async headers() {
     return [
-      // The standalone funnel gets its own relaxed CSP (Tailwind CDN, fonts, embeds).
-      {
-        source: "/funnel",
-        headers: funnelSecurityHeaders,
-      },
+      // The standalone static VSL page (public/funnel.html, reachable at
+      // /funnel.html) gets its own relaxed CSP for the Tailwind CDN, Google
+      // Fonts, and embeds. The /funnel React page below keeps the strict app CSP.
       {
         source: "/funnel.html",
         headers: funnelSecurityHeaders,
       },
-      // Everything else keeps the strict app CSP. (Exclude /funnel so the strict
-      // CSP doesn't intersect with and override the relaxed one above.)
+      // Everything else (including the /funnel React route) keeps the strict CSP.
       {
-        source: "/((?!funnel).*)",
+        source: "/((?!funnel\\.html).*)",
         headers: securityHeaders,
       },
     ];
