@@ -86,7 +86,7 @@ values (
     limit 1
   ),
   'Quote Request',
-  '/template-creatives/car-detailing/because-clean-turns-heads.png',
+  '/template-creatives/car-detailing/because-clean-turns-heads.webp',
   jsonb_build_object(
     'industry', 'Car Detailing',
     'positioning', 'Best for premium exterior detail and paint-enhancement offers that need a polished, high-status feel.',
@@ -125,7 +125,7 @@ values (
       'name', 'Because Clean Turns Heads',
       'slug', 'because-clean-turns-heads',
       'ad_type', 'lead_form',
-      'image_url', '/template-creatives/car-detailing/because-clean-turns-heads.png',
+      'image_url', '/template-creatives/car-detailing/because-clean-turns-heads.webp',
       'image_text', 'BECAUSE CLEAN TURNS HEADS\nBOOK NOW',
       'primary_text', 'Your car should look as good as it drives.\n\nGet a premium detail that brings back the shine, removes buildup, and gives your vehicle that clean, head-turning finish.\n\n✅ Exterior wash & detail\n✅ Wheels, tires, trim & shine\n✅ Paint-safe cleaning\n✅ Interior add-ons available\n\n⚡ Request a free quote today.\n{{urgency_text}}',
       'headline', 'Because Clean Turns Heads',
@@ -238,7 +238,7 @@ values (
       )
     ),
     'creativeAssets', jsonb_build_object(
-      'imageUrls', to_jsonb(array['/template-creatives/car-detailing/because-clean-turns-heads.png']::text[]),
+      'imageUrls', to_jsonb(array['/template-creatives/car-detailing/because-clean-turns-heads.webp']::text[]),
       'videoUrls', '[]'::jsonb
     ),
     'placeholderFields', jsonb_build_array(

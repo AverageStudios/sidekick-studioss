@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Globe, MessageCircle, MoreHorizontal, PlayCircle, Share2, ThumbsUp, X } from "lucide-react";
+import { OptimizedImage } from "@/components/optimized-image";
 import { resolveTemplateCtaLabel } from "@/data/template-taxonomy";
 import { buildResolvedPlaceholderMap, replacePlaceholdersInString } from "@/lib/template-placeholders";
 import { cn } from "@/lib/utils";
@@ -378,14 +379,16 @@ export function FacebookAdPreview({
             <div className="flex min-w-0 items-center gap-3">
               <div className={cn(
                 "flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[radial-gradient(circle_at_30%_30%,#7650d8_0%,#4c258c_55%,#2f124f_100%)] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]",
+                "relative",
                 compact ? "h-10 w-10 text-[0.72rem]" : "h-12 w-12 text-sm",
               )}>
                 {pageAvatarUrl && !avatarFailed ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <OptimizedImage
                     key={avatarImageKey}
                     src={pageAvatarUrl}
                     alt={resolvedPageName}
+                    fill
+                    sizes={compact ? "40px" : "48px"}
                     className="h-full w-full object-cover"
                     onError={() => setAvatarErrorKey(avatarImageKey)}
                   />
@@ -491,10 +494,11 @@ export function FacebookAdPreview({
                       index === 0 ? "w-[72%]" : "w-[28%]",
                     )}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <OptimizedImage
                       src={url}
                       alt={template ? `${template.name} preview ${index + 1}` : `Template preview ${index + 1}`}
+                      fill
+                      sizes={index === 0 ? "(max-width: 768px) 72vw, 260px" : "(max-width: 768px) 28vw, 110px"}
                       className={cn("h-full w-full", mediaFitClass)}
                     />
                   </div>
@@ -502,10 +506,11 @@ export function FacebookAdPreview({
               </div>
             </div>
           ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <OptimizedImage
               src={resolvedMedia.url}
               alt={template ? `${template.name} preview` : "Template preview"}
+              fill
+              sizes={compact ? "(max-width: 768px) 100vw, 360px" : "(max-width: 1024px) 100vw, 520px"}
               className={cn("h-full w-full", mediaFitClass)}
             />
           )

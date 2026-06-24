@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
 import { Reveal } from "@/components/ui/reveal";
@@ -35,12 +36,12 @@ export function SupportedCrmsSection({
             <div className="group flex h-full flex-col rounded-[18px] border border-[rgba(15,17,22,0.1)] bg-white p-6 shadow-[0_1px_2px_rgba(15,17,22,0.04)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_56px_-20px_rgba(21,16,31,0.22)]">
               <div className="flex items-start justify-between gap-3">
                 <span className="flex h-12 w-12 items-center justify-center rounded-[14px] border border-[rgba(15,17,22,0.08)] bg-white shadow-[0_1px_2px_rgba(15,17,22,0.04)]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={crm.logoPath}
                     alt={`${crm.name} logo`}
                     width={28}
                     height={28}
+                    sizes="28px"
                     loading="lazy"
                     className="h-7 w-7 object-contain"
                   />

@@ -163,15 +163,30 @@ const nextConfig: NextConfig = {
     root: process.cwd(),
   },
   images: {
-    remotePatterns: supabaseImageHostname
-      ? [
-          {
-            protocol: "https",
-            hostname: supabaseImageHostname,
-            pathname: "/storage/v1/object/public/**",
-          },
-        ]
-      : [],
+    formats: ["image/avif", "image/webp"],
+    remotePatterns: [
+      ...(supabaseImageHostname
+        ? [
+            {
+              protocol: "https" as const,
+              hostname: supabaseImageHostname,
+              pathname: "/storage/v1/object/public/**",
+            },
+          ]
+        : []),
+      {
+        protocol: "https",
+        hostname: "graph.facebook.com",
+      },
+      {
+        protocol: "https",
+        hostname: "**.fbcdn.net",
+      },
+      {
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com",
+      },
+    ],
   },
   async headers() {
     return [

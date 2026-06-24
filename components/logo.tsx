@@ -25,7 +25,13 @@ export function Logo({
           size === "compact" ? "h-10 w-10 rounded-[16px]" : "h-11 w-11 rounded-[18px]",
         )}
       >
-        <Image src="/sidekick-logo.png" alt="SideKick Studioss logo" fill className="object-cover" />
+        <Image
+          src="/sidekick-logo.png"
+          alt="SideKick Studioss logo"
+          fill
+          sizes={size === "compact" ? "40px" : "44px"}
+          className="object-cover"
+        />
       </span>
       {!markOnly ? (
         <span className="flex flex-col">

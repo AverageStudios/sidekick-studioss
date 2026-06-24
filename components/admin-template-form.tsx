@@ -38,6 +38,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FacebookAdPreview } from "@/components/facebook-ad-preview";
+import { OptimizedImage } from "@/components/optimized-image";
 import {
   AdminTemplateActionState,
   AdminTemplateFormData,
@@ -1868,8 +1869,15 @@ export function AdminTemplateForm({
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     {values.mediaImageUrls.map((url, index) => (
                       <div key={url} className="overflow-hidden rounded-[20px] border border-[var(--line)] bg-white">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={url} alt={`Uploaded image ${index + 1}`} className="h-40 w-full object-cover" />
+                        <div className="relative h-40 w-full bg-[var(--soft-panel)]">
+                          <OptimizedImage
+                            src={url}
+                            alt={`Uploaded image ${index + 1}`}
+                            fill
+                            sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 320px"
+                            className="object-cover"
+                          />
+                        </div>
                         <div className="flex items-center justify-between gap-3 px-3 py-3 text-xs text-[var(--muted-strong)]">
                           <span>Image {index + 1}</span>
                           <button

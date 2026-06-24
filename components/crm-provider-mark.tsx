@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { getCrmProviderMetadata } from "@/lib/crm-providers";
 import { CrmProvider } from "@/types";
@@ -23,11 +24,13 @@ export function CrmProviderMark({
       aria-hidden="true"
     >
       {metadata.logoPath ? (
-        <img
+        <Image
           src={metadata.logoPath}
           alt=""
+          width={size === "lg" ? 32 : size === "md" ? 28 : 24}
+          height={size === "lg" ? 32 : size === "md" ? 28 : 24}
+          sizes={size === "lg" ? "32px" : size === "md" ? "28px" : "24px"}
           className="h-full w-full object-contain"
-          loading="lazy"
         />
       ) : (
         <span className={cn("font-semibold tracking-[0.08em]", metadata.accentClassName, metadata.surfaceClassName)}>
