@@ -15,8 +15,10 @@ import { Reveal } from "@/components/ui/reveal";
 import { FunnelHero } from "@/components/funnel/funnel-hero";
 import { FUNNEL_TEMPLATES_HREF, FUNNEL_TRIAL_HREF } from "@/components/funnel/funnel-links";
 import { FunnelQuiz } from "@/components/funnel/funnel-quiz";
+import { FunnelStats } from "@/components/funnel/funnel-stats";
 import { HowItWorks } from "@/components/funnel/how-it-works";
 import { TemplatePreviewGrid } from "@/components/funnel/template-preview-grid";
+import { OldVsNew } from "@/components/funnel/old-vs-new";
 import { FunnelCTA } from "@/components/funnel/funnel-cta";
 
 export const metadata: Metadata = {
@@ -83,6 +85,8 @@ export default function FunnelDetailingPage() {
 
       <FunnelQuiz />
 
+      <FunnelStats />
+
       <HowItWorks />
 
       <TemplatePreviewGrid />
@@ -111,6 +115,8 @@ export default function FunnelDetailingPage() {
           </div>
         </div>
       </section>
+
+      <OldVsNew />
 
       <FunnelCTA />
 

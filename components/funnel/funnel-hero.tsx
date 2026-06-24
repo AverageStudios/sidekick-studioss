@@ -2,30 +2,58 @@ import Link from "next/link";
 import { ArrowRight, Play } from "lucide-react";
 import { BrowserFrame } from "@/components/ui/browser-frame";
 import { Reveal } from "@/components/ui/reveal";
+import { AnimatedNumber } from "@/components/funnel/animated-number";
 import { FUNNEL_TEMPLATES_HREF, FUNNEL_TRIAL_HREF } from "@/components/funnel/funnel-links";
 
 export function FunnelHero() {
   return (
-    <section className="relative overflow-hidden pt-10 sm:pt-16">
+    <section className="relative overflow-hidden pt-8 sm:pt-14">
       <div
-        className="pointer-events-none absolute left-1/2 top-0 h-[28rem] w-[52rem] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(101,88,246,0.14),transparent_62%)]"
+        className="pointer-events-none absolute left-1/2 top-0 h-[30rem] w-[54rem] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(101,88,246,0.16),transparent_62%)]"
         aria-hidden="true"
       />
 
-      <div className="relative mx-auto max-w-2xl px-5 text-center sm:px-6">
+      <div className="relative mx-auto max-w-3xl px-5 text-center sm:px-6">
+        {/* Pill */}
         <Reveal>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--public-accent)]">
-            Built for small service businesses
+          <span className="inline-flex items-center gap-2 rounded-full border border-[rgba(101,88,246,0.22)] bg-[rgba(101,88,246,0.07)] px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--public-accent)]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--public-accent)]" />
+            Built for small businesses launching campaigns
+          </span>
+        </Reveal>
+
+        {/* Headline with the one big number above the fold */}
+        <Reveal delay={0.06} className="mt-6 sm:mt-7">
+          <h1 className="font-heading">
+            <span className="block text-[clamp(1.35rem,1rem+2.2vw,2rem)] font-semibold tracking-[-0.02em] text-[var(--public-text)]">
+              Launch your next campaign in
+            </span>
+            <span className="mt-1 flex items-baseline justify-center gap-2 sm:gap-3">
+              <AnimatedNumber
+                to={3}
+                className="bg-[linear-gradient(180deg,#6558f6,#8f7dff)] bg-clip-text text-[clamp(5rem,2.8rem+18vw,9.5rem)] font-semibold leading-[0.85] tracking-[-0.05em] text-transparent"
+              />
+              <span className="text-[clamp(2.1rem,1.4rem+5vw,4.25rem)] font-semibold tracking-[-0.03em] text-[var(--public-text)]">
+                steps
+              </span>
+            </span>
+          </h1>
+        </Reveal>
+
+        {/* Supporting micro-line */}
+        <Reveal delay={0.12} className="mt-3">
+          <p className="text-[13px] font-semibold uppercase tracking-[0.2em] text-[var(--public-muted-soft)]">
+            Choose. Template. Launch.
           </p>
         </Reveal>
 
         {/* ===========================================================
-            >>> VIDEO PLACEHOLDER <<<
+            >>> VIDEO PLACEHOLDER <<<  (sits under the number, doesn't bury it)
             Swap the inner content of this card for your real VSL later:
               <iframe className="absolute inset-0 h-full w-full" src="https://www.youtube.com/embed/VIDEO_ID" ... />
               or <video className="absolute inset-0 h-full w-full object-cover" src="/walkthrough.mp4" poster="..." controls playsInline />
             =========================================================== */}
-        <Reveal delay={0.08} className="mt-6">
+        <Reveal delay={0.18} className="mt-8 sm:mt-10">
           <BrowserFrame url="sidekickstudioss.com" className="mx-auto max-w-xl">
             <div className="relative aspect-video w-full">
               <div className="absolute inset-0 bg-[linear-gradient(135deg,#241a3d_0%,#37265c_55%,#5646ec_135%)]" />
@@ -47,29 +75,19 @@ export function FunnelHero() {
           </BrowserFrame>
         </Reveal>
 
-        <Reveal delay={0.12} className="mt-4">
-          <p className="text-sm text-[var(--public-muted-soft)]">
-            Watch how SideKick helps small businesses launch lead campaigns without starting from scratch.
+        {/* Subheadline */}
+        <Reveal delay={0.24}>
+          <p className="site-lead mx-auto mt-6">
+            SideKick helps small businesses turn an offer into a live campaign faster — with
+            templates, lead capture, and one cleaner system.
           </p>
         </Reveal>
 
-        <Reveal delay={0.16} className="mt-8">
-          <h1 className="site-h2 text-[clamp(2rem,1.4rem+3vw,3.1rem)]">
-            Launch your next campaign without building everything from scratch.
-          </h1>
-        </Reveal>
-
-        <Reveal delay={0.22}>
-          <p className="site-lead mx-auto mt-4">
-            SideKick helps small businesses choose an industry, pick a ready-to-go template, capture
-            leads, and manage the launch from one clean system.
-          </p>
-        </Reveal>
-
-        <Reveal delay={0.28}>
+        {/* CTAs + trust */}
+        <Reveal delay={0.3}>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link href={FUNNEL_TRIAL_HREF} className="site-cta-primary w-full sm:w-auto">
-              Start Free Trial
+              Start Your 14-Day Trial
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link href={FUNNEL_TEMPLATES_HREF} className="site-cta-secondary w-full sm:w-auto">
