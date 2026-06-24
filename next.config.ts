@@ -65,6 +65,53 @@ function buildContentSecurityPolicy() {
     .join("; ");
 }
 
+// Relaxed CSP scoped ONLY to the standalone marketing funnel at /funnel(.html).
+// The funnel is a self-contained static page that loads the Tailwind Play CDN,
+// Google Fonts, and (when you swap them in) a Calendly embed + video iframe.
+// Keeping this separate means the rest of the app keeps its strict CSP.
+function buildFunnelContentSecurityPolicy() {
+  const directives: Array<[string, string[]]> = [
+    ["default-src", ["'self'"]],
+    [
+      "script-src",
+      [
+        "'self'",
+        "'unsafe-inline'",
+        "'unsafe-eval'", // Tailwind Play CDN compiles styles in-browser
+        "https://cdn.tailwindcss.com",
+        "https://assets.calendly.com",
+      ],
+    ],
+    ["style-src", ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://assets.calendly.com"]],
+    ["font-src", ["'self'", "data:", "https://fonts.gstatic.com"]],
+    ["img-src", ["'self'", "data:", "blob:", "https:"]],
+    ["media-src", ["'self'", "blob:", "data:", "https:"]],
+    [
+      "frame-src",
+      [
+        "'self'",
+        "https://calendly.com",
+        "https://*.calendly.com",
+        "https://www.youtube.com",
+        "https://www.youtube-nocookie.com",
+        "https://player.vimeo.com",
+        "https://fast.wistia.net",
+        "https://*.wistia.com",
+      ],
+    ],
+    ["connect-src", ["'self'", "https://calendly.com", "https://*.calendly.com"]],
+    ["object-src", ["'none'"]],
+    ["base-uri", ["'self'"]],
+    ["form-action", ["'self'"]],
+    ["frame-ancestors", ["'none'"]],
+    ...(isDevelopment ? [] : ([["upgrade-insecure-requests", []]] as Array<[string, string[]]>)),
+  ];
+
+  return directives
+    .map(([name, values]) => `${name} ${(Array.isArray(values) ? values : []).join(" ")}`.trim())
+    .join("; ");
+}
+
 const securityHeaders = [
   {
     key: "Content-Security-Policy",
@@ -104,6 +151,13 @@ const securityHeaders = [
     : []),
 ];
 
+// Same hardening headers as the rest of the app, but with the funnel-scoped CSP.
+const funnelSecurityHeaders = securityHeaders.map((header) =>
+  header.key === "Content-Security-Policy"
+    ? { key: header.key, value: buildFunnelContentSecurityPolicy() }
+    : header,
+);
+
 const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
@@ -119,10 +173,25 @@ const nextConfig: NextConfig = {
         ]
       : [],
   },
+  async rewrites() {
+    // Clean URL: /funnel serves the static public/funnel.html
+    return [{ source: "/funnel", destination: "/funnel.html" }];
+  },
   async headers() {
     return [
+      // The standalone funnel gets its own relaxed CSP (Tailwind CDN, fonts, embeds).
       {
-        source: "/:path*",
+        source: "/funnel",
+        headers: funnelSecurityHeaders,
+      },
+      {
+        source: "/funnel.html",
+        headers: funnelSecurityHeaders,
+      },
+      // Everything else keeps the strict app CSP. (Exclude /funnel so the strict
+      // CSP doesn't intersect with and override the relaxed one above.)
+      {
+        source: "/((?!funnel).*)",
         headers: securityHeaders,
       },
     ];
