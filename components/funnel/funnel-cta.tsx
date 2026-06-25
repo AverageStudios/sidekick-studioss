@@ -4,9 +4,9 @@ import { Reveal } from "@/components/ui/reveal";
 import { FUNNEL_TEMPLATES_HREF, FUNNEL_TRIAL_HREF } from "@/components/funnel/funnel-links";
 
 export function FunnelCTA({
-  title = "Stop rebuilding every campaign from scratch.",
-  subtitle = "Choose a template, launch faster, and start capturing leads with SideKick.",
-  trust = "14-day trial • No long-term contract • Built for small businesses",
+  title = "Launch the campaign your competitors keep putting off.",
+  subtitle = "Start with a template, run a simple local test, and give every click a cleaner path to become a lead.",
+  trust = "14-day trial • Cancel anytime • Built for small service businesses",
 }: {
   title?: string;
   subtitle?: string;

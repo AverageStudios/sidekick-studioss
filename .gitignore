@@ -56,6 +56,15 @@ yarn-error.log*
 .pnpm-debug.log*
 *.log
 logs/
+*.bak
+*.backup
+*.orig
+secret-scan*.json
+secret-scan*.txt
+gitleaks-report.*
+trufflehog-report.*
+token-dump*
+secret-dump*
 
 # env files
 .env

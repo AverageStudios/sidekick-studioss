@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { env, isSupabaseServerConfigured, isStripeConfigured } from "@/lib/env";
+import { getSafeRelativePath } from "@/lib/safe-redirect";
 import { getStripeServerClient } from "@/lib/stripe";
 import type { UserBillingRecord, UserBillingSubscriptionStatus } from "@/types";
 import {
@@ -589,9 +590,7 @@ export async function getUserBillingStatusWithRetry(
 
 export function buildBillingRequiredHref(returnTo = "/dashboard") {
   const url = new URL("/billing-required", env.appUrl);
-  if (returnTo.startsWith("/")) {
-    url.searchParams.set("returnTo", returnTo);
-  }
+  url.searchParams.set("returnTo", getSafeRelativePath(returnTo, "/dashboard"));
   return `${url.pathname}${url.search}`;
 }
 

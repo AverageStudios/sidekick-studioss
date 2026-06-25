@@ -8,8 +8,12 @@ import { cn } from "@/lib/utils";
 export type AnimatedStatCardProps = {
   /** Number => counts up from 0 on scroll. String => shown as-is (no count-up). */
   value: number | string;
+  /** Optional prefix shown before numeric values, e.g. "$". */
+  prefix?: string;
   /** Unit shown next to a numeric value, e.g. "steps", "days", "%". */
   suffix?: string;
+  /** Small label above the value. */
+  eyebrow?: string;
   /** Supporting line under the number. */
   label: string;
   /** Optional small source/disclaimer line (e.g. for benchmark stats). */
@@ -21,7 +25,9 @@ export type AnimatedStatCardProps = {
 
 export function AnimatedStatCard({
   value,
+  prefix,
   suffix,
+  eyebrow,
   label,
   source,
   muted = false,
@@ -70,8 +76,18 @@ export function AnimatedStatCard({
       />
 
       <div className="relative">
+        {eyebrow ? (
+          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--public-accent)]">
+            {eyebrow}
+          </p>
+        ) : null}
         {isNumber ? (
           <p className="font-heading leading-none">
+            {prefix ? (
+              <span className="mr-1 align-baseline text-[1.35rem] font-semibold tracking-[-0.01em] text-[var(--public-accent)]">
+                {prefix}
+              </span>
+            ) : null}
             <span
               className={cn(
                 "align-baseline text-[clamp(2.75rem,2rem+3vw,3.85rem)] font-semibold tracking-[-0.03em]",

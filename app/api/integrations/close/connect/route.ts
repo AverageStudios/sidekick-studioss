@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { env } from "@/lib/env";
+import { getSafeRelativePath } from "@/lib/safe-redirect";
 
 function getAppOrigin(request: NextRequest) {
   return request.nextUrl.origin || env.appUrl;
@@ -10,8 +11,9 @@ export async function GET(request: NextRequest) {
   redirectUrl.searchParams.set("provider", "close");
 
   const next = request.nextUrl.searchParams.get("next");
-  if (next?.startsWith("/")) {
-    redirectUrl.searchParams.set("next", next);
+  const safeNext = getSafeRelativePath(next, "");
+  if (safeNext) {
+    redirectUrl.searchParams.set("next", safeNext);
   }
 
   return NextResponse.redirect(redirectUrl);

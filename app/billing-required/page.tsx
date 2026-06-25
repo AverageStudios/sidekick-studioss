@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getCurrentUser, requireUser } from "@/lib/auth";
 import { formatBillingDate, getBillingDisplayState, getUserBillingStatus } from "@/lib/billing";
+import { getSafeRelativePath } from "@/lib/safe-redirect";
 
 function getBillingRequiredHeadline(key: ReturnType<typeof getBillingDisplayState>["key"]) {
   switch (key) {
@@ -35,7 +36,7 @@ export default async function BillingRequiredPage({
     return null;
   }
 
-  const safeReturnTo = returnTo?.startsWith("/") ? returnTo : "/dashboard";
+  const safeReturnTo = getSafeRelativePath(returnTo, "/dashboard");
   const billingDisplayState = getBillingDisplayState(billingStatus);
   const headline = getBillingRequiredHeadline(billingDisplayState.key);
   const primaryAction =

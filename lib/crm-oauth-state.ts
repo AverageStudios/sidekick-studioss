@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { env } from "@/lib/env";
+import { getSafeRelativePath } from "@/lib/safe-redirect";
 import { CrmProvider } from "@/types";
 
 type CrmOAuthStatePayload = {
@@ -115,7 +116,7 @@ export function parseCrmOAuthState(value: string | null | undefined): CrmOAuthSt
     nonce: candidate.nonce,
     provider,
     workspaceId: candidate.workspaceId,
-    next: candidate.next.startsWith("/") ? candidate.next : "/workspace/settings?section=integrations",
+    next: getSafeRelativePath(candidate.next, "/workspace/settings?section=integrations"),
     issuedAt: candidate.issuedAt,
   };
 }

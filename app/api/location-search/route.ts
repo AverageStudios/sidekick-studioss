@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { fetchMetaGeoLocationSearch, MetaGeoLocationSearchResult } from "@/lib/meta";
 import { getWorkspaceMetaAccessToken } from "@/lib/meta-integration";
 import { logRouteError } from "@/lib/api-security";
+import { checkRateLimit, createRateLimitResponse, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
 import { CampaignLocationScope, MetaLocationClassification, MetaLocationTargeting } from "@/types";
 
 type GeocoderSearchResult = {
@@ -241,6 +242,24 @@ export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ suggestions: [], error: "Sign in to search Meta locations." }, { status: 401 });
+  }
+
+  const ip = getIpFromRequest(request);
+  const rateLimit = await checkRateLimit({
+    key: "api:location-search",
+    limit: 120,
+    windowMs: 60 * 1000,
+    identifiers: { ip, userId: user.id },
+  });
+  if (!rateLimit.allowed) {
+    logRateLimitHit({
+      key: "api:location-search",
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+      matchedOn: rateLimit.matchedOn,
+      ip,
+      userId: user.id,
+    });
+    return createRateLimitResponse("Too many location searches. Please wait and try again.", rateLimit.retryAfterSeconds);
   }
 
   const workspaceContext = await ensureWorkspaceContextForUser(user).catch(() => null);

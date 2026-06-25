@@ -6,6 +6,7 @@ import { createCrmOAuthState } from "@/lib/crm-oauth-state";
 import { env } from "@/lib/env";
 import { buildAuthorizationUrl } from "@/lib/integrations/pipedrive";
 import { checkRateLimit, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
+import { getSafeRelativePath } from "@/lib/safe-redirect";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 
 function getAppOrigin(request: NextRequest) {
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
   }
 
   const next = request.nextUrl.searchParams.get("next");
-  const safeNext = next?.startsWith("/") ? next : "/workspace/settings?section=integrations";
+  const safeNext = getSafeRelativePath(next, "/workspace/settings?section=integrations");
   const provider = "pipedrive";
   const state = createCrmOAuthState({
     nonce: randomUUID(),

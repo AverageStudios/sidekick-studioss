@@ -5,6 +5,7 @@ import { parseCrmOAuthState } from "@/lib/crm-oauth-state";
 import { connectWorkspaceZohoOAuthProvider } from "@/lib/crm-integration";
 import { env } from "@/lib/env";
 import { checkRateLimit, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
+import { getSafeRelativePath } from "@/lib/safe-redirect";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 
@@ -52,9 +53,10 @@ export async function GET(request: NextRequest) {
   const workspaceCookie = request.cookies.get("crm_oauth_workspace")?.value;
   const providerCookie = request.cookies.get("crm_oauth_provider")?.value;
   const statePayload = parseCrmOAuthState(state || stateCookie);
-  const safeNext =
-    statePayload?.next ||
-    (nextCookie?.startsWith("/") ? nextCookie : "/workspace/settings?section=integrations");
+  const safeNext = getSafeRelativePath(
+    statePayload?.next || nextCookie,
+    "/workspace/settings?section=integrations",
+  );
 
   if (
     !code ||

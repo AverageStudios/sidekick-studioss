@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import type { Provider } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
-import { env } from "@/lib/env";
+import { publicEnv } from "@/lib/public-env";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 function GoogleIcon() {
@@ -62,7 +62,7 @@ export function SocialAuthButtons({
         return;
       }
 
-      const redirectTo = new URL("/auth/callback", env.appUrl);
+      const redirectTo = new URL("/auth/callback", publicEnv.appUrl);
       redirectTo.searchParams.set("next", nextPath);
 
       const { error: authError } = await supabase.auth.signInWithOAuth({

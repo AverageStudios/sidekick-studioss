@@ -2,19 +2,19 @@ import { Check, X } from "lucide-react";
 import { Reveal } from "@/components/ui/reveal";
 
 const OLD_WAY = [
-  "Start with a blank page",
-  "Build your own funnel",
-  "Connect random tools",
-  "Guess what offer to run",
-  "Lose momentum before launching",
+  "Posts randomly",
+  "Boosts when desperate",
+  "Sends people to a generic page",
+  "Forgets to follow up",
+  "Has no real campaign structure",
 ];
 
 const SIDEKICK_WAY = [
-  "Choose your industry",
-  "Pick a proven campaign structure",
-  "Customize the offer",
-  "Launch faster",
-  "Capture leads in one cleaner system",
+  "Pick a campaign template",
+  "Launch with a clear offer",
+  "Send traffic to a focused lead flow",
+  "Route leads into CRM/outreach",
+  "Track what offer gets attention",
 ];
 
 export function OldVsNew() {
@@ -22,7 +22,7 @@ export function OldVsNew() {
     <section className="px-5 py-16 sm:px-6 sm:py-24">
       <div className="mx-auto max-w-5xl">
         <Reveal className="mx-auto max-w-2xl text-center">
-          <h2 className="site-h2">The old way vs. the SideKick way.</h2>
+          <h2 className="site-h2">Posting and hoping is not a campaign.</h2>
         </Reveal>
 
         <div className="mt-12 grid gap-4 sm:mt-14 lg:grid-cols-2">
@@ -30,7 +30,7 @@ export function OldVsNew() {
           <Reveal>
             <div className="h-full rounded-[24px] border border-[rgba(15,17,22,0.1)] bg-[rgba(15,17,22,0.02)] p-6 sm:p-7">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--public-muted-soft)]">
-                The old way
+                Normal small business
               </p>
               <ul className="mt-5 space-y-3">
                 {OLD_WAY.map((item) => (
@@ -55,7 +55,7 @@ export function OldVsNew() {
                 className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full bg-[rgba(101,88,246,0.12)] blur-2xl"
               />
               <p className="relative text-xs font-semibold uppercase tracking-[0.18em] text-[var(--public-accent)]">
-                The SideKick way
+                SideKick launch flow
               </p>
               <ul className="relative mt-5 space-y-3">
                 {SIDEKICK_WAY.map((item) => (
@@ -74,8 +74,7 @@ export function OldVsNew() {
         {/* Microcopy leading into the final CTA */}
         <Reveal delay={0.05} className="mx-auto mt-12 max-w-2xl text-center sm:mt-14">
           <p className="font-heading text-[1.25rem] font-semibold leading-snug tracking-[-0.02em] text-[var(--public-text)] sm:text-[1.45rem]">
-            Most businesses don&rsquo;t lose because they&rsquo;re bad at what they do. They lose
-            because they move too slowly.
+            Most businesses do not lose because they are bad at what they do. They lose because they move too slowly.
           </p>
         </Reveal>
       </div>

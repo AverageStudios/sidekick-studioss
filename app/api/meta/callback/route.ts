@@ -6,6 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 import { logRouteError } from "@/lib/api-security";
 import { checkRateLimit, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
+import { getSafeRelativePath } from "@/lib/safe-redirect";
 import { ensureWorkspaceMetaLeadAutomation } from "@/lib/meta-leads";
 import {
   exchangeMetaCodeForToken,
@@ -43,10 +44,10 @@ export async function GET(request: NextRequest) {
   const scopeSetCookie = request.cookies.get("meta_oauth_scope_set")?.value || "default";
   const requestedScopesCookie = request.cookies.get("meta_oauth_requested_scopes")?.value || "";
   const statePayload = parseMetaOAuthState(state);
-  const safeNext = statePayload?.next ||
-    (nextCookie?.startsWith("/")
-      ? nextCookie
-      : "/workspace/settings?section=integrations");
+  const safeNext = getSafeRelativePath(
+    statePayload?.next || nextCookie,
+    "/workspace/settings?section=integrations",
+  );
   const resolvedScopeSet =
     statePayload?.scopeSet ||
     (scopeSetCookie === "leads" ? "leads" : scopeSetCookie === "lead_forms" ? "lead_forms" : "default");

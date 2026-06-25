@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { env } from "@/lib/env";
+import { getSafeRelativePath } from "@/lib/safe-redirect";
 
 export type MetaOAuthScopeSet = "default" | "lead_forms" | "leads";
 
@@ -111,7 +112,7 @@ export function parseMetaOAuthState(value: string | null | undefined): MetaOAuth
     version: 1,
     nonce: candidate.nonce,
     workspaceId: candidate.workspaceId,
-    next: candidate.next.startsWith("/") ? candidate.next : "/workspace/settings?section=integrations",
+    next: getSafeRelativePath(candidate.next, "/workspace/settings?section=integrations"),
     scopeSet,
     requestedScopes,
     issuedAt: candidate.issuedAt,

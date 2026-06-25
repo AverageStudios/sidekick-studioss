@@ -19,6 +19,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 import { logRouteError } from "@/lib/api-security";
 import { checkRateLimit, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
+import { getSafeRelativePath } from "@/lib/safe-redirect";
 
 function getAppOrigin(request: NextRequest) {
   return request.nextUrl.origin || env.appUrl;
@@ -105,9 +106,10 @@ export async function GET(request: NextRequest) {
       !(state && stateCookie && state !== stateCookie) &&
       !(providerCookie && statePayload.provider !== providerCookie),
   );
-  const safeNext =
-    statePayload?.next ||
-    (nextCookie?.startsWith("/") ? nextCookie : "/workspace/settings?section=integrations");
+  const safeNext = getSafeRelativePath(
+    statePayload?.next || nextCookie,
+    "/workspace/settings?section=integrations",
+  );
 
   if (statePayload?.provider === "freshsales" || providerCookie === "freshsales") {
     const debug = getFreshsalesOAuthDebugInfo(getFreshsalesCallbackUrl(request));

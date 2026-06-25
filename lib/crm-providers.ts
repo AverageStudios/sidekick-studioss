@@ -1,4 +1,5 @@
 import { CrmProvider } from "@/types";
+import { getSafeRelativePath } from "@/lib/safe-redirect";
 
 export type CrmProviderMetadata = {
   key: CrmProvider;
@@ -123,8 +124,9 @@ export function buildCrmProviderConnectHref(provider: CrmProvider, nextPath?: st
   if (!metadata) return "#";
 
   const href = new URL(metadata.connectPath, "http://localhost");
-  if (nextPath?.startsWith("/")) {
-    href.searchParams.set("next", nextPath);
+  const safeNext = getSafeRelativePath(nextPath, "");
+  if (safeNext) {
+    href.searchParams.set("next", safeNext);
   }
 
   return `${href.pathname}${href.search}`;

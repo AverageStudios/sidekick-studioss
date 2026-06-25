@@ -6,6 +6,7 @@ import { createMetaOAuthState, MetaOAuthScopeSet } from "@/lib/meta-oauth-state"
 import { getCurrentUser } from "@/lib/auth";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 import { checkRateLimit, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
+import { getSafeRelativePath } from "@/lib/safe-redirect";
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
   const includePageWebhookManagement = false;
   const resolvedScopeSet: MetaOAuthScopeSet =
     scopeSet === "leads" ? "leads" : includeLeadFormManagement ? "lead_forms" : "default";
-  const safeNext = next?.startsWith("/") ? next : "/workspace/settings?section=integrations";
+  const safeNext = getSafeRelativePath(next, "/workspace/settings?section=integrations");
   const requestedScopes = getMetaScopes({
     includeLeadFormManagement,
     includeLeadRetrieval,

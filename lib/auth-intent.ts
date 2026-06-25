@@ -1,3 +1,5 @@
+import { getSafeRelativePath } from "@/lib/safe-redirect";
+
 export const CHECKOUT_AUTH_INTENT = "checkout";
 
 export function isCheckoutAuthIntent(value: string | null | undefined) {
@@ -9,11 +11,7 @@ export function getSafeAuthNextValue(value: string | null | undefined) {
     return CHECKOUT_AUTH_INTENT;
   }
 
-  if (typeof value === "string" && value.startsWith("/")) {
-    return value;
-  }
-
-  return "/dashboard";
+  return getSafeRelativePath(value, "/dashboard");
 }
 
 export function resolvePostAuthDestination(value: string | null | undefined) {

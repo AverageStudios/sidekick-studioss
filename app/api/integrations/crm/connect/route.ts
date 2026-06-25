@@ -15,6 +15,7 @@ import { CrmProvider } from "@/types";
 import { ensureWorkspaceContextForUser } from "@/lib/workspaces";
 import { logRouteError } from "@/lib/api-security";
 import { checkRateLimit, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
+import { getSafeRelativePath } from "@/lib/safe-redirect";
 
 function getAppOrigin(request: NextRequest) {
   return request.nextUrl.origin || env.appUrl;
@@ -127,7 +128,7 @@ export async function GET(request: NextRequest) {
   }
 
   const next = request.nextUrl.searchParams.get("next");
-  const safeNext = next?.startsWith("/") ? next : "/workspace/settings?section=integrations";
+  const safeNext = getSafeRelativePath(next, "/workspace/settings?section=integrations");
   const state = createCrmOAuthState({
     nonce: randomUUID(),
     provider,

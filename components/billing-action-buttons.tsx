@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { ArrowRight, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getSafeRelativePath } from "@/lib/safe-redirect";
 
 async function postForRedirect(url: string) {
   const response = await fetch(url, {
@@ -25,7 +26,7 @@ function resolveLoggedOutTrialHref(nextPath?: string) {
     return "/signup?next=checkout";
   }
 
-  const next = nextPath && nextPath.startsWith("/") ? nextPath : "/pricing?startTrial=1";
+  const next = getSafeRelativePath(nextPath, "/pricing?startTrial=1");
   return `/signup?next=${encodeURIComponent(next)}`;
 }
 

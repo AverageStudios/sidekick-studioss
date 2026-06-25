@@ -14,6 +14,7 @@ import { getSafeAuthNextValue, resolvePostAuthDestination } from "@/lib/auth-int
 import { getUserBillingStatus, hasLiveBillingPeriod, requireActiveUserBilling } from "@/lib/billing";
 import { createCampaignBlueprint } from "@/lib/template-engine";
 import { env, isDemoModeEnabled, isSupabasePublicConfigured, isSupabaseServerConfigured } from "@/lib/env";
+import { getSafeRelativePath } from "@/lib/safe-redirect";
 import { getPublishedTemplateBySlug } from "@/lib/template-repository";
 import { slugify } from "@/lib/utils";
 import { sendClientInviteEmail, sendCrmIntegrationRequestEmail, sendLeadConfirmationEmail, sendWorkspaceInvitationEmail } from "@/services/follow-up";
@@ -213,6 +214,7 @@ async function enforceActionRateLimit({
   });
 
   if (!result.allowed) {
+    const safeRedirectTo = getSafeRelativePath(redirectTo, "/dashboard");
     logRateLimitHit({
       key,
       retryAfterSeconds: result.retryAfterSeconds,
@@ -220,7 +222,7 @@ async function enforceActionRateLimit({
       ip,
       userId,
     });
-    redirect(appendQueryParam(redirectTo, "error", RATE_LIMITED_ACTION_MESSAGE));
+    redirect(appendQueryParam(safeRedirectTo, "error", RATE_LIMITED_ACTION_MESSAGE));
   }
 }
 
@@ -329,14 +331,14 @@ async function verifyNoRemainingRowsByColumn(
 }
 
 function appendSafeActionError(redirectTo: string, message: string) {
-  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/dashboard";
+  const safeRedirectTo = getSafeRelativePath(redirectTo, "/dashboard");
   return appendQueryParam(safeRedirectTo, "error", message);
 }
 
 async function requireAuthenticatedActionUser(redirectTo = "/login") {
   const user = await getCurrentUser();
   if (!user) {
-    redirect(redirectTo);
+    redirect(getSafeRelativePath(redirectTo, "/login"));
   }
   return user;
 }
@@ -496,8 +498,21 @@ const signUpSchema = authSchema.extend({
 });
 
 const profileAvatarMaxBytes = 5 * 1024 * 1024;
+const campaignImageMaxBytes = 10 * 1024 * 1024;
 const allowedProfileAvatarTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const allowedWorkspaceLogoTypes = allowedProfileAvatarTypes;
+
+function validateImageUploadFile(file: File, label: string, maxBytes: number) {
+  if (!allowedProfileAvatarTypes.has(file.type)) {
+    throw new Error(`Use a JPG, PNG, WEBP, or GIF image for ${label}.`);
+  }
+
+  if (file.size > maxBytes) {
+    throw new Error(`${label.charAt(0).toUpperCase() + label.slice(1)} must be ${Math.floor(maxBytes / 1024 / 1024)} MB or smaller.`);
+  }
+
+  return file;
+}
 
 function createImageFileFromDataUrl(dataUrl: string, fileBaseName: string, errorLabel: string) {
   const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
@@ -799,7 +814,7 @@ async function resolveAdminTemplatePreviewImage(formData: FormData, fallbackUrl?
   }
 
   if (previewImageFile instanceof File && previewImageFile.size > 0) {
-    return (await uploadAsset(previewImageFile, "templates/previews")) || "";
+    return (await uploadAsset(validateImageUploadFile(previewImageFile, "the preview image", campaignImageMaxBytes), "templates/previews")) || "";
   }
 
   return fallbackUrl || "";
@@ -1690,7 +1705,7 @@ export async function replyToSupportTicketAction(formData: FormData) {
   });
 
   const redirectTo = String(formData.get("redirectTo") || "/support");
-  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/support";
+  const safeRedirectTo = getSafeRelativePath(redirectTo, "/support");
 
   if (!values.success) {
     const message = values.error.issues[0]?.message || "Reply could not be sent.";
@@ -1755,7 +1770,7 @@ export async function adminReplyToSupportTicketAction(formData: FormData) {
   });
   const nextStatus = (String(formData.get("nextStatus") || "waiting_on_user") as SupportTicketStatus);
   const redirectTo = String(formData.get("redirectTo") || `/admin/support/${String(formData.get("ticketId") || "")}`);
-  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/admin/support";
+  const safeRedirectTo = getSafeRelativePath(redirectTo, "/admin/support");
 
   if (!values.success) {
     const message = values.error.issues[0]?.message || "Reply could not be sent.";
@@ -1809,13 +1824,14 @@ export async function adminUpdateSupportTicketStatusAction(formData: FormData) {
   if (!values.success) {
     const message = values.error.issues[0]?.message || "Status could not be updated.";
     const fallback = String(formData.get("redirectTo") || "/admin/support");
-    const safeFallback = fallback.startsWith("/") ? fallback : "/admin/support";
+    const safeFallback = getSafeRelativePath(fallback, "/admin/support");
     redirect(`${safeFallback}${safeFallback.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`);
   }
 
+  const safeRedirectTo = getSafeRelativePath(values.data.redirectTo, "/admin/support");
   const admin = createSupabaseAdminClient();
   if (!admin || !isSupabaseServerConfigured()) {
-    redirect(`${values.data.redirectTo}${values.data.redirectTo.includes("?") ? "&" : "?"}error=${encodeURIComponent("Support admin is not available right now.")}`);
+    redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}error=${encodeURIComponent("Support admin is not available right now.")}`);
   }
 
   const { error } = await admin
@@ -1830,12 +1846,12 @@ export async function adminUpdateSupportTicketStatusAction(formData: FormData) {
     const message = isMissingSupportTableError(error.message)
       ? "Support ticket storage is not enabled in this database yet. Apply supabase/migrations/022_support_tickets.sql and 023_support_ticket_threads.sql."
       : error.message;
-    redirect(`${values.data.redirectTo}${values.data.redirectTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`);
+    redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`);
   }
 
   revalidatePath("/admin/support");
   revalidatePath("/support");
-  redirect(`${values.data.redirectTo}${values.data.redirectTo.includes("?") ? "&" : "?"}saved=${encodeURIComponent("Status updated")}`);
+  redirect(`${safeRedirectTo}${safeRedirectTo.includes("?") ? "&" : "?"}saved=${encodeURIComponent("Status updated")}`);
 }
 
 type CampaignLifecycleControl = "pause" | "resume" | "archive";
@@ -1869,19 +1885,20 @@ async function runCampaignLifecycleAction(
 ) {
   const campaignId = String(formData.get("campaignId") || "").trim();
   const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
-  const user = await requireProductActionUser(redirectTo);
+  const safeRedirectTo = getSafeRelativePath(redirectTo, `/campaigns/${campaignId || ""}`);
+  const user = await requireProductActionUser(safeRedirectTo);
 
   if (!isSupabaseServerConfigured()) {
     redirect("/dashboard");
   }
 
   if (!campaignId) {
-    redirect(appendQueryParam(redirectTo, "error", "Campaign could not be found."));
+    redirect(appendQueryParam(safeRedirectTo, "error", "Campaign could not be found."));
   }
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
-    redirect(appendQueryParam(redirectTo, "error", "Campaign controls are not available right now."));
+    redirect(appendQueryParam(safeRedirectTo, "error", "Campaign controls are not available right now."));
   }
 
   let successMessage: string | null = null;
@@ -2007,7 +2024,7 @@ async function runCampaignLifecycleAction(
     ) {
       successMessage = message;
     } else {
-      redirect(appendQueryParam(redirectTo, "error", message));
+      redirect(appendQueryParam(safeRedirectTo, "error", message));
     }
   }
 
@@ -2017,7 +2034,7 @@ async function runCampaignLifecycleAction(
     revalidatePath("/templates");
     revalidatePath("/performance");
     revalidatePath("/dashboard");
-    redirect(appendQueryParam(redirectTo, "success", successMessage));
+    redirect(appendQueryParam(safeRedirectTo, "success", successMessage));
   }
 }
 
@@ -2062,7 +2079,8 @@ export async function deleteCampaignAction(formData: FormData) {
   const campaignId = String(formData.get("campaignId") || "").trim();
   const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
   const successRedirectTo = String(formData.get("successRedirectTo") || "/templates") || "/templates";
-  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/templates";
+  const safeRedirectTo = getSafeRelativePath(redirectTo, "/templates");
+  const safeSuccessRedirectTo = getSafeRelativePath(successRedirectTo, "/templates");
   const user = await requireProductActionUser(safeRedirectTo);
 
   if (!isSupabaseServerConfigured()) {
@@ -2107,13 +2125,13 @@ export async function deleteCampaignAction(formData: FormData) {
   revalidatePath("/templates");
   revalidatePath("/performance");
   revalidatePath("/dashboard");
-  redirect(appendQueryParam(successRedirectTo, "success", "Campaign deleted."));
+  redirect(appendQueryParam(safeSuccessRedirectTo, "success", "Campaign deleted."));
 }
 
 export async function deleteDraftCampaignAction(formData: FormData) {
   const campaignId = String(formData.get("campaignId") || "").trim();
   const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
-  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/templates/drafts";
+  const safeRedirectTo = getSafeRelativePath(redirectTo, "/templates/drafts");
   const user = await requireProductActionUser(safeRedirectTo);
 
   if (!isSupabaseServerConfigured()) {
@@ -2162,25 +2180,26 @@ export async function deleteDraftCampaignAction(formData: FormData) {
   revalidatePath("/performance");
   revalidatePath("/dashboard");
   revalidatePath("/templates");
-  redirect(appendQueryParam(redirectTo, "success", "Draft deleted."));
+  redirect(appendQueryParam(safeRedirectTo, "success", "Draft deleted."));
 }
 
 export async function syncCampaignStatusAction(formData: FormData) {
   const campaignId = String(formData.get("campaignId") || "").trim();
   const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
-  const user = await requireProductActionUser(redirectTo);
+  const safeRedirectTo = getSafeRelativePath(redirectTo, `/campaigns/${campaignId || ""}`);
+  const user = await requireProductActionUser(safeRedirectTo);
 
   if (!isSupabaseServerConfigured()) {
     redirect("/dashboard");
   }
 
   if (!campaignId) {
-    redirect(appendQueryParam(redirectTo, "error", "Campaign could not be found."));
+    redirect(appendQueryParam(safeRedirectTo, "error", "Campaign could not be found."));
   }
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
-    redirect(appendQueryParam(redirectTo, "error", "Campaign status sync is not available right now."));
+    redirect(appendQueryParam(safeRedirectTo, "error", "Campaign status sync is not available right now."));
   }
 
   try {
@@ -2199,7 +2218,7 @@ export async function syncCampaignStatusAction(formData: FormData) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Campaign status sync failed.";
-    redirect(appendQueryParam(redirectTo, "error", message));
+    redirect(appendQueryParam(safeRedirectTo, "error", message));
   }
 
   revalidatePath(`/campaigns/${campaignId}`);
@@ -2207,7 +2226,7 @@ export async function syncCampaignStatusAction(formData: FormData) {
   revalidatePath("/templates");
   revalidatePath("/performance");
   revalidatePath("/dashboard");
-  redirect(appendQueryParam(redirectTo, "success", "Campaign status synced from Meta."));
+  redirect(appendQueryParam(safeRedirectTo, "success", "Campaign status synced from Meta."));
 }
 
 export async function switchWorkspaceAction(formData: FormData) {
@@ -2218,10 +2237,11 @@ export async function switchWorkspaceAction(formData: FormData) {
 
   const workspaceId = String(formData.get("workspaceId") || "");
   const redirectTo = String(formData.get("redirectTo") || "/dashboard");
+  const safeRedirectTo = getSafeRelativePath(redirectTo, "/dashboard");
   const admin = createSupabaseAdminClient();
 
   if (!admin || !workspaceId) {
-    redirect(redirectTo);
+    redirect(safeRedirectTo);
   }
 
   const isAdmin = (await getCurrentRole()) === "admin";
@@ -2273,11 +2293,12 @@ export async function switchWorkspaceAction(formData: FormData) {
   revalidatePath("/settings");
   revalidatePath("/workspace/settings");
   revalidatePath("/workspaces");
-  redirect(redirectTo);
+  redirect(safeRedirectTo);
 }
 
 export async function createWorkspaceAction(formData: FormData) {
   const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=general&created=1");
+  const safeRedirectTo = getSafeRelativePath(redirectTo, "/workspace/settings?section=general&created=1");
   const user = await requireProductActionUser("/workspaces/new");
   const workspaceName = String(formData.get("workspaceName") || "").trim();
   if (!workspaceName) {
@@ -2301,7 +2322,7 @@ export async function createWorkspaceAction(formData: FormData) {
   revalidatePath("/workspace/settings");
   revalidatePath("/settings");
   revalidatePath("/workspaces");
-  redirect(redirectTo);
+  redirect(safeRedirectTo);
 }
 
 export async function deleteWorkspaceAction(formData: FormData) {
@@ -2312,18 +2333,19 @@ export async function deleteWorkspaceAction(formData: FormData) {
 
   const workspaceId = String(formData.get("workspaceId") || "").trim();
   const redirectTo = String(formData.get("redirectTo") || "/workspaces");
+  const safeRedirectTo = getSafeRelativePath(redirectTo, "/workspaces");
 
   if (!workspaceId) {
-    redirect(redirectTo);
+    redirect(safeRedirectTo);
   }
 
   if (!isSupabaseServerConfigured()) {
-    redirect(redirectTo);
+    redirect(safeRedirectTo);
   }
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
-    redirect(redirectTo);
+    redirect(safeRedirectTo);
   }
 
   const membershipRole = await getWorkspaceMembershipRole({
@@ -2333,13 +2355,13 @@ export async function deleteWorkspaceAction(formData: FormData) {
   });
 
   if (membershipRole !== "owner") {
-    redirect(redirectTo);
+    redirect(safeRedirectTo);
   }
 
   const workspaceContext = await ensureWorkspaceContextForUser(user);
   const totalWorkspaces = workspaceContext?.workspaces || [];
   if (totalWorkspaces.length <= 1) {
-    redirect(redirectTo);
+    redirect(safeRedirectTo);
   }
 
   const remainingWorkspaces = totalWorkspaces.filter((workspace) => workspace.id !== workspaceId);
@@ -2371,7 +2393,7 @@ export async function deleteWorkspaceAction(formData: FormData) {
   revalidatePath("/workspace/settings");
   revalidatePath("/workspaces");
   revalidatePath("/", "layout");
-  redirect(redirectTo);
+  redirect(safeRedirectTo);
 }
 
 async function getWorkspaceMembershipRole({
@@ -2781,9 +2803,28 @@ export async function createCampaignAction(formData: FormData) {
     redirect("/templates");
   }
 
-  const logoFile = formData.get("logo") as File;
-  const beforeFiles = [formData.get("before1"), formData.get("before2")].filter(Boolean) as File[];
-  const afterFiles = [formData.get("after1"), formData.get("after2")].filter(Boolean) as File[];
+  const logoFile = formData.get("logo");
+  const beforeFiles = [formData.get("before1"), formData.get("before2")].filter(
+    (file): file is File => file instanceof File && file.size > 0,
+  );
+  const afterFiles = [formData.get("after1"), formData.get("after2")].filter(
+    (file): file is File => file instanceof File && file.size > 0,
+  );
+  let validatedLogoFile: File | null = null;
+  let validatedBeforeFiles: File[] = [];
+  let validatedAfterFiles: File[] = [];
+
+  try {
+    validatedLogoFile =
+      logoFile instanceof File && logoFile.size > 0
+        ? validateImageUploadFile(logoFile, "the business logo", campaignImageMaxBytes)
+        : null;
+    validatedBeforeFiles = beforeFiles.map((file) => validateImageUploadFile(file, "before photos", campaignImageMaxBytes));
+    validatedAfterFiles = afterFiles.map((file) => validateImageUploadFile(file, "after photos", campaignImageMaxBytes));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Upload a JPG, PNG, WEBP, or GIF image.";
+    redirect(`/templates/${template.slug}?error=${encodeURIComponent(message)}`);
+  }
 
   const values = {
     businessName: String(formData.get("businessName") || ""),
@@ -2803,13 +2844,13 @@ export async function createCampaignAction(formData: FormData) {
   };
 
   const [logoUrl, ...assetUploads] = await Promise.all([
-    uploadAsset(logoFile, "logos"),
-    ...beforeFiles.map((file, index) => uploadAsset(file, `before/${index}`)),
-    ...afterFiles.map((file, index) => uploadAsset(file, `after/${index}`)),
+    validatedLogoFile ? uploadAsset(validatedLogoFile, "logos") : Promise.resolve(null),
+    ...validatedBeforeFiles.map((file, index) => uploadAsset(file, `before/${index}`)),
+    ...validatedAfterFiles.map((file, index) => uploadAsset(file, `after/${index}`)),
   ]);
 
-  const beforeImageUrls = assetUploads.slice(0, beforeFiles.length).filter(Boolean) as string[];
-  const afterImageUrls = assetUploads.slice(beforeFiles.length).filter(Boolean) as string[];
+  const beforeImageUrls = assetUploads.slice(0, validatedBeforeFiles.length).filter(Boolean) as string[];
+  const afterImageUrls = assetUploads.slice(validatedBeforeFiles.length).filter(Boolean) as string[];
 
   const blueprint = createCampaignBlueprint(template, values, {
     logoUrl,
@@ -3647,7 +3688,7 @@ export async function setInvitedClientPasswordAction(formData: FormData) {
 
 export async function updateLeadStatusAction(formData: FormData) {
   const redirectTo = String(formData.get("redirectTo") || "/leads");
-  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/leads";
+  const safeRedirectTo = getSafeRelativePath(redirectTo, "/leads");
   const user = await requireProductActionUser(safeRedirectTo);
   const leadIdResult = uuidSchema.safeParse(String(formData.get("leadId") || ""));
   if (!leadIdResult.success) {
@@ -3689,7 +3730,7 @@ export async function updateLeadStatusAction(formData: FormData) {
 
 export async function updateLeadNotesAction(formData: FormData) {
   const redirectTo = String(formData.get("redirectTo") || "/leads");
-  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/leads";
+  const safeRedirectTo = getSafeRelativePath(redirectTo, "/leads");
   const user = await requireProductActionUser(safeRedirectTo);
   const leadIdResult = uuidSchema.safeParse(String(formData.get("leadId") || ""));
   if (!leadIdResult.success) {
@@ -3727,7 +3768,7 @@ export async function syncMetaLeadsAction(formData: FormData) {
   }
 
   const redirectTo = String(formData.get("redirectTo") || "/leads");
-  const safeRedirectTo = redirectTo.startsWith("/") ? redirectTo : "/leads";
+  const safeRedirectTo = getSafeRelativePath(redirectTo, "/leads");
   const mode = String(formData.get("mode") || "incremental") === "backfill" ? "backfill" : "incremental";
   const user = await requireProductActionUser(safeRedirectTo);
 
@@ -4017,8 +4058,17 @@ export async function updateSettingsAction(formData: FormData) {
   if (!activeWorkspaceId) {
     redirect("/settings?saved=1");
   }
-  const logoFile = formData.get("logo") as File;
-  const logoUrl = await uploadAsset(logoFile, "logos");
+  const logoFile = formData.get("logo");
+  let logoUploadFile: File | null = null;
+  if (logoFile instanceof File && logoFile.size > 0) {
+    try {
+      logoUploadFile = validateImageUploadFile(logoFile, "the business logo", profileAvatarMaxBytes);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Use a JPG, PNG, WEBP, or GIF image for the business logo.";
+      redirect(`/settings?error=${encodeURIComponent(message)}`);
+    }
+  }
+  const logoUrl = logoUploadFile ? await uploadAsset(logoUploadFile, "logos") : null;
   const workspaceName = String(formData.get("workspaceName") || formData.get("businessName") || "");
 
   await upsertWorkspaceBusinessProfile(admin, {
@@ -4438,8 +4488,9 @@ export async function disconnectCrmConnectionAction(formData: FormData) {
   const workspaceId = workspaceContext?.activeWorkspace.id;
   const provider = String(formData.get("provider") || "").trim();
   const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=integrations").trim();
+  const safeRedirectTo = getSafeRelativePath(redirectTo, "/workspace/settings?section=integrations");
   if (!workspaceId || !provider) {
-    redirect(appendQueryParam(redirectTo, "error", "Missing workspace or provider."));
+    redirect(appendQueryParam(safeRedirectTo, "error", "Missing workspace or provider."));
   }
 
   try {
@@ -4450,11 +4501,11 @@ export async function disconnectCrmConnectionAction(formData: FormData) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not disconnect CRM.";
-    redirect(appendQueryParam(redirectTo, "error", message));
+    redirect(appendQueryParam(safeRedirectTo, "error", message));
   }
 
   revalidatePath("/workspace/settings");
-  redirect(appendQueryParam(redirectTo, "saved", `${provider} disconnected`));
+  redirect(appendQueryParam(safeRedirectTo, "saved", `${provider} disconnected`));
 }
 
 export async function testCrmDeliveryAction(formData: FormData) {
@@ -4466,31 +4517,32 @@ export async function testCrmDeliveryAction(formData: FormData) {
 
   const workspaceId = String(formData.get("workspaceId") || "").trim();
   const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=integrations");
+  const safeRedirectTo = getSafeRelativePath(redirectTo, "/workspace/settings?section=integrations");
   const provider = String(formData.get("provider") || "").trim() as "gohighlevel" | "hubspot" | "pipedrive" | "salesforce" | "zoho" | "freshsales" | "monday" | "keap" | "close";
 
   if (!workspaceId) {
-    redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect your CRM or try again."));
+    redirect(appendQueryParam(safeRedirectTo, "error", "Test failed. Please reconnect your CRM or try again."));
   }
 
   if (!provider || !["gohighlevel", "hubspot", "pipedrive", "salesforce", "zoho", "freshsales", "monday", "keap", "close"].includes(provider)) {
-    redirect(appendQueryParam(redirectTo, "error", "Test not available yet."));
+    redirect(appendQueryParam(safeRedirectTo, "error", "Test not available yet."));
   }
 
   await enforceActionRateLimit({
     key: `crm:test-delivery:${provider}:${workspaceId}`,
     limit: 5,
     windowMs: 60 * 60 * 1000,
-    redirectTo,
+    redirectTo: safeRedirectTo,
     userId: user.id,
   });
 
   if (!isSupabaseServerConfigured()) {
-    redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect your CRM or try again."));
+    redirect(appendQueryParam(safeRedirectTo, "error", "Test failed. Please reconnect your CRM or try again."));
   }
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
-    redirect(appendQueryParam(redirectTo, "error", "Test failed. Please reconnect your CRM or try again."));
+    redirect(appendQueryParam(safeRedirectTo, "error", "Test failed. Please reconnect your CRM or try again."));
   }
 
   const globalRole = await getCurrentRole();
@@ -4503,11 +4555,11 @@ export async function testCrmDeliveryAction(formData: FormData) {
     globalRole === "admin" || membershipRole === "owner" || membershipRole === "admin";
 
   if (!canTriggerTest) {
-    redirect(appendQueryParam(redirectTo, "error", "Only workspace owners or admins can send test leads."));
+    redirect(appendQueryParam(safeRedirectTo, "error", "Only workspace owners or admins can send test leads."));
   }
 
   if (!isCrmTestDeliverySupported(provider)) {
-    redirect(appendQueryParam(redirectTo, "error", `${getCrmProviderLabel(provider)} test delivery is not available yet.`));
+    redirect(appendQueryParam(safeRedirectTo, "error", `${getCrmProviderLabel(provider)} test delivery is not available yet.`));
   }
 
   try {
@@ -4529,7 +4581,7 @@ export async function testCrmDeliveryAction(formData: FormData) {
       }),
     );
     revalidatePath("/workspace/settings");
-    redirect(appendQueryParam(redirectTo, "saved", result.safeMessage));
+    redirect(appendQueryParam(safeRedirectTo, "saved", result.safeMessage));
   } catch (error) {
     if (isRedirectError(error)) {
       throw error;
@@ -4542,7 +4594,7 @@ export async function testCrmDeliveryAction(formData: FormData) {
     });
     redirect(
       appendQueryParam(
-        redirectTo,
+        safeRedirectTo,
         "error",
         getCrmTestDeliveryFailureMessage({
           provider,
@@ -4561,23 +4613,24 @@ export async function saveMondayBoardIdAction(formData: FormData) {
   await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=integrations");
+  const safeRedirectTo = getSafeRelativePath(redirectTo, "/workspace/settings?section=integrations");
   const boardId = String(formData.get("boardId") || "").trim();
 
   await enforceActionRateLimit({
     key: "crm:monday:save-board",
     limit: 20,
     windowMs: 60 * 60 * 1000,
-    redirectTo,
+    redirectTo: safeRedirectTo,
     userId: user.id,
   });
 
   if (!isSupabaseServerConfigured()) {
-    redirect(appendQueryParam(redirectTo, "error", "Monday CRM could not be configured right now."));
+    redirect(appendQueryParam(safeRedirectTo, "error", "Monday CRM could not be configured right now."));
   }
 
   const admin = createSupabaseAdminClient();
   if (!admin) {
-    redirect(appendQueryParam(redirectTo, "error", "Monday CRM could not be configured right now."));
+    redirect(appendQueryParam(safeRedirectTo, "error", "Monday CRM could not be configured right now."));
   }
 
   let workspaceContext;
@@ -4585,12 +4638,12 @@ export async function saveMondayBoardIdAction(formData: FormData) {
     workspaceContext = await ensureWorkspaceContextForUser(user);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Workspace could not be loaded.";
-    redirect(appendQueryParam(redirectTo, "error", msg));
+    redirect(appendQueryParam(safeRedirectTo, "error", msg));
   }
 
   const workspaceId = workspaceContext?.activeWorkspace.id;
   if (!workspaceId) {
-    redirect(appendQueryParam(redirectTo, "error", "No active workspace found."));
+    redirect(appendQueryParam(safeRedirectTo, "error", "No active workspace found."));
   }
 
   const globalRole = await getCurrentRole();
@@ -4603,11 +4656,11 @@ export async function saveMondayBoardIdAction(formData: FormData) {
     globalRole === "admin" || membershipRole === "owner" || membershipRole === "admin";
 
   if (!canConfigureMonday) {
-    redirect(appendQueryParam(redirectTo, "error", "Only workspace owners or admins can configure Monday CRM."));
+    redirect(appendQueryParam(safeRedirectTo, "error", "Only workspace owners or admins can configure Monday CRM."));
   }
 
   if (!boardId) {
-    redirect(appendQueryParam(redirectTo, "error", "Add a monday board ID before sending a test lead."));
+    redirect(appendQueryParam(safeRedirectTo, "error", "Add a monday board ID before sending a test lead."));
   }
 
   try {
@@ -4625,7 +4678,7 @@ export async function saveMondayBoardIdAction(formData: FormData) {
     });
     redirect(
       appendQueryParam(
-        redirectTo,
+        safeRedirectTo,
         "error",
         getCrmTestDeliveryFailureMessage({
           provider: "monday",
@@ -4636,7 +4689,7 @@ export async function saveMondayBoardIdAction(formData: FormData) {
   }
 
   revalidatePath("/workspace/settings");
-  redirect(appendQueryParam(redirectTo, "saved", "Monday board saved."));
+  redirect(appendQueryParam(safeRedirectTo, "saved", "Monday board saved."));
 }
 
 export async function updateMondayBoardSelectionAction({

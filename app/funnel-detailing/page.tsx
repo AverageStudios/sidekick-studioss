@@ -6,8 +6,11 @@ import {
   Filter,
   Inbox,
   Layers,
+  MapPin,
   LayoutGrid,
   LayoutTemplate,
+  LineChart,
+  Send,
   Wand2,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
@@ -34,10 +37,10 @@ const PROBLEMS = [
 ];
 
 const BENEFITS = [
-  { icon: Wand2, title: "No blank-page setup", description: "Start from a campaign that's already built." },
-  { icon: LayoutTemplate, title: "Offer-led templates", description: "Built around real small-business offers." },
-  { icon: Inbox, title: "Lead capture included", description: "Inquiries come in through the campaign forms." },
-  { icon: LayoutGrid, title: "One clean workspace", description: "Launch and leads in a single system." },
+  { icon: MapPin, title: "Reach local buyers", description: "Put your offer in front of people in your service area." },
+  { icon: Wand2, title: "Capture interest", description: "Send traffic to a focused campaign page or lead flow." },
+  { icon: Send, title: "Route the lead", description: "Move new inquiries into your CRM/outreach system." },
+  { icon: LineChart, title: "Test and improve", description: "Use the numbers to see what offer gets attention." },
 ];
 
 export default function FunnelDetailingPage() {
@@ -94,7 +97,10 @@ export default function FunnelDetailingPage() {
       <section className="px-5 py-16 sm:px-6 sm:py-24">
         <div className="mx-auto max-w-5xl">
           <Reveal className="mx-auto max-w-2xl text-center">
-            <h2 className="site-h2">Built for the way small businesses actually launch.</h2>
+            <h2 className="site-h2">Your customers are already scrolling.</h2>
+            <p className="site-lead mx-auto mt-4">
+              Facebook and Instagram give local businesses a way to reach people where attention already is. SideKick helps you turn that attention into a campaign path.
+            </p>
           </Reveal>
 
           <div className="mt-12 grid gap-4 sm:mt-14 sm:grid-cols-2 lg:grid-cols-4">
