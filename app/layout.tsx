@@ -15,6 +15,13 @@ const sora = Sora({
 export const metadata: Metadata = {
   title: "SideKick Studioss",
   description: "A campaign system for car detailers to launch offers, capture more local leads, and keep follow-up organized.",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({
