@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Check, ChevronRight, Circle, CircleDashed, Inbox, Layers3, Send } from "lucide-react";
+import { ArrowRight, Check, ChevronRight, Circle, CircleDashed, Inbox, Layers3, Send, TrendingDown, TrendingUp } from "lucide-react";
 import { MarketingNav } from "@/components/marketing-nav";
 import { PublicSiteFooter } from "@/components/public-site-footer";
 import { StartTrialButton } from "@/components/billing-action-buttons";
@@ -84,16 +84,22 @@ const productMetrics = [
   {
     value: 184,
     label: "Leads",
+    trend: "+28%",
+    direction: "up",
     prefix: "",
   },
   {
     value: 18420,
     label: "Impressions",
+    trend: "+41%",
+    direction: "up",
     prefix: "",
   },
   {
     value: 21,
     label: "Cost per lead",
+    trend: "-19%",
+    direction: "down",
     prefix: "$",
   },
 ] as const;
@@ -194,34 +200,30 @@ function SectionEyebrow({ children }: { children: React.ReactNode }) {
 
 function HeroMetricsShowcase() {
   return (
-    <div className="mx-auto w-full max-w-[760px] rounded-[32px] border border-[rgba(109,94,248,0.14)] bg-white p-3 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.32)] sm:p-4">
-      <div className="overflow-hidden rounded-[24px] border border-[var(--line)] bg-[linear-gradient(180deg,#fcfbff_0%,#f5f2ff_100%)]">
-        <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3 sm:px-5">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-ink)]">Performance snapshot</p>
-            <p className="mt-1 text-sm font-semibold text-[var(--ink)] sm:text-base">Three numbers worth watching</p>
+    <div className="grid gap-4 lg:grid-cols-3">
+      {productMetrics.map((metric) => (
+        <div
+          key={metric.label}
+          className="rounded-[28px] border border-[var(--line)] bg-[linear-gradient(180deg,#ffffff_0%,#faf8ff_100%)] px-6 py-7 text-center shadow-[0_14px_35px_-28px_rgba(15,23,42,0.18)]"
+        >
+          <div className="flex items-center justify-center gap-2">
+            {metric.direction === "up" ? (
+              <TrendingUp className="h-4 w-4 text-emerald-600" />
+            ) : (
+              <TrendingDown className="h-4 w-4 text-emerald-600" />
+            )}
+            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
+              {metric.trend}
+            </span>
           </div>
-          <span className="rounded-full bg-[var(--soft-brand)] px-3 py-1 text-xs font-semibold text-[var(--brand)]">
-            Live view
-          </span>
+          <p className="mt-4 text-5xl font-semibold tracking-[-0.07em] text-[var(--ink)]">
+            <AnimatedNumber to={metric.value} prefix={metric.prefix || ""} duration={0.85} />
+          </p>
+          <p className="mt-2 text-sm font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
+            {metric.label}
+          </p>
         </div>
-
-        <div className="grid gap-4 p-4 md:grid-cols-3 md:p-5">
-          {productMetrics.map((metric) => (
-            <div
-              key={metric.label}
-              className="rounded-[22px] border border-[var(--line)] bg-white px-5 py-6 text-center shadow-[0_12px_28px_-24px_rgba(15,23,42,0.2)]"
-            >
-              <p className="text-5xl font-semibold tracking-[-0.07em] text-[var(--ink)]">
-                <AnimatedNumber to={metric.value} prefix={metric.prefix || ""} duration={0.85} />
-              </p>
-              <p className="mt-3 text-sm font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
-                {metric.label}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
+      ))}
     </div>
   );
 }
