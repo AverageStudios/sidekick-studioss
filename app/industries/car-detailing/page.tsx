@@ -63,31 +63,31 @@ const systemCards = [
 
 const templateCards = [
   {
-    slug: "ceramic-coating-promo",
+    slug: "defend-your-shine",
     title: "Ceramic Coating Promo",
     detail: "Position protection packages.",
     leadType: "Higher-ticket inquiries",
   },
   {
-    slug: "full-detail-promo",
+    slug: "performance-full-detail",
     title: "Full Detail Promo",
     detail: "Fill the calendar fast.",
     leadType: "General detailing jobs",
   },
   {
-    slug: "interior-detail-promo",
+    slug: "clean-cabin-reset",
     title: "Interior Detail Promo",
     detail: "Great for dirty interiors.",
     leadType: "Family cars and odor jobs",
   },
   {
-    slug: "paint-correction-promo",
+    slug: "protect-your-investment",
     title: "Paint Correction Promo",
     detail: "Turn transformations into leads.",
     leadType: "Premium correction work",
   },
   {
-    slug: "monthly-maintenance-promo",
+    slug: "stay-clean-monthly",
     title: "Monthly Maintenance Promo",
     detail: "Stay in front of past clients.",
     leadType: "Repeat-service inquiries",
@@ -190,7 +190,7 @@ function SectionEyebrow({ children }: { children: React.ReactNode }) {
 
 function ProductMockup() {
   return (
-    <div className="rounded-[32px] border border-[rgba(109,94,248,0.14)] bg-white p-3 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.32)] sm:p-4">
+    <div className="mx-auto w-full max-w-[760px] rounded-[32px] border border-[rgba(109,94,248,0.14)] bg-white p-3 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.32)] sm:p-4">
       <div className="overflow-hidden rounded-[24px] border border-[var(--line)] bg-[linear-gradient(180deg,#fcfbff_0%,#f5f2ff_100%)]">
         <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3 sm:px-5">
           <div>
@@ -347,7 +347,7 @@ export default async function CarDetailingIndustryPage() {
     <main className="public-site min-h-screen bg-[var(--surface)]">
       <MarketingNav />
 
-      <section className="border-b border-[rgba(109,94,248,0.1)] bg-[linear-gradient(180deg,#faf8ff_0%,#f4f1fb_100%)] pb-18 pt-32 sm:pb-22 sm:pt-40">
+      <section className="border-b border-[rgba(109,94,248,0.1)] bg-[linear-gradient(180deg,#faf8ff_0%,#f4f1fb_100%)] pb-16 pt-28 sm:pb-20 sm:pt-34">
         <div className="site-container">
           <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[13px] text-[var(--muted)]">
             <Link href="/product/templates" className="transition-colors hover:text-[var(--ink)]">
@@ -357,19 +357,19 @@ export default async function CarDetailingIndustryPage() {
             <span className="text-[var(--muted-strong)]">Car Detailing</span>
           </nav>
 
-          <div className="mt-8 grid items-center gap-12 lg:grid-cols-[0.88fr_1.12fr]">
-            <div className="max-w-xl">
+          <div className="mt-6 grid items-center gap-8 lg:grid-cols-[0.84fr_1.16fr] lg:gap-10">
+            <div className="mx-auto max-w-xl lg:mx-0 lg:max-w-[32rem]">
               <p className="inline-flex rounded-full bg-[var(--soft-brand)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-ink)]">
                 For car detailers
               </p>
-              <h1 className="mt-5 text-[clamp(2.6rem,1.8rem+3vw,4.7rem)] font-semibold tracking-[-0.07em] text-[var(--ink)]">
+              <h1 className="mt-4 text-[clamp(2.6rem,1.9rem+2.5vw,4.35rem)] font-semibold leading-[0.96] tracking-[-0.075em] text-[var(--ink)]">
                 Turn detailing leads into booked jobs.
               </h1>
-              <p className="mt-5 max-w-lg text-lg leading-8 text-[var(--muted-strong)]">
+              <p className="mt-4 max-w-lg text-lg leading-7 text-[var(--muted-strong)]">
                 Launch ready-to-go Facebook and Instagram campaigns, capture leads, and keep follow-up organized from one clean workspace.
               </p>
 
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
                 <PrimaryCta
                   loggedIn={loggedIn}
                   hasAccess={hasAccess}
@@ -379,7 +379,7 @@ export default async function CarDetailingIndustryPage() {
                 <TemplatesCta hasAccess={hasAccess} />
               </div>
 
-              <p className="mt-4 text-sm text-[var(--muted)]">
+              <p className="mt-3 text-sm text-[var(--muted)]">
                 $97/month after trial. Ad spend paid separately to Meta.
               </p>
             </div>
@@ -389,9 +389,9 @@ export default async function CarDetailingIndustryPage() {
         </div>
       </section>
 
-      <section className="bg-white py-18 sm:py-22">
+      <section className="bg-white py-16 sm:py-20">
         <div className="site-container">
-          <div className="max-w-2xl">
+          <div className="mx-auto max-w-2xl text-center">
             <SectionEyebrow>Problem snapshot</SectionEyebrow>
             <h2 className="mt-3 text-[clamp(2rem,1.6rem+1.8vw,3rem)] font-semibold tracking-[-0.06em] text-[var(--ink)]">
               Most detailers lose leads in the gaps.
@@ -412,9 +412,9 @@ export default async function CarDetailingIndustryPage() {
         </div>
       </section>
 
-      <section className="bg-[var(--background)] py-18 sm:py-22">
+      <section className="bg-[var(--background)] py-16 sm:py-20">
         <div className="site-container">
-          <div className="max-w-2xl">
+          <div className="mx-auto max-w-2xl text-center">
             <SectionEyebrow>How it works</SectionEyebrow>
             <h2 className="mt-3 text-[clamp(2rem,1.6rem+1.8vw,3rem)] font-semibold tracking-[-0.06em] text-[var(--ink)]">
               SideKick gives your shop a campaign system.
@@ -442,15 +442,15 @@ export default async function CarDetailingIndustryPage() {
         </div>
       </section>
 
-      <section className="bg-white py-18 sm:py-22">
+      <section className="bg-white py-16 sm:py-20">
         <div className="site-container">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-            <div className="max-w-2xl">
+          <div className="mx-auto max-w-2xl text-center">
               <SectionEyebrow>Template showcase</SectionEyebrow>
               <h2 className="mt-3 text-[clamp(2rem,1.6rem+1.8vw,3rem)] font-semibold tracking-[-0.06em] text-[var(--ink)]">
                 Detailing campaigns ready from day one.
               </h2>
-            </div>
+          </div>
+          <div className="mt-6 flex justify-center">
             <TemplatesCta hasAccess={hasAccess} />
           </div>
 
@@ -467,9 +467,9 @@ export default async function CarDetailingIndustryPage() {
         </div>
       </section>
 
-      <section className="bg-[var(--background)] py-18 sm:py-22">
+      <section className="bg-[var(--background)] py-16 sm:py-20">
         <div className="site-container">
-          <div className="max-w-2xl">
+          <div className="mx-auto max-w-2xl text-center">
             <SectionEyebrow>Before / after</SectionEyebrow>
             <h2 className="mt-3 text-[clamp(2rem,1.6rem+1.8vw,3rem)] font-semibold tracking-[-0.06em] text-[var(--ink)]">
               Before SideKick / After SideKick
@@ -504,7 +504,7 @@ export default async function CarDetailingIndustryPage() {
         </div>
       </section>
 
-      <section className="bg-white py-18 sm:py-22">
+      <section className="bg-white py-16 sm:py-20">
         <div className="site-container">
           <div className="mx-auto max-w-3xl text-center">
             <SectionEyebrow>Pricing</SectionEyebrow>
@@ -550,7 +550,7 @@ export default async function CarDetailingIndustryPage() {
         </div>
       </section>
 
-      <section className="bg-[linear-gradient(180deg,#16122d_0%,#1c1637_100%)] py-18 text-white sm:py-22">
+      <section className="bg-[linear-gradient(180deg,#16122d_0%,#1c1637_100%)] py-16 text-white sm:py-20">
         <div className="site-container">
           <div className="mx-auto max-w-3xl text-center">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[rgba(221,212,255,0.9)]">FAQ</p>
