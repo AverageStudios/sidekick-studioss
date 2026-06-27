@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Check, ChevronRight, Circle, CircleDashed, Inbox, Layers3, Send } from "lucide-react";
 import { MarketingNav } from "@/components/marketing-nav";
@@ -7,8 +6,6 @@ import { PublicSiteFooter } from "@/components/public-site-footer";
 import { StartTrialButton } from "@/components/billing-action-buttons";
 import { getCurrentUser } from "@/lib/auth";
 import { getUserBillingStatus } from "@/lib/billing";
-import { getTemplates } from "@/lib/data";
-import type { TemplateSeed } from "@/types";
 
 export const metadata: Metadata = {
   title: "Car Detailing Campaigns | SideKick Studioss",
@@ -61,24 +58,26 @@ const systemCards = [
   },
 ];
 
-const templateCards = [
+const productMetrics = [
   {
-    slug: "membership-detailing-always-ready",
-    title: "Always Ready Plan",
-    detail: "A cleaner recurring offer for maintenance-minded drivers.",
-    leadType: "Monthly plan inquiries",
+    value: "1",
+    label: "clean workspace",
+    detail: "Campaigns, leads, and follow-up in one place.",
   },
   {
-    slug: "premium-car-detail",
-    title: "Premium Car Detail",
-    detail: "A polished full-detail offer for premium local jobs.",
-    leadType: "High-intent detail quotes",
+    value: "3",
+    label: "lead statuses that matter",
+    detail: "New, contacted, and booked stay visible fast.",
   },
   {
-    slug: "premium-exterior-detail",
-    title: "Head-Turning Detail",
-    detail: "A sharp exterior-focused campaign built around visual proof.",
-    leadType: "Exterior detail leads",
+    value: "5",
+    label: "CRM integrations",
+    detail: "Pipedrive, Zoho, monday, Keap, and Close.",
+  },
+  {
+    value: "2",
+    label: "Meta channels",
+    detail: "Facebook and Instagram launch flows built in.",
   },
 ];
 
@@ -263,79 +262,11 @@ function ProductMockup() {
   );
 }
 
-function TemplateShowcaseCard({
-  item,
-  template,
-}: {
-  item: (typeof templateCards)[number];
-  template?: TemplateSeed;
-}) {
-  const imageUrl = template?.creativeAssets?.imageUrls?.[0] || template?.previewImage || null;
-
-  return (
-    <div className="overflow-hidden rounded-[28px] border border-[var(--line)] bg-white shadow-[0_18px_40px_-30px_rgba(15,23,42,0.2)]">
-      <div className="relative aspect-[4/5] border-b border-[var(--line)] bg-[linear-gradient(135deg,#f3efff_0%,#ece7ff_100%)]">
-        {imageUrl ? (
-          <Image
-            src={imageUrl}
-            alt={item.title}
-            fill
-            sizes="(min-width: 1024px) 30vw, 100vw"
-            className="object-contain"
-          />
-        ) : (
-          <div className="flex h-full items-end bg-[radial-gradient(circle_at_top_left,rgba(109,94,248,0.18),transparent_45%),linear-gradient(180deg,#f7f3ff_0%,#ece6ff_100%)] p-5">
-            <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
-              Preview
-            </span>
-          </div>
-        )}
-        <div className="absolute right-4 top-4">
-          <span className="shrink-0 rounded-full bg-[var(--soft-brand)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--brand)]">
-            Ready to launch
-          </span>
-        </div>
-      </div>
-
-      <div className="p-6 sm:p-7">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-lg font-semibold tracking-[-0.03em] text-[var(--ink)]">{template?.name || item.title}</p>
-            <p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted-strong)]">{item.detail}</p>
-          </div>
-          <span className="rounded-full border border-[var(--line)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted-strong)]">
-            Meta
-          </span>
-        </div>
-
-        <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-[var(--line)] pt-5">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Lead type</p>
-            <p className="mt-1 text-sm font-medium text-[var(--ink)]">{item.leadType}</p>
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Category</p>
-            <p className="mt-1 text-sm font-medium text-[var(--ink)]">{template?.category || "Car Detailing"}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default async function CarDetailingIndustryPage() {
   const user = await getCurrentUser();
   const billingStatus = user ? await getUserBillingStatus(user.id) : null;
   const hasAccess = Boolean(billingStatus?.hasAccess);
   const loggedIn = Boolean(user);
-  const templates = await getTemplates();
-  const detailingTemplates = templates.filter((template) => template.industry === "Car Detailing");
-  const showcaseTemplates = templateCards.map((item) => ({
-    item,
-    template:
-      detailingTemplates.find((template) => template.slug === item.slug) ||
-      detailingTemplates.find((template) => template.name === item.title),
-  }));
 
   return (
     <main className="public-site min-h-screen bg-[var(--surface)]">
@@ -439,22 +370,27 @@ export default async function CarDetailingIndustryPage() {
       <section className="bg-white py-16 sm:py-20">
         <div className="site-container">
           <div className="mx-auto max-w-2xl text-center">
-              <SectionEyebrow>Template showcase</SectionEyebrow>
-              <h2 className="mt-3 text-[clamp(2rem,1.6rem+1.8vw,3rem)] font-semibold tracking-[-0.06em] text-[var(--ink)]">
-                Three detailing campaigns, presented the right way.
-              </h2>
+            <SectionEyebrow>At a glance</SectionEyebrow>
+            <h2 className="mt-3 text-[clamp(2rem,1.6rem+1.8vw,3rem)] font-semibold tracking-[-0.06em] text-[var(--ink)]">
+              A simpler way to keep the pipeline clean.
+            </h2>
           </div>
           <div className="mt-6 flex justify-center">
             <TemplatesCta hasAccess={hasAccess} />
           </div>
 
-          <div className="mx-auto mt-10 grid max-w-6xl gap-5 lg:grid-cols-3">
-            {showcaseTemplates.map(({ item, template }) => (
-              <TemplateShowcaseCard
-                key={item.slug}
-                item={item}
-                template={template}
-              />
+          <div className="mx-auto mt-10 grid max-w-5xl gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {productMetrics.map((metric) => (
+              <div
+                key={metric.label}
+                className="rounded-[26px] border border-[var(--line)] bg-[linear-gradient(180deg,#ffffff_0%,#faf8ff_100%)] px-5 py-6 text-center shadow-[0_14px_35px_-28px_rgba(15,23,42,0.18)]"
+              >
+                <p className="text-4xl font-semibold tracking-[-0.06em] text-[var(--ink)]">{metric.value}</p>
+                <p className="mt-2 text-sm font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
+                  {metric.label}
+                </p>
+                <p className="mt-3 text-sm leading-6 text-[var(--muted-strong)]">{metric.detail}</p>
+              </div>
             ))}
           </div>
         </div>
