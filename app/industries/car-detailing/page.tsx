@@ -291,19 +291,19 @@ export default async function CarDetailingIndustryPage() {
             <span className="text-[var(--muted-strong)]">Car Detailing</span>
           </nav>
 
-          <div className="mt-6 grid items-center gap-8 lg:grid-cols-[0.84fr_1.16fr] lg:gap-10">
-            <div className="mx-auto max-w-xl lg:mx-0 lg:max-w-[32rem]">
+          <div className="mx-auto mt-6 max-w-2xl text-center">
+            <div>
               <p className="inline-flex rounded-full bg-[var(--soft-brand)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-ink)]">
                 For car detailers
               </p>
               <h1 className="mt-4 text-[clamp(2.6rem,1.9rem+2.5vw,4.35rem)] font-semibold leading-[0.96] tracking-[-0.075em] text-[var(--ink)]">
                 Turn detailing leads into booked jobs.
               </h1>
-              <p className="mt-4 max-w-lg text-lg leading-7 text-[var(--muted-strong)]">
+              <p className="mx-auto mt-4 max-w-xl text-lg leading-7 text-[var(--muted-strong)]">
                 Launch ready-to-go Facebook and Instagram campaigns, capture leads, and keep follow-up organized from one clean workspace.
               </p>
 
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
                 <PrimaryCta
                   loggedIn={loggedIn}
                   hasAccess={hasAccess}
@@ -317,8 +317,6 @@ export default async function CarDetailingIndustryPage() {
                 $97/month after trial. Ad spend paid separately to Meta.
               </p>
             </div>
-
-            <HeroMetricsShowcase />
           </div>
         </div>
       </section>
@@ -372,6 +370,20 @@ export default async function CarDetailingIndustryPage() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white py-16 sm:py-20">
+        <div className="site-container">
+          <div className="mx-auto max-w-2xl text-center">
+            <SectionEyebrow>At a glance</SectionEyebrow>
+            <h2 className="mt-3 text-[clamp(2rem,1.6rem+1.8vw,3rem)] font-semibold tracking-[-0.06em] text-[var(--ink)]">
+              A cleaner read on what is working.
+            </h2>
+          </div>
+          <div className="mx-auto mt-10 max-w-5xl">
+            <HeroMetricsShowcase />
           </div>
         </div>
       </section>
