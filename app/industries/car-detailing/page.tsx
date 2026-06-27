@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Check, ChevronRight, Circle, CircleDashed, Inbox, Layers3, Send } from "lucide-react";
+import { ArrowRight, Check, ChevronRight, Circle, CircleDashed, Inbox, Layers3, Send, TrendingDown, TrendingUp } from "lucide-react";
 import { MarketingNav } from "@/components/marketing-nav";
 import { PublicSiteFooter } from "@/components/public-site-footer";
 import { StartTrialButton } from "@/components/billing-action-buttons";
+import { AnimatedNumber } from "@/components/funnel/animated-number";
 import { getCurrentUser } from "@/lib/auth";
 import { getUserBillingStatus } from "@/lib/billing";
 
@@ -60,26 +61,30 @@ const systemCards = [
 
 const productMetrics = [
   {
-    value: "1",
-    label: "clean workspace",
-    detail: "Campaigns, leads, and follow-up in one place.",
+    value: 184,
+    label: "Leads",
+    detail: "Captured and organized in one place.",
+    trend: "+28%",
+    direction: "up",
+    prefix: "",
   },
   {
-    value: "3",
-    label: "lead statuses that matter",
-    detail: "New, contacted, and booked stay visible fast.",
+    value: 18420,
+    label: "Impressions",
+    detail: "Steady local visibility across Meta.",
+    trend: "+41%",
+    direction: "up",
+    prefix: "",
   },
   {
-    value: "5",
-    label: "CRM integrations",
-    detail: "Pipedrive, Zoho, monday, Keap, and Close.",
+    value: 21,
+    label: "Cost per lead",
+    detail: "Cleaner tracking makes spend easier to judge.",
+    trend: "-19%",
+    direction: "down",
+    prefix: "$",
   },
-  {
-    value: "2",
-    label: "Meta channels",
-    detail: "Facebook and Instagram launch flows built in.",
-  },
-];
+] as const;
 
 const beforeItems = [
   "Random posts",
@@ -372,20 +377,32 @@ export default async function CarDetailingIndustryPage() {
           <div className="mx-auto max-w-2xl text-center">
             <SectionEyebrow>At a glance</SectionEyebrow>
             <h2 className="mt-3 text-[clamp(2rem,1.6rem+1.8vw,3rem)] font-semibold tracking-[-0.06em] text-[var(--ink)]">
-              A simpler way to keep the pipeline clean.
+              A cleaner read on what is working.
             </h2>
           </div>
           <div className="mt-6 flex justify-center">
             <TemplatesCta hasAccess={hasAccess} />
           </div>
 
-          <div className="mx-auto mt-10 grid max-w-5xl gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mx-auto mt-10 grid max-w-5xl gap-4 lg:grid-cols-3">
             {productMetrics.map((metric) => (
               <div
                 key={metric.label}
-                className="rounded-[26px] border border-[var(--line)] bg-[linear-gradient(180deg,#ffffff_0%,#faf8ff_100%)] px-5 py-6 text-center shadow-[0_14px_35px_-28px_rgba(15,23,42,0.18)]"
+                className="rounded-[28px] border border-[var(--line)] bg-[linear-gradient(180deg,#ffffff_0%,#faf8ff_100%)] px-6 py-7 text-center shadow-[0_14px_35px_-28px_rgba(15,23,42,0.18)]"
               >
-                <p className="text-4xl font-semibold tracking-[-0.06em] text-[var(--ink)]">{metric.value}</p>
+                <div className="flex items-center justify-center gap-2">
+                  {metric.direction === "up" ? (
+                    <TrendingUp className="h-4 w-4 text-emerald-600" />
+                  ) : (
+                    <TrendingDown className="h-4 w-4 text-emerald-600" />
+                  )}
+                  <span className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
+                    {metric.trend}
+                  </span>
+                </div>
+                <p className="mt-4 text-5xl font-semibold tracking-[-0.07em] text-[var(--ink)]">
+                  <AnimatedNumber to={metric.value} prefix={metric.prefix || ""} duration={0.85} />
+                </p>
                 <p className="mt-2 text-sm font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
                   {metric.label}
                 </p>
