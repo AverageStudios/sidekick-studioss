@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Check, ChevronRight, Circle, CircleDashed, Inbox, Layers3, Send, TrendingDown, TrendingUp } from "lucide-react";
 import { MarketingNav } from "@/components/marketing-nav";
@@ -7,6 +8,8 @@ import { StartTrialButton } from "@/components/billing-action-buttons";
 import { AnimatedNumber } from "@/components/funnel/animated-number";
 import { getCurrentUser } from "@/lib/auth";
 import { getUserBillingStatus } from "@/lib/billing";
+import { getTemplates } from "@/lib/data";
+import type { TemplateSeed } from "@/types";
 
 export const metadata: Metadata = {
   title: "Car Detailing Campaigns | SideKick Studioss",
@@ -58,6 +61,24 @@ const systemCards = [
     icon: Inbox,
   },
 ];
+
+const heroTemplateCards = [
+  {
+    slug: "membership-detailing-always-ready",
+    fallbackTitle: "Always Ready Plan",
+    kicker: "Maintenance plan",
+  },
+  {
+    slug: "premium-car-detail",
+    fallbackTitle: "Premium Car Detail",
+    kicker: "Full detail",
+  },
+  {
+    slug: "premium-exterior-detail",
+    fallbackTitle: "Head-Turning Detail",
+    kicker: "Exterior detail",
+  },
+] as const;
 
 const productMetrics = [
   {
@@ -180,87 +201,61 @@ function SectionEyebrow({ children }: { children: React.ReactNode }) {
   return <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-ink)]">{children}</p>;
 }
 
-function ProductMockup() {
+function HeroTemplateShowcase({
+  templates,
+}: {
+  templates: Array<{ template?: TemplateSeed; fallbackTitle: string; kicker: string }>;
+}) {
   return (
     <div className="mx-auto w-full max-w-[760px] rounded-[32px] border border-[rgba(109,94,248,0.14)] bg-white p-3 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.32)] sm:p-4">
       <div className="overflow-hidden rounded-[24px] border border-[var(--line)] bg-[linear-gradient(180deg,#fcfbff_0%,#f5f2ff_100%)]">
         <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3 sm:px-5">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-ink)]">Campaign</p>
-            <p className="mt-1 text-sm font-semibold text-[var(--ink)] sm:text-base">Ceramic Coating Promo</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-ink)]">Detailing templates</p>
+            <p className="mt-1 text-sm font-semibold text-[var(--ink)] sm:text-base">Ready-to-launch campaign library</p>
           </div>
           <span className="rounded-full bg-[var(--soft-brand)] px-3 py-1 text-xs font-semibold text-[var(--brand)]">
-            Ready to launch
+            3 featured
           </span>
         </div>
 
-        <div className="grid gap-3 p-4 sm:grid-cols-[1.1fr_0.9fr] sm:p-5">
-          <div className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[20px] border border-[var(--line)] bg-white p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted)]">Leads captured</p>
-                <p className="mt-2 text-3xl font-semibold tracking-[-0.05em] text-[var(--ink)]">18</p>
-              </div>
-              <div className="rounded-[20px] border border-[var(--line)] bg-white p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted)]">CRM</p>
-                <p className="mt-2 text-base font-semibold text-[var(--ink)]">Pipedrive connected</p>
-              </div>
-            </div>
+        <div className="grid gap-4 p-4 md:grid-cols-3 md:p-5">
+          {templates.map(({ template, fallbackTitle, kicker }, index) => {
+            const imageUrl = template?.creativeAssets?.imageUrls?.[0] || template?.previewImage || null;
 
-            <div className="rounded-[20px] border border-[var(--line)] bg-white p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted)]">New lead</p>
-              <p className="mt-2 text-base font-semibold text-[var(--ink)]">2022 BMW M4 - Ceramic Coating</p>
-              <p className="mt-1 text-sm text-[var(--muted-strong)]">Service interest captured and ready for follow-up.</p>
-            </div>
-
-            <div className="rounded-[20px] border border-[var(--line)] bg-white p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted)]">Lead status</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {["New", "Contacted", "Booked"].map((item, index) => (
-                  <span
-                    key={item}
-                    className={[
-                      "rounded-full px-3 py-1 text-xs font-semibold",
-                      index === 0
-                        ? "bg-[var(--brand)] text-white"
-                        : "border border-[var(--line)] bg-[var(--soft-panel)] text-[var(--muted-strong)]",
-                    ].join(" ")}
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-[24px] border border-[var(--line)] bg-[#151228] p-4 text-white">
-            <div className="flex items-center justify-between">
-              <p className="text-xs uppercase tracking-[0.16em] text-white/55">Workspace</p>
-              <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-white/75">
-                Meta ready
-              </span>
-            </div>
-            <div className="mt-4 rounded-[18px] border border-white/10 bg-white/5 p-4">
-              <p className="text-sm font-semibold">Campaign flow</p>
-              <div className="mt-4 space-y-3">
-                {[
-                  { label: "Template selected", done: true },
-                  { label: "Creative ready", done: true },
-                  { label: "Lead capture on", done: true },
-                  { label: "CRM handoff ready", done: false },
-                ].map((step) => (
-                  <div key={step.label} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="text-white/82">{step.label}</span>
-                    {step.done ? (
-                      <Check className="h-4 w-4 text-[rgba(216,203,255,0.95)]" strokeWidth={2.8} />
-                    ) : (
-                      <CircleDashed className="h-4 w-4 text-white/40" />
-                    )}
+            return (
+              <div
+                key={template?.slug || fallbackTitle}
+                className={[
+                  "overflow-hidden rounded-[22px] border border-[var(--line)] bg-white shadow-[0_12px_28px_-24px_rgba(15,23,42,0.2)]",
+                  index === 1 ? "md:-translate-y-1" : "",
+                ].join(" ")}
+              >
+                <div className="relative aspect-[4/5] bg-[linear-gradient(135deg,#f3efff_0%,#ece7ff_100%)]">
+                  {imageUrl ? (
+                    <Image
+                      src={imageUrl}
+                      alt={template?.name || fallbackTitle}
+                      fill
+                      sizes="(min-width: 768px) 30vw, 100vw"
+                      className="object-contain"
+                    />
+                  ) : null}
+                  <div className="absolute left-3 top-3 rounded-full bg-white/88 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
+                    {kicker}
                   </div>
-                ))}
+                </div>
+                <div className="border-t border-[var(--line)] px-4 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-[var(--ink)]">{template?.name || fallbackTitle}</p>
+                    <span className="rounded-full bg-[var(--soft-brand)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--brand)]">
+                      Ready
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -272,6 +267,12 @@ export default async function CarDetailingIndustryPage() {
   const billingStatus = user ? await getUserBillingStatus(user.id) : null;
   const hasAccess = Boolean(billingStatus?.hasAccess);
   const loggedIn = Boolean(user);
+  const templates = await getTemplates();
+  const heroTemplates = heroTemplateCards.map((item) => ({
+    fallbackTitle: item.fallbackTitle,
+    kicker: item.kicker,
+    template: templates.find((template) => template.slug === item.slug),
+  }));
 
   return (
     <main className="public-site min-h-screen bg-[var(--surface)]">
@@ -314,7 +315,7 @@ export default async function CarDetailingIndustryPage() {
               </p>
             </div>
 
-            <ProductMockup />
+            <HeroTemplateShowcase templates={heroTemplates} />
           </div>
         </div>
       </section>
