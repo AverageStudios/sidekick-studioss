@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
-import type { ReactNode } from "react";
-import { ArrowRight, Check, ChevronRight, CircleDashed, Clock3, Inbox, Layers3, Send, Sparkles } from "lucide-react";
+import { ArrowRight, Check, ChevronRight, Circle, CircleDashed, Inbox, Layers3, Send } from "lucide-react";
 import { MarketingNav } from "@/components/marketing-nav";
 import { PublicSiteFooter } from "@/components/public-site-footer";
 import { StartTrialButton } from "@/components/billing-action-buttons";
@@ -12,128 +10,127 @@ import { getUserBillingStatus } from "@/lib/billing";
 export const metadata: Metadata = {
   title: "Car Detailing Campaigns | SideKick Studioss",
   description:
-    "Launch ready-to-go Facebook and Instagram campaigns for your detailing business, capture new leads, and keep follow-up organized with SideKick.",
+    "Launch ready-to-go Facebook and Instagram campaigns for your detailing business, capture leads, and keep follow-up organized with SideKick.",
 };
 
-const painPoints = [
-  "Your best before-and-afters are buried in old Instagram posts.",
-  "Leads come in while you're polishing, coating, or driving.",
-  "Customers ask \"how much?\" and disappear.",
-  "You forget to follow up because you're busy doing the actual work.",
-  "Your premium services look like random posts instead of a real offer.",
+const problemCards = [
+  {
+    title: "Missed DMs",
+    detail: "Leads come in while you're working.",
+  },
+  {
+    title: "Slow replies",
+    detail: "Price shoppers disappear fast.",
+  },
+  {
+    title: "Buried proof",
+    detail: "Your best work gets lost in the feed.",
+  },
+  {
+    title: "Blank-page ads",
+    detail: "Every campaign starts from scratch.",
+  },
+  {
+    title: "Forgotten follow-up",
+    detail: "Hot leads cool off quietly.",
+  },
+  {
+    title: "Empty days",
+    detail: "The calendar has gaps you feel.",
+  },
 ];
 
-const mechanismCards = [
+const systemCards = [
   {
-    title: "Ready-to-launch detailing campaigns",
-    description:
-      "Start with templates for full details, ceramic coatings, interior details, paint correction, and maintenance plans.",
-    icon: Sparkles,
+    title: "Pick a detailing template",
+    detail: "Full detail, interior, coating, correction, or maintenance.",
+    icon: Layers3,
   },
   {
-    title: "Lead capture built in",
-    description:
-      "Capture name, phone, email, service interest, and vehicle details without building a funnel from scratch.",
-    icon: Inbox,
-  },
-  {
-    title: "Simple follow-up workspace",
-    description: "Track who is new, contacted, booked, won, or lost so leads do not disappear.",
-    icon: Clock3,
-  },
-  {
-    title: "CRM integrations",
-    description: "Send leads to Pipedrive, Zoho CRM, monday CRM, Keap, or Close.",
+    title: "Launch on Meta",
+    detail: "Use ready-to-go Facebook and Instagram campaign flows.",
     icon: Send,
   },
   {
-    title: "Meta campaign launch",
-    description: "Launch Facebook and Instagram lead campaigns without getting buried inside Ads Manager.",
-    icon: Layers3,
+    title: "Track every lead",
+    detail: "See new, contacted, booked, won, and lost leads in one place.",
+    icon: Inbox,
+  },
+];
+
+const templateCards = [
+  {
+    title: "Ceramic Coating Promo",
+    detail: "Position protection packages.",
+    leadType: "Higher-ticket inquiries",
+  },
+  {
+    title: "Full Detail Promo",
+    detail: "Fill the calendar fast.",
+    leadType: "General detailing jobs",
+  },
+  {
+    title: "Interior Detail Promo",
+    detail: "Great for dirty interiors.",
+    leadType: "Family cars and odor jobs",
+  },
+  {
+    title: "Paint Correction Promo",
+    detail: "Turn transformations into leads.",
+    leadType: "Premium correction work",
+  },
+  {
+    title: "Monthly Maintenance Promo",
+    detail: "Stay in front of past clients.",
+    leadType: "Repeat-service inquiries",
   },
 ];
 
 const beforeItems = [
-  "Random Instagram posts",
-  "Leads spread across DMs, texts, and forms",
-  "Forgetting who followed up",
-  "Starting ads from scratch",
-  "Looking like every other detailer",
+  "Random posts",
+  "Missed DMs",
+  "Messy follow-up",
+  "Starting from scratch",
 ];
 
 const afterItems = [
-  "Clear campaign offers",
-  "Leads organized in one workspace",
-  "Status tracking for every lead",
-  "Ready-to-launch templates",
-  "Cleaner, more premium presentation",
-];
-
-const campaignCards = [
-  {
-    title: "Full Detail Promo",
-    description: "Fill the calendar with general detailing jobs.",
-  },
-  {
-    title: "Interior Detail Promo",
-    description: "Great for dirty interiors, family cars, pet hair, spills, and odor removal.",
-  },
-  {
-    title: "Ceramic Coating Promo",
-    description: "Position higher-ticket protection packages.",
-  },
-  {
-    title: "Paint Correction Promo",
-    description: "Turn transformation shots into premium leads.",
-  },
-  {
-    title: "Monthly Maintenance Promo",
-    description: "Turn one-time customers into repeat clients.",
-  },
+  "Campaign templates",
+  "Captured leads",
+  "Clear statuses",
+  "CRM handoff",
 ];
 
 const pricingFeatures = [
   "Unlimited workspaces",
-  "Ready-to-launch Meta campaign templates",
-  "Car detailing campaign templates",
-  "Facebook and Instagram campaign launch",
+  "Detailing campaign templates",
+  "Meta campaign launch flow",
   "Lead capture workspace",
   "Lead status tracking",
-  "Follow-up tools",
   "Email alerts",
   "CSV export",
   "CRM integrations",
-  "Cancel anytime",
 ];
 
 const faqs = [
   {
     question: "Do I need to know Facebook Ads?",
-    answer:
-      "No. SideKick gives you ready-to-launch campaign templates so you are not starting from a blank Ads Manager screen.",
-  },
-  {
-    question: "Is this only for car detailers?",
-    answer:
-      "SideKick works for small businesses, but this page is built specifically for detailers using detailing-focused templates.",
-  },
-  {
-    question: "Does SideKick do the marketing for me?",
-    answer:
-      "SideKick gives you the software, templates, lead capture, and follow-up workspace. You still control your business, offers, ad spend, and customer conversations.",
+    answer: "No. SideKick gives you ready-to-launch campaign flows so you are not starting from a blank Ads Manager screen.",
   },
   {
     question: "Does this include ad spend?",
-    answer: "No. Your SideKick subscription is $97/month. Meta ad spend is paid separately to Meta.",
+    answer: "No. Meta ad spend is separate from your SideKick subscription.",
   },
   {
     question: "Can I cancel?",
-    answer: "Yes. You can cancel anytime from your billing settings.",
+    answer: "Yes. You can cancel anytime from billing settings.",
   },
   {
-    question: "What happens after the free trial?",
-    answer:
-      "After 14 days, your subscription continues at $97/month unless you cancel before the trial ends.",
+    question: "Is this only for detailers?",
+    answer: "SideKick works for small businesses, but this page is built specifically for detailing campaigns.",
+  },
+  {
+    question: "What happens after the trial?",
+    answer: "After 14 days, the subscription continues at $97/month unless you cancel before it ends.",
   },
 ];
 
@@ -168,11 +165,105 @@ function PrimaryCta({
   );
 }
 
-function SectionLabel({ children }: { children: ReactNode }) {
+function TemplatesCta({ hasAccess }: { hasAccess: boolean }) {
   return (
-    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[rgba(233,238,255,0.58)]">
-      {children}
-    </p>
+    <Link
+      href={hasAccess ? "/templates" : "/product/templates"}
+      className="site-cta-secondary inline-flex justify-center"
+    >
+      View detailing templates
+    </Link>
+  );
+}
+
+function SectionEyebrow({ children }: { children: React.ReactNode }) {
+  return <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-ink)]">{children}</p>;
+}
+
+function ProductMockup() {
+  return (
+    <div className="rounded-[32px] border border-[rgba(109,94,248,0.14)] bg-white p-3 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.32)] sm:p-4">
+      <div className="overflow-hidden rounded-[24px] border border-[var(--line)] bg-[linear-gradient(180deg,#fcfbff_0%,#f5f2ff_100%)]">
+        <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3 sm:px-5">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-ink)]">Campaign</p>
+            <p className="mt-1 text-sm font-semibold text-[var(--ink)] sm:text-base">Ceramic Coating Promo</p>
+          </div>
+          <span className="rounded-full bg-[var(--soft-brand)] px-3 py-1 text-xs font-semibold text-[var(--brand)]">
+            Ready to launch
+          </span>
+        </div>
+
+        <div className="grid gap-3 p-4 sm:grid-cols-[1.1fr_0.9fr] sm:p-5">
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[20px] border border-[var(--line)] bg-white p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted)]">Leads captured</p>
+                <p className="mt-2 text-3xl font-semibold tracking-[-0.05em] text-[var(--ink)]">18</p>
+              </div>
+              <div className="rounded-[20px] border border-[var(--line)] bg-white p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted)]">CRM</p>
+                <p className="mt-2 text-base font-semibold text-[var(--ink)]">Pipedrive connected</p>
+              </div>
+            </div>
+
+            <div className="rounded-[20px] border border-[var(--line)] bg-white p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted)]">New lead</p>
+              <p className="mt-2 text-base font-semibold text-[var(--ink)]">2022 BMW M4 - Ceramic Coating</p>
+              <p className="mt-1 text-sm text-[var(--muted-strong)]">Service interest captured and ready for follow-up.</p>
+            </div>
+
+            <div className="rounded-[20px] border border-[var(--line)] bg-white p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted)]">Lead status</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {["New", "Contacted", "Booked"].map((item, index) => (
+                  <span
+                    key={item}
+                    className={[
+                      "rounded-full px-3 py-1 text-xs font-semibold",
+                      index === 0
+                        ? "bg-[var(--brand)] text-white"
+                        : "border border-[var(--line)] bg-[var(--soft-panel)] text-[var(--muted-strong)]",
+                    ].join(" ")}
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-[var(--line)] bg-[#151228] p-4 text-white">
+            <div className="flex items-center justify-between">
+              <p className="text-xs uppercase tracking-[0.16em] text-white/55">Workspace</p>
+              <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-white/75">
+                Meta ready
+              </span>
+            </div>
+            <div className="mt-4 rounded-[18px] border border-white/10 bg-white/5 p-4">
+              <p className="text-sm font-semibold">Campaign flow</p>
+              <div className="mt-4 space-y-3">
+                {[
+                  { label: "Template selected", done: true },
+                  { label: "Creative ready", done: true },
+                  { label: "Lead capture on", done: true },
+                  { label: "CRM handoff ready", done: false },
+                ].map((step) => (
+                  <div key={step.label} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="text-white/82">{step.label}</span>
+                    {step.done ? (
+                      <Check className="h-4 w-4 text-[rgba(216,203,255,0.95)]" strokeWidth={2.8} />
+                    ) : (
+                      <CircleDashed className="h-4 w-4 text-white/40" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -183,179 +274,97 @@ export default async function CarDetailingIndustryPage() {
   const loggedIn = Boolean(user);
 
   return (
-    <main className="public-site min-h-screen bg-[#09111f] text-white">
+    <main className="public-site min-h-screen bg-[var(--surface)]">
       <MarketingNav />
 
-      <section className="relative overflow-hidden border-b border-white/8 bg-[radial-gradient(circle_at_top,rgba(87,162,255,0.18),transparent_30%),linear-gradient(180deg,#09111f_0%,#0d1526_52%,#11182c_100%)] pb-18 pt-32 sm:pb-24 sm:pt-40">
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:64px_64px] opacity-20" />
-        <div className="site-container relative">
-          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[13px] text-white/50">
-            <Link href="/product/templates" className="transition-colors hover:text-white">
+      <section className="border-b border-[rgba(109,94,248,0.1)] bg-[linear-gradient(180deg,#faf8ff_0%,#f4f1fb_100%)] pb-18 pt-32 sm:pb-22 sm:pt-40">
+        <div className="site-container">
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[13px] text-[var(--muted)]">
+            <Link href="/product/templates" className="transition-colors hover:text-[var(--ink)]">
               Templates
             </Link>
             <ChevronRight className="h-3 w-3" />
-            <span className="text-white/72">Car Detailing</span>
+            <span className="text-[var(--muted-strong)]">Car Detailing</span>
           </nav>
 
-          <div className="mt-8 grid items-center gap-12 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
-            <div className="max-w-2xl">
-              <p className="inline-flex rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#9dc2ff]">
-                Built for car detailers
+          <div className="mt-8 grid items-center gap-12 lg:grid-cols-[0.88fr_1.12fr]">
+            <div className="max-w-xl">
+              <p className="inline-flex rounded-full bg-[var(--soft-brand)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-ink)]">
+                For car detailers
               </p>
-              <h1 className="mt-6 text-[clamp(2.7rem,1.8rem+3.6vw,5.3rem)] font-semibold tracking-[-0.07em] text-white">
-                Your detailing work looks premium. Your marketing should too.
+              <h1 className="mt-5 text-[clamp(2.6rem,1.8rem+3vw,4.7rem)] font-semibold tracking-[-0.07em] text-[var(--ink)]">
+                Turn detailing leads into booked jobs.
               </h1>
-              <p className="mt-6 max-w-xl text-lg leading-8 text-[rgba(233,238,255,0.78)]">
-                SideKick helps car detailers launch ready-to-go Facebook and Instagram campaigns, capture new leads, and keep follow-up organized so more local customers turn into booked jobs.
+              <p className="mt-5 max-w-lg text-lg leading-8 text-[var(--muted-strong)]">
+                Launch ready-to-go Facebook and Instagram campaigns, capture leads, and keep follow-up organized from one clean workspace.
               </p>
 
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <PrimaryCta
                   loggedIn={loggedIn}
                   hasAccess={hasAccess}
-                  label="Launch my first detailing campaign"
-                  className="site-cta-primary inline-flex min-w-[260px] justify-center bg-white !text-[#0d1526] shadow-[0_18px_45px_-18px_rgba(120,183,255,0.55)]"
+                  label="Start 14-day trial"
+                  className="site-cta-primary inline-flex justify-center"
                 />
-                <Link href="#how-it-works" className="site-cta-secondary inline-flex justify-center border-white/12 bg-white/5 text-white hover:bg-white/10">
-                  See how it works
-                </Link>
+                <TemplatesCta hasAccess={hasAccess} />
               </div>
 
-              <p className="mt-4 text-sm text-[rgba(233,238,255,0.58)]">
-                14-day free trial. $97/month after trial. Ad spend paid separately to Meta.
+              <p className="mt-4 text-sm text-[var(--muted)]">
+                $97/month after trial. Ad spend paid separately to Meta.
               </p>
             </div>
 
-            <div className="relative">
-              <div className="absolute -inset-3 rounded-[32px] bg-[radial-gradient(circle_at_top,rgba(118,195,255,0.24),transparent_55%)] blur-2xl" />
-              <div className="relative grid gap-4 rounded-[32px] border border-white/10 bg-[rgba(10,16,29,0.84)] p-4 shadow-[0_40px_90px_-28px_rgba(0,0,0,0.65)] backdrop-blur-xl sm:p-5">
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-[24px] border border-rose-400/20 bg-[linear-gradient(180deg,rgba(49,14,21,0.9),rgba(25,10,16,0.98))] p-5">
-                    <SectionLabel>Messy lead flow</SectionLabel>
-                    <div className="mt-4 space-y-3">
-                      {[
-                        "Missed DM",
-                        "Lead from Facebook",
-                        "Forgot to follow up",
-                        "Empty Tuesday",
-                      ].map((item) => (
-                        <div
-                          key={item}
-                          className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/4 px-4 py-3 text-sm text-white/82"
-                        >
-                          <span>{item}</span>
-                          <CircleDashed className="h-4 w-4 text-rose-300/70" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="rounded-[24px] border border-sky-300/20 bg-[linear-gradient(180deg,rgba(14,32,52,0.92),rgba(7,20,33,0.98))] p-5">
-                    <SectionLabel>SideKick workflow</SectionLabel>
-                    <div className="mt-4 space-y-3">
-                      {[
-                        "New lead captured",
-                        "Campaign launched",
-                        "Follow-up ready",
-                        "Lead sent to CRM",
-                      ].map((item) => (
-                        <div
-                          key={item}
-                          className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-white/88"
-                        >
-                          <span>{item}</span>
-                          <Check className="h-4 w-4 text-[#9dd8ff]" strokeWidth={2.8} />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="overflow-hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))]">
-                  <div className="flex items-center justify-between border-b border-white/8 px-4 py-3 text-xs uppercase tracking-[0.18em] text-white/42">
-                    <span>SideKick preview</span>
-                    <span>Detailing campaign workspace</span>
-                  </div>
-                  <Image
-                    src="/Ui-preview.webp"
-                    alt="SideKick product workspace preview"
-                    width={1440}
-                    height={900}
-                    className="h-auto w-full"
-                    priority
-                  />
-                </div>
-              </div>
-            </div>
+            <ProductMockup />
           </div>
         </div>
       </section>
 
-      <section className="bg-[#f5f3ef] py-18 text-[#111827] sm:py-24">
+      <section className="bg-white py-18 sm:py-22">
         <div className="site-container">
-          <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
-            <div className="max-w-3xl">
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#5f6f8e]">The pain</p>
-              <h2 className="mt-4 text-[clamp(2rem,1.5rem+2vw,3.3rem)] font-semibold tracking-[-0.06em] text-[#101828]">
-                The job usually gets lost before they ever see your work.
-              </h2>
-              <p className="mt-6 text-lg leading-8 text-[#4b5563]">
-                Most detailers think they need better work to get more bookings. They don&rsquo;t. They need customers to trust them faster.
-              </p>
-              <p className="mt-5 text-lg leading-8 text-[#4b5563]">
-                A customer sees your ad, checks your photos, compares your business to three other detailers, and decides who looks the most professional before they ever call. If your proof is scattered, your offer is unclear, or your reply comes too late, the job goes to someone else.
-              </p>
-              <p className="mt-6 text-lg font-semibold tracking-[-0.02em] text-[#101828]">
-                That is the leak SideKick is built to fix.
-              </p>
-            </div>
-
-            <div className="rounded-[28px] border border-[#d8dce5] bg-white p-6 shadow-[0_22px_55px_-30px_rgba(15,23,42,0.25)]">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#6b7280]">Where bookings leak</p>
-              <div className="mt-5 space-y-3">
-                {painPoints.map((item) => (
-                  <div key={item} className="rounded-2xl border border-[#eceef4] bg-[#fbfbfd] px-4 py-3 text-sm leading-6 text-[#344054]">
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="how-it-works" className="bg-white py-18 text-[#111827] sm:py-24">
-        <div className="site-container">
-          <div className="mx-auto max-w-3xl text-center">
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#5f6f8e]">Mechanism</p>
-            <h2 className="mt-4 text-[clamp(2rem,1.5rem+2vw,3.1rem)] font-semibold tracking-[-0.06em] text-[#101828]">
-              SideKick turns your proof into a campaign system.
+          <div className="max-w-2xl">
+            <SectionEyebrow>Problem snapshot</SectionEyebrow>
+            <h2 className="mt-3 text-[clamp(2rem,1.6rem+1.8vw,3rem)] font-semibold tracking-[-0.06em] text-[var(--ink)]">
+              Most detailers lose leads in the gaps.
             </h2>
-            <p className="mt-5 text-lg leading-8 text-[#4b5563]">
-              Instead of starting from a blank page, SideKick gives detailers ready-to-launch campaign templates built around the services customers already understand.
-            </p>
           </div>
 
-          <div className="mt-12 grid gap-4 lg:grid-cols-3">
-            {mechanismCards.map((card, index) => {
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {problemCards.map((card) => (
+              <div
+                key={card.title}
+                className="rounded-[24px] border border-[var(--line)] bg-[linear-gradient(180deg,#ffffff_0%,#fbfaff_100%)] p-5 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.18)]"
+              >
+                <p className="text-lg font-semibold tracking-[-0.03em] text-[var(--ink)]">{card.title}</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">{card.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-[var(--background)] py-18 sm:py-22">
+        <div className="site-container">
+          <div className="max-w-2xl">
+            <SectionEyebrow>How it works</SectionEyebrow>
+            <h2 className="mt-3 text-[clamp(2rem,1.6rem+1.8vw,3rem)] font-semibold tracking-[-0.06em] text-[var(--ink)]">
+              SideKick gives your shop a campaign system.
+            </h2>
+          </div>
+
+          <div className="mt-10 grid gap-4 lg:grid-cols-3">
+            {systemCards.map((card) => {
               const Icon = card.icon;
-              const wide = index === mechanismCards.length - 1;
 
               return (
                 <div
                   key={card.title}
-                  className={[
-                    "rounded-[28px] border border-[#e8ebf2] bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-6 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.22)]",
-                    wide ? "lg:col-span-3 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:items-center lg:gap-8" : "",
-                  ].join(" ")}
+                  className="rounded-[28px] border border-[rgba(109,94,248,0.1)] bg-white p-6 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.22)]"
                 >
-                  <div>
-                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eaf4ff] text-[#2e74b5]">
-                      <Icon className="h-5 w-5" />
-                    </span>
-                    <h3 className="mt-5 text-xl font-semibold tracking-[-0.03em] text-[#101828]">{card.title}</h3>
-                  </div>
-                  <p className="mt-3 text-base leading-7 text-[#4b5563] lg:mt-0">{card.description}</p>
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--soft-brand)] text-[var(--brand)]">
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <h3 className="mt-5 text-xl font-semibold tracking-[-0.03em] text-[var(--ink)]">{card.title}</h3>
+                  <p className="mt-3 text-base leading-7 text-[var(--muted-strong)]">{card.detail}</p>
                 </div>
               );
             })}
@@ -363,100 +372,108 @@ export default async function CarDetailingIndustryPage() {
         </div>
       </section>
 
-      <section className="bg-[#eef3f8] py-18 text-[#111827] sm:py-24">
-        <div className="site-container">
-          <div className="mx-auto max-w-3xl text-center">
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#5f6f8e]">Before and after</p>
-            <h2 className="mt-4 text-[clamp(2rem,1.5rem+2vw,3.1rem)] font-semibold tracking-[-0.06em] text-[#101828]">
-              Before SideKick vs. after SideKick
-            </h2>
-          </div>
-
-          <div className="mx-auto mt-12 grid max-w-5xl gap-5 lg:grid-cols-2">
-            <div className="rounded-[30px] border border-[#d9dee9] bg-[#fbfcfe] p-7">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7b8798]">Before</p>
-              <div className="mt-5 space-y-3">
-                {beforeItems.map((item) => (
-                  <div key={item} className="rounded-2xl border border-[#eaedf4] bg-white px-4 py-3 text-sm text-[#475467]">
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-[30px] border border-[#b8d7f0] bg-[linear-gradient(180deg,#0f1727_0%,#13223a_100%)] p-7 text-white shadow-[0_30px_70px_-36px_rgba(7,16,32,0.72)]">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#a9d5ff]">After</p>
-              <div className="mt-5 space-y-3">
-                {afterItems.map((item) => (
-                  <div key={item} className="rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm text-white/84">
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <p className="mx-auto mt-8 max-w-3xl text-center text-lg leading-8 text-[#344054]">
-            Your detailing already looks professional. SideKick helps the business around it look professional too.
-          </p>
-        </div>
-      </section>
-
-      <section className="bg-[#0f1727] py-18 text-white sm:py-24">
+      <section className="bg-white py-18 sm:py-22">
         <div className="site-container">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
             <div className="max-w-2xl">
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#8ebeff]">Campaign library</p>
-              <h2 className="mt-4 text-[clamp(2rem,1.5rem+2vw,3.1rem)] font-semibold tracking-[-0.06em]">
-                Start with the detailing campaigns that already make sense.
+              <SectionEyebrow>Template showcase</SectionEyebrow>
+              <h2 className="mt-3 text-[clamp(2rem,1.6rem+1.8vw,3rem)] font-semibold tracking-[-0.06em] text-[var(--ink)]">
+                Detailing campaigns ready from day one.
               </h2>
             </div>
-            <PrimaryCta
-              loggedIn={loggedIn}
-              hasAccess={hasAccess}
-              label="Launch my first detailing campaign"
-              className="site-cta-primary inline-flex justify-center bg-white !text-[#0f1727]"
-            />
+            <TemplatesCta hasAccess={hasAccess} />
           </div>
 
-          <div className="mt-12 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            {campaignCards.map((card) => (
+          <div className="mt-10 grid gap-4 lg:grid-cols-6">
+            {templateCards.map((card, index) => (
               <div
                 key={card.title}
-                className="rounded-[26px] border border-white/10 bg-white/5 p-5 shadow-[0_18px_40px_-30px_rgba(0,0,0,0.55)]"
+                className={[
+                  "rounded-[28px] border border-[var(--line)] bg-[linear-gradient(180deg,#ffffff_0%,#faf8ff_100%)] p-5 shadow-[0_14px_35px_-28px_rgba(15,23,42,0.18)]",
+                  index === 0 || index === 3 ? "lg:col-span-3" : "lg:col-span-2",
+                ].join(" ")}
               >
-                <p className="text-lg font-semibold tracking-[-0.03em] text-white">{card.title}</p>
-                <p className="mt-3 text-sm leading-6 text-[rgba(233,238,255,0.7)]">{card.description}</p>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-lg font-semibold tracking-[-0.03em] text-[var(--ink)]">{card.title}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">{card.detail}</p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-[var(--soft-brand)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--brand)]">
+                    Ready to launch
+                  </span>
+                </div>
+
+                <div className="mt-5 rounded-[20px] border border-[rgba(109,94,248,0.08)] bg-white px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Lead type</p>
+                  <p className="mt-1 text-sm font-medium text-[var(--ink)]">{card.leadType}</p>
+                </div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="bg-white py-18 text-[#111827] sm:py-24">
+      <section className="bg-[var(--background)] py-18 sm:py-22">
         <div className="site-container">
-          <div className="mx-auto max-w-3xl text-center">
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#5f6f8e]">Pricing</p>
-            <h2 className="mt-4 text-[clamp(2rem,1.5rem+2vw,3.1rem)] font-semibold tracking-[-0.06em] text-[#101828]">
-              Launch your first detailing campaign for less than one missed detail job.
+          <div className="max-w-2xl">
+            <SectionEyebrow>Before / after</SectionEyebrow>
+            <h2 className="mt-3 text-[clamp(2rem,1.6rem+1.8vw,3rem)] font-semibold tracking-[-0.06em] text-[var(--ink)]">
+              Before SideKick / After SideKick
             </h2>
           </div>
 
-          <div className="mx-auto mt-12 max-w-2xl rounded-[34px] border border-[#dfe5ef] bg-[linear-gradient(180deg,#ffffff_0%,#f7fbff_100%)] p-8 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.3)] sm:p-10">
+          <div className="mt-10 grid gap-5 lg:grid-cols-2">
+            <div className="rounded-[30px] border border-[var(--line)] bg-white p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">Before</p>
+              <div className="mt-5 space-y-3">
+                {beforeItems.map((item) => (
+                  <div key={item} className="flex items-center gap-3 rounded-2xl border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-3">
+                    <Circle className="h-3.5 w-3.5 text-[var(--muted)] fill-current" />
+                    <span className="text-sm font-medium text-[var(--muted-strong)]">{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-[30px] border border-[rgba(109,94,248,0.16)] bg-[linear-gradient(180deg,#17132d_0%,#211741_100%)] p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[rgba(221,212,255,0.9)]">After</p>
+              <div className="mt-5 space-y-3">
+                {afterItems.map((item) => (
+                  <div key={item} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/6 px-4 py-3">
+                    <Check className="h-4 w-4 text-[rgba(216,203,255,0.95)]" strokeWidth={2.8} />
+                    <span className="text-sm font-medium text-white/86">{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white py-18 sm:py-22">
+        <div className="site-container">
+          <div className="mx-auto max-w-3xl text-center">
+            <SectionEyebrow>Pricing</SectionEyebrow>
+            <h2 className="mt-3 text-[clamp(2rem,1.6rem+1.8vw,3rem)] font-semibold tracking-[-0.06em] text-[var(--ink)]">
+              Less than one missed detail job.
+            </h2>
+          </div>
+
+          <div className="mx-auto mt-10 max-w-2xl rounded-[34px] border border-[rgba(109,94,248,0.14)] bg-[linear-gradient(180deg,#ffffff_0%,#faf8ff_100%)] p-8 shadow-[0_26px_70px_-40px_rgba(15,23,42,0.28)] sm:p-10">
             <div className="text-center">
-              <p className="text-sm font-semibold text-[#2e74b5]">SideKick Core</p>
-              <p className="mt-4 font-heading text-6xl font-semibold tracking-[-0.05em] text-[#101828]">
+              <p className="text-sm font-semibold text-[var(--public-accent-strong)]">SideKick Core</p>
+              <p className="mt-4 text-6xl font-semibold tracking-[-0.05em] text-[var(--ink)]">
                 $97
-                <span className="ml-2 text-lg font-medium tracking-normal text-[#667085]">/month</span>
+                <span className="ml-2 text-lg font-medium tracking-normal text-[var(--muted)]">/month</span>
               </p>
-              <p className="mt-3 text-base text-[#475467]">14-day free trial</p>
+              <p className="mt-3 text-base text-[var(--muted-strong)]">14-day free trial</p>
             </div>
 
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               {pricingFeatures.map((item) => (
-                <div key={item} className="flex items-start gap-3 rounded-2xl border border-[#edf0f5] bg-white px-4 py-3 text-sm text-[#344054]">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#eaf4ff]">
-                    <Check className="h-3 w-3 text-[#2e74b5]" strokeWidth={3} />
+                <div key={item} className="flex items-start gap-3 rounded-2xl border border-[rgba(109,94,248,0.08)] bg-white px-4 py-3 text-sm text-[var(--muted-strong)]">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--soft-brand)]">
+                    <Check className="h-3 w-3 text-[var(--public-accent-strong)]" strokeWidth={3} />
                   </span>
                   {item}
                 </div>
@@ -467,83 +484,34 @@ export default async function CarDetailingIndustryPage() {
               <PrimaryCta
                 loggedIn={loggedIn}
                 hasAccess={hasAccess}
-                label="Start my 14-day trial"
+                label="Start 14-day trial"
                 className="site-cta-primary inline-flex w-full justify-center"
               />
             </div>
 
-            <p className="mt-4 text-center text-sm leading-6 text-[#667085]">
-              Ad spend is paid separately to Meta. Payment method required. You will not be charged until your trial ends.
+            <p className="mt-4 text-center text-sm leading-6 text-[var(--muted)]">
+              Payment method required. You won&apos;t be charged until your trial ends. Ad spend is paid separately to Meta.
             </p>
           </div>
         </div>
       </section>
 
-      <section className="bg-[#f5f3ef] py-18 text-[#111827] sm:py-24">
+      <section className="bg-[linear-gradient(180deg,#16122d_0%,#1c1637_100%)] py-18 text-white sm:py-22">
         <div className="site-container">
           <div className="mx-auto max-w-3xl text-center">
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#5f6f8e]">Objection</p>
-            <h2 className="mt-4 text-[clamp(2rem,1.5rem+2vw,3rem)] font-semibold tracking-[-0.06em] text-[#101828]">
-              Can&rsquo;t I just run ads myself?
-            </h2>
-            <p className="mt-6 text-lg leading-8 text-[#4b5563]">
-              Yes. You can. But most detailers do not lose because they cannot click buttons inside Ads Manager. They lose because the offer is unclear, the proof is not organized, the leads come in while they are working, and the follow-up gets messy.
-            </p>
-            <p className="mt-6 text-lg font-semibold tracking-[-0.03em] text-[#101828]">
-              SideKick is not here to replace your skill. It is here to make sure your skill turns into booked jobs.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="bg-[#0a1220] py-18 text-white sm:py-24">
-        <div className="site-container">
-          <div className="mx-auto max-w-3xl text-center">
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#8ebeff]">FAQ</p>
-            <h2 className="mt-4 text-[clamp(2rem,1.5rem+2vw,3rem)] font-semibold tracking-[-0.06em]">
-              Questions detailers ask before they launch.
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[rgba(221,212,255,0.9)]">FAQ</p>
+            <h2 className="mt-3 text-[clamp(2rem,1.6rem+1.8vw,3rem)] font-semibold tracking-[-0.06em]">
+              Short answers before you launch.
             </h2>
           </div>
 
-          <div className="mx-auto mt-12 max-w-4xl space-y-4">
+          <div className="mx-auto mt-10 grid max-w-4xl gap-4 md:grid-cols-2">
             {faqs.map((faq) => (
-              <details
-                key={faq.question}
-                className="group rounded-[24px] border border-white/10 bg-white/5 px-5 py-4 open:bg-white/7"
-              >
-                <summary className="cursor-pointer list-none text-left text-lg font-medium tracking-[-0.02em] text-white">
-                  <span className="flex items-center justify-between gap-4">
-                    <span>{faq.question}</span>
-                    <span className="text-[#8ebeff] transition group-open:rotate-45">+</span>
-                  </span>
-                </summary>
-                <p className="mt-3 max-w-3xl text-base leading-7 text-[rgba(233,238,255,0.72)]">{faq.answer}</p>
-              </details>
+              <div key={faq.question} className="rounded-[24px] border border-white/10 bg-white/5 px-5 py-4">
+                <p className="text-base font-semibold tracking-[-0.02em] text-white">{faq.question}</p>
+                <p className="mt-2 text-sm leading-6 text-white/72">{faq.answer}</p>
+              </div>
             ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="border-t border-white/8 bg-[linear-gradient(180deg,#0a1220_0%,#0c1424_100%)] py-18 text-white sm:py-24">
-        <div className="site-container">
-          <div className="mx-auto max-w-4xl rounded-[32px] border border-white/10 bg-white/6 px-6 py-8 text-center shadow-[0_24px_70px_-40px_rgba(0,0,0,0.65)] sm:px-10 sm:py-12">
-            <h2 className="text-[clamp(2rem,1.5rem+2vw,3rem)] font-semibold tracking-[-0.06em]">
-              The detailing looks premium already. Let the pipeline match it.
-            </h2>
-            <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-[rgba(233,238,255,0.72)]">
-              Launch a detailing-focused campaign, capture leads in one workspace, and keep follow-up organized before another good job slips away.
-            </p>
-            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-              <PrimaryCta
-                loggedIn={loggedIn}
-                hasAccess={hasAccess}
-                label="Launch my first detailing campaign"
-                className="site-cta-primary inline-flex justify-center bg-white !text-[#0c1424]"
-              />
-              <Link href="/product/templates" className="site-cta-secondary inline-flex justify-center border-white/12 bg-white/5 text-white hover:bg-white/10">
-                Browse templates
-              </Link>
-            </div>
           </div>
         </div>
       </section>
