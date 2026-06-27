@@ -201,61 +201,84 @@ function SectionEyebrow({ children }: { children: React.ReactNode }) {
   return <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-ink)]">{children}</p>;
 }
 
-function HeroTemplateShowcase({
-  templates,
-}: {
-  templates: Array<{ template?: TemplateSeed; fallbackTitle: string; kicker: string }>;
-}) {
+function HeroMetricsShowcase() {
   return (
     <div className="mx-auto w-full max-w-[760px] rounded-[32px] border border-[rgba(109,94,248,0.14)] bg-white p-3 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.32)] sm:p-4">
       <div className="overflow-hidden rounded-[24px] border border-[var(--line)] bg-[linear-gradient(180deg,#fcfbff_0%,#f5f2ff_100%)]">
         <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3 sm:px-5">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-ink)]">Detailing templates</p>
-            <p className="mt-1 text-sm font-semibold text-[var(--ink)] sm:text-base">Ready-to-launch campaign library</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-ink)]">Performance snapshot</p>
+            <p className="mt-1 text-sm font-semibold text-[var(--ink)] sm:text-base">Three numbers worth watching</p>
           </div>
           <span className="rounded-full bg-[var(--soft-brand)] px-3 py-1 text-xs font-semibold text-[var(--brand)]">
-            3 featured
+            Live view
           </span>
         </div>
 
         <div className="grid gap-4 p-4 md:grid-cols-3 md:p-5">
-          {templates.map(({ template, fallbackTitle, kicker }, index) => {
-            const imageUrl = template?.creativeAssets?.imageUrls?.[0] || template?.previewImage || null;
-
-            return (
-              <div
-                key={template?.slug || fallbackTitle}
-                className={[
-                  "overflow-hidden rounded-[22px] border border-[var(--line)] bg-white shadow-[0_12px_28px_-24px_rgba(15,23,42,0.2)]",
-                  index === 1 ? "md:-translate-y-1" : "",
-                ].join(" ")}
-              >
-                <div className="relative aspect-[4/5] bg-[linear-gradient(135deg,#f3efff_0%,#ece7ff_100%)]">
-                  {imageUrl ? (
-                    <Image
-                      src={imageUrl}
-                      alt={template?.name || fallbackTitle}
-                      fill
-                      sizes="(min-width: 768px) 30vw, 100vw"
-                      className="object-contain"
-                    />
-                  ) : null}
-                  <div className="absolute left-3 top-3 rounded-full bg-white/88 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
-                    {kicker}
-                  </div>
-                </div>
-                <div className="border-t border-[var(--line)] px-4 py-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-[var(--ink)]">{template?.name || fallbackTitle}</p>
-                    <span className="rounded-full bg-[var(--soft-brand)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--brand)]">
-                      Ready
-                    </span>
-                  </div>
-                </div>
+          {productMetrics.map((metric) => (
+            <div
+              key={metric.label}
+              className="rounded-[22px] border border-[var(--line)] bg-white px-5 py-6 text-center shadow-[0_12px_28px_-24px_rgba(15,23,42,0.2)]"
+            >
+              <div className="flex items-center justify-center gap-2">
+                {metric.direction === "up" ? (
+                  <TrendingUp className="h-4 w-4 text-emerald-600" />
+                ) : (
+                  <TrendingDown className="h-4 w-4 text-emerald-600" />
+                )}
+                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
+                  {metric.trend}
+                </span>
               </div>
-            );
-          })}
+              <p className="mt-4 text-5xl font-semibold tracking-[-0.07em] text-[var(--ink)]">
+                <AnimatedNumber to={metric.value} prefix={metric.prefix || ""} duration={0.85} />
+              </p>
+              <p className="mt-2 text-sm font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
+                {metric.label}
+              </p>
+              <p className="mt-3 text-sm leading-6 text-[var(--muted-strong)]">{metric.detail}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TemplateShowcaseCard({
+  template,
+  fallbackTitle,
+  kicker,
+}: {
+  template?: TemplateSeed;
+  fallbackTitle: string;
+  kicker: string;
+}) {
+  const imageUrl = template?.creativeAssets?.imageUrls?.[0] || template?.previewImage || null;
+
+  return (
+    <div className="overflow-hidden rounded-[22px] border border-[var(--line)] bg-white shadow-[0_12px_28px_-24px_rgba(15,23,42,0.2)]">
+      <div className="relative aspect-[4/5] bg-[linear-gradient(135deg,#f3efff_0%,#ece7ff_100%)]">
+        {imageUrl ? (
+          <Image
+            src={imageUrl}
+            alt={template?.name || fallbackTitle}
+            fill
+            sizes="(min-width: 768px) 30vw, 100vw"
+            className="object-contain"
+          />
+        ) : null}
+        <div className="absolute left-3 top-3 rounded-full bg-white/88 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
+          {kicker}
+        </div>
+      </div>
+      <div className="border-t border-[var(--line)] px-4 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-[var(--ink)]">{template?.name || fallbackTitle}</p>
+          <span className="rounded-full bg-[var(--soft-brand)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--brand)]">
+            Ready
+          </span>
         </div>
       </div>
     </div>
@@ -315,7 +338,7 @@ export default async function CarDetailingIndustryPage() {
               </p>
             </div>
 
-            <HeroTemplateShowcase templates={heroTemplates} />
+            <HeroMetricsShowcase />
           </div>
         </div>
       </section>
@@ -376,9 +399,9 @@ export default async function CarDetailingIndustryPage() {
       <section className="bg-white py-16 sm:py-20">
         <div className="site-container">
           <div className="mx-auto max-w-2xl text-center">
-            <SectionEyebrow>At a glance</SectionEyebrow>
+            <SectionEyebrow>Template showcase</SectionEyebrow>
             <h2 className="mt-3 text-[clamp(2rem,1.6rem+1.8vw,3rem)] font-semibold tracking-[-0.06em] text-[var(--ink)]">
-              A cleaner read on what is working.
+              Three detailing campaigns, presented the right way.
             </h2>
           </div>
           <div className="mt-6 flex justify-center">
@@ -386,29 +409,13 @@ export default async function CarDetailingIndustryPage() {
           </div>
 
           <div className="mx-auto mt-10 grid max-w-5xl gap-4 lg:grid-cols-3">
-            {productMetrics.map((metric) => (
-              <div
-                key={metric.label}
-                className="rounded-[28px] border border-[var(--line)] bg-[linear-gradient(180deg,#ffffff_0%,#faf8ff_100%)] px-6 py-7 text-center shadow-[0_14px_35px_-28px_rgba(15,23,42,0.18)]"
-              >
-                <div className="flex items-center justify-center gap-2">
-                  {metric.direction === "up" ? (
-                    <TrendingUp className="h-4 w-4 text-emerald-600" />
-                  ) : (
-                    <TrendingDown className="h-4 w-4 text-emerald-600" />
-                  )}
-                  <span className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
-                    {metric.trend}
-                  </span>
-                </div>
-                <p className="mt-4 text-5xl font-semibold tracking-[-0.07em] text-[var(--ink)]">
-                  <AnimatedNumber to={metric.value} prefix={metric.prefix || ""} duration={0.85} />
-                </p>
-                <p className="mt-2 text-sm font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
-                  {metric.label}
-                </p>
-                <p className="mt-3 text-sm leading-6 text-[var(--muted-strong)]">{metric.detail}</p>
-              </div>
+            {heroTemplates.map(({ template, fallbackTitle, kicker }) => (
+              <TemplateShowcaseCard
+                key={template?.slug || fallbackTitle}
+                template={template}
+                fallbackTitle={fallbackTitle}
+                kicker={kicker}
+              />
             ))}
           </div>
         </div>
