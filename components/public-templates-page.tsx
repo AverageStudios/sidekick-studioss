@@ -37,12 +37,21 @@ export function PublicTemplatesPage({ templates }: { templates: TemplateSeed[] }
           </h1>
           <p className="site-lead mx-auto mt-5">
             A few of the ready-to-launch campaigns small businesses start from. The
-            ad you see is the ad that runs — the full library lives inside SideKick.
+            ad you see is the ad that runs - the full library lives inside SideKick.
           </p>
           <p className="mt-4 text-sm text-[rgba(15,17,22,0.55)]">
             Car detailing templates are available first. More small-business
             categories are being added.
           </p>
+          <div className="mt-6">
+            <Link
+              href="/industries/car-detailing"
+              className="inline-flex items-center gap-2 rounded-full border border-[rgba(15,17,22,0.08)] bg-white px-4 py-2 text-sm font-medium text-[var(--public-text)] shadow-[0_1px_2px_rgba(15,17,22,0.04)] transition hover:border-[rgba(15,17,22,0.14)] hover:text-[var(--public-accent)]"
+            >
+              See the car detailing funnel
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </div>
 
         {featuredTemplates.length === 0 ? (
