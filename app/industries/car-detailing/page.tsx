@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Check, ChevronRight, Circle, CircleDashed, Inbox, Layers3, Send, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowRight, Check, ChevronRight, Circle, CircleDashed, Inbox, Layers3, Send } from "lucide-react";
 import { MarketingNav } from "@/components/marketing-nav";
 import { PublicSiteFooter } from "@/components/public-site-footer";
 import { StartTrialButton } from "@/components/billing-action-buttons";
@@ -84,25 +84,16 @@ const productMetrics = [
   {
     value: 184,
     label: "Leads",
-    detail: "Captured and organized in one place.",
-    trend: "+28%",
-    direction: "up",
     prefix: "",
   },
   {
     value: 18420,
     label: "Impressions",
-    detail: "Steady local visibility across Meta.",
-    trend: "+41%",
-    direction: "up",
     prefix: "",
   },
   {
     value: 21,
     label: "Cost per lead",
-    detail: "Cleaner tracking makes spend easier to judge.",
-    trend: "-19%",
-    direction: "down",
     prefix: "$",
   },
 ] as const;
@@ -221,23 +212,12 @@ function HeroMetricsShowcase() {
               key={metric.label}
               className="rounded-[22px] border border-[var(--line)] bg-white px-5 py-6 text-center shadow-[0_12px_28px_-24px_rgba(15,23,42,0.2)]"
             >
-              <div className="flex items-center justify-center gap-2">
-                {metric.direction === "up" ? (
-                  <TrendingUp className="h-4 w-4 text-emerald-600" />
-                ) : (
-                  <TrendingDown className="h-4 w-4 text-emerald-600" />
-                )}
-                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
-                  {metric.trend}
-                </span>
-              </div>
-              <p className="mt-4 text-5xl font-semibold tracking-[-0.07em] text-[var(--ink)]">
+              <p className="text-5xl font-semibold tracking-[-0.07em] text-[var(--ink)]">
                 <AnimatedNumber to={metric.value} prefix={metric.prefix || ""} duration={0.85} />
               </p>
-              <p className="mt-2 text-sm font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
+              <p className="mt-3 text-sm font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
                 {metric.label}
               </p>
-              <p className="mt-3 text-sm leading-6 text-[var(--muted-strong)]">{metric.detail}</p>
             </div>
           ))}
         </div>
