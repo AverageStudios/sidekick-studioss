@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Check, ChevronRight, Circle, CircleDashed, Inbox, Layers3, Send } from "lucide-react";
 import { MarketingNav } from "@/components/marketing-nav";
@@ -6,6 +7,8 @@ import { PublicSiteFooter } from "@/components/public-site-footer";
 import { StartTrialButton } from "@/components/billing-action-buttons";
 import { getCurrentUser } from "@/lib/auth";
 import { getUserBillingStatus } from "@/lib/billing";
+import { getTemplates } from "@/lib/data";
+import type { TemplateSeed } from "@/types";
 
 export const metadata: Metadata = {
   title: "Car Detailing Campaigns | SideKick Studioss",
@@ -60,26 +63,31 @@ const systemCards = [
 
 const templateCards = [
   {
+    slug: "ceramic-coating-promo",
     title: "Ceramic Coating Promo",
     detail: "Position protection packages.",
     leadType: "Higher-ticket inquiries",
   },
   {
+    slug: "full-detail-promo",
     title: "Full Detail Promo",
     detail: "Fill the calendar fast.",
     leadType: "General detailing jobs",
   },
   {
+    slug: "interior-detail-promo",
     title: "Interior Detail Promo",
     detail: "Great for dirty interiors.",
     leadType: "Family cars and odor jobs",
   },
   {
+    slug: "paint-correction-promo",
     title: "Paint Correction Promo",
     detail: "Turn transformations into leads.",
     leadType: "Premium correction work",
   },
   {
+    slug: "monthly-maintenance-promo",
     title: "Monthly Maintenance Promo",
     detail: "Stay in front of past clients.",
     leadType: "Repeat-service inquiries",
@@ -267,11 +275,73 @@ function ProductMockup() {
   );
 }
 
+function TemplateShowcaseCard({
+  item,
+  template,
+  wide = false,
+}: {
+  item: (typeof templateCards)[number];
+  template?: TemplateSeed;
+  wide?: boolean;
+}) {
+  const imageUrl = template?.creativeAssets?.imageUrls?.[0] || template?.previewImage || null;
+
+  return (
+    <div
+      className={[
+        "overflow-hidden rounded-[28px] border border-[var(--line)] bg-[linear-gradient(180deg,#ffffff_0%,#faf8ff_100%)] shadow-[0_14px_35px_-28px_rgba(15,23,42,0.18)]",
+        wide ? "lg:col-span-3" : "lg:col-span-2",
+      ].join(" ")}
+    >
+      <div className="relative aspect-[16/9] border-b border-[var(--line)] bg-[linear-gradient(135deg,#f3efff_0%,#ece7ff_100%)]">
+        {imageUrl ? (
+          <Image
+            src={imageUrl}
+            alt={item.title}
+            fill
+            sizes="(min-width: 1024px) 33vw, 100vw"
+            className="object-cover"
+          />
+        ) : (
+          <div className="flex h-full items-end bg-[radial-gradient(circle_at_top_left,rgba(109,94,248,0.18),transparent_45%),linear-gradient(180deg,#f7f3ff_0%,#ece6ff_100%)] p-5">
+            <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-ink)]">
+              Preview
+            </span>
+          </div>
+        )}
+        <div className="absolute right-4 top-4">
+          <span className="shrink-0 rounded-full bg-[var(--soft-brand)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--brand)]">
+            Ready to launch
+          </span>
+        </div>
+      </div>
+
+      <div className="p-5">
+        <p className="text-lg font-semibold tracking-[-0.03em] text-[var(--ink)]">{template?.name || item.title}</p>
+        <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">{item.detail}</p>
+
+        <div className="mt-5 rounded-[20px] border border-[rgba(109,94,248,0.08)] bg-white px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Lead type</p>
+          <p className="mt-1 text-sm font-medium text-[var(--ink)]">{item.leadType}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default async function CarDetailingIndustryPage() {
   const user = await getCurrentUser();
   const billingStatus = user ? await getUserBillingStatus(user.id) : null;
   const hasAccess = Boolean(billingStatus?.hasAccess);
   const loggedIn = Boolean(user);
+  const templates = await getTemplates();
+  const detailingTemplates = templates.filter((template) => template.industry === "Car Detailing");
+  const showcaseTemplates = templateCards.map((item) => ({
+    item,
+    template:
+      detailingTemplates.find((template) => template.slug === item.slug) ||
+      detailingTemplates.find((template) => template.name === item.title),
+  }));
 
   return (
     <main className="public-site min-h-screen bg-[var(--surface)]">
@@ -385,29 +455,13 @@ export default async function CarDetailingIndustryPage() {
           </div>
 
           <div className="mt-10 grid gap-4 lg:grid-cols-6">
-            {templateCards.map((card, index) => (
-              <div
-                key={card.title}
-                className={[
-                  "rounded-[28px] border border-[var(--line)] bg-[linear-gradient(180deg,#ffffff_0%,#faf8ff_100%)] p-5 shadow-[0_14px_35px_-28px_rgba(15,23,42,0.18)]",
-                  index === 0 || index === 3 ? "lg:col-span-3" : "lg:col-span-2",
-                ].join(" ")}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-lg font-semibold tracking-[-0.03em] text-[var(--ink)]">{card.title}</p>
-                    <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">{card.detail}</p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-[var(--soft-brand)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--brand)]">
-                    Ready to launch
-                  </span>
-                </div>
-
-                <div className="mt-5 rounded-[20px] border border-[rgba(109,94,248,0.08)] bg-white px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Lead type</p>
-                  <p className="mt-1 text-sm font-medium text-[var(--ink)]">{card.leadType}</p>
-                </div>
-              </div>
+            {showcaseTemplates.map(({ item, template }, index) => (
+              <TemplateShowcaseCard
+                key={item.slug}
+                item={item}
+                template={template}
+                wide={index === 0 || index === 3}
+              />
             ))}
           </div>
         </div>
