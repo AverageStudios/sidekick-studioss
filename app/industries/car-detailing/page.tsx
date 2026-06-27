@@ -274,7 +274,7 @@ function TemplateShowcaseCard({
 
   return (
     <div className="overflow-hidden rounded-[28px] border border-[var(--line)] bg-white shadow-[0_18px_40px_-30px_rgba(15,23,42,0.2)]">
-      <div className="relative aspect-[16/9] border-b border-[var(--line)] bg-[linear-gradient(135deg,#f3efff_0%,#ece7ff_100%)]">
+      <div className="relative aspect-[4/3] border-b border-[var(--line)] bg-[linear-gradient(135deg,#f3efff_0%,#ece7ff_100%)]">
         {imageUrl ? (
           <Image
             src={imageUrl}
@@ -297,23 +297,23 @@ function TemplateShowcaseCard({
         </div>
       </div>
 
-      <div className="p-6">
+      <div className="p-6 sm:p-7">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-lg font-semibold tracking-[-0.03em] text-[var(--ink)]">{template?.name || item.title}</p>
-            <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--muted-strong)]">{item.detail}</p>
+            <p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted-strong)]">{item.detail}</p>
           </div>
-          <span className="rounded-full border border-[var(--line)] bg-[var(--soft-panel)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted-strong)]">
+          <span className="rounded-full border border-[var(--line)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted-strong)]">
             Meta
           </span>
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-[18px] border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-3">
+        <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-[var(--line)] pt-5">
+          <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Lead type</p>
             <p className="mt-1 text-sm font-medium text-[var(--ink)]">{item.leadType}</p>
           </div>
-          <div className="rounded-[18px] border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-3">
+          <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Category</p>
             <p className="mt-1 text-sm font-medium text-[var(--ink)]">{template?.category || "Car Detailing"}</p>
           </div>
