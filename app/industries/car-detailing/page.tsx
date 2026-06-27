@@ -274,14 +274,14 @@ function TemplateShowcaseCard({
 
   return (
     <div className="overflow-hidden rounded-[28px] border border-[var(--line)] bg-white shadow-[0_18px_40px_-30px_rgba(15,23,42,0.2)]">
-      <div className="relative aspect-[4/3] border-b border-[var(--line)] bg-[linear-gradient(135deg,#f3efff_0%,#ece7ff_100%)]">
+      <div className="relative aspect-[4/5] border-b border-[var(--line)] bg-[linear-gradient(135deg,#f3efff_0%,#ece7ff_100%)]">
         {imageUrl ? (
           <Image
             src={imageUrl}
             alt={item.title}
             fill
             sizes="(min-width: 1024px) 30vw, 100vw"
-            className="object-cover"
+            className="object-contain"
           />
         ) : (
           <div className="flex h-full items-end bg-[radial-gradient(circle_at_top_left,rgba(109,94,248,0.18),transparent_45%),linear-gradient(180deg,#f7f3ff_0%,#ece6ff_100%)] p-5">
