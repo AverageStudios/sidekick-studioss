@@ -69,7 +69,7 @@ const heroTemplateCards = [
     kicker: "Maintenance plan",
   },
   {
-    slug: "premium-car-detail",
+    slug: "premium-car-detailing",
     fallbackTitle: "Premium Car Detail",
     kicker: "Full detail",
   },
