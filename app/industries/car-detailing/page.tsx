@@ -63,34 +63,22 @@ const systemCards = [
 
 const templateCards = [
   {
-    slug: "defend-your-shine",
-    title: "Ceramic Coating Promo",
-    detail: "Position protection packages.",
-    leadType: "Higher-ticket inquiries",
+    slug: "membership-detailing-always-ready",
+    title: "Always Ready Plan",
+    detail: "A cleaner recurring offer for maintenance-minded drivers.",
+    leadType: "Monthly plan inquiries",
   },
   {
-    slug: "performance-full-detail",
-    title: "Full Detail Promo",
-    detail: "Fill the calendar fast.",
-    leadType: "General detailing jobs",
+    slug: "premium-car-detail",
+    title: "Premium Car Detail",
+    detail: "A polished full-detail offer for premium local jobs.",
+    leadType: "High-intent detail quotes",
   },
   {
-    slug: "clean-cabin-reset",
-    title: "Interior Detail Promo",
-    detail: "Great for dirty interiors.",
-    leadType: "Family cars and odor jobs",
-  },
-  {
-    slug: "protect-your-investment",
-    title: "Paint Correction Promo",
-    detail: "Turn transformations into leads.",
-    leadType: "Premium correction work",
-  },
-  {
-    slug: "stay-clean-monthly",
-    title: "Monthly Maintenance Promo",
-    detail: "Stay in front of past clients.",
-    leadType: "Repeat-service inquiries",
+    slug: "premium-exterior-detail",
+    title: "Head-Turning Detail",
+    detail: "A sharp exterior-focused campaign built around visual proof.",
+    leadType: "Exterior detail leads",
   },
 ];
 
@@ -278,28 +266,21 @@ function ProductMockup() {
 function TemplateShowcaseCard({
   item,
   template,
-  wide = false,
 }: {
   item: (typeof templateCards)[number];
   template?: TemplateSeed;
-  wide?: boolean;
 }) {
   const imageUrl = template?.creativeAssets?.imageUrls?.[0] || template?.previewImage || null;
 
   return (
-    <div
-      className={[
-        "overflow-hidden rounded-[28px] border border-[var(--line)] bg-[linear-gradient(180deg,#ffffff_0%,#faf8ff_100%)] shadow-[0_14px_35px_-28px_rgba(15,23,42,0.18)]",
-        wide ? "lg:col-span-3" : "lg:col-span-2",
-      ].join(" ")}
-    >
+    <div className="overflow-hidden rounded-[28px] border border-[var(--line)] bg-white shadow-[0_18px_40px_-30px_rgba(15,23,42,0.2)]">
       <div className="relative aspect-[16/9] border-b border-[var(--line)] bg-[linear-gradient(135deg,#f3efff_0%,#ece7ff_100%)]">
         {imageUrl ? (
           <Image
             src={imageUrl}
             alt={item.title}
             fill
-            sizes="(min-width: 1024px) 33vw, 100vw"
+            sizes="(min-width: 1024px) 30vw, 100vw"
             className="object-cover"
           />
         ) : (
@@ -316,13 +297,26 @@ function TemplateShowcaseCard({
         </div>
       </div>
 
-      <div className="p-5">
-        <p className="text-lg font-semibold tracking-[-0.03em] text-[var(--ink)]">{template?.name || item.title}</p>
-        <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">{item.detail}</p>
+      <div className="p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-lg font-semibold tracking-[-0.03em] text-[var(--ink)]">{template?.name || item.title}</p>
+            <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--muted-strong)]">{item.detail}</p>
+          </div>
+          <span className="rounded-full border border-[var(--line)] bg-[var(--soft-panel)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted-strong)]">
+            Meta
+          </span>
+        </div>
 
-        <div className="mt-5 rounded-[20px] border border-[rgba(109,94,248,0.08)] bg-white px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Lead type</p>
-          <p className="mt-1 text-sm font-medium text-[var(--ink)]">{item.leadType}</p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-[18px] border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Lead type</p>
+            <p className="mt-1 text-sm font-medium text-[var(--ink)]">{item.leadType}</p>
+          </div>
+          <div className="rounded-[18px] border border-[var(--line)] bg-[var(--soft-panel)] px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Category</p>
+            <p className="mt-1 text-sm font-medium text-[var(--ink)]">{template?.category || "Car Detailing"}</p>
+          </div>
         </div>
       </div>
     </div>
@@ -447,20 +441,19 @@ export default async function CarDetailingIndustryPage() {
           <div className="mx-auto max-w-2xl text-center">
               <SectionEyebrow>Template showcase</SectionEyebrow>
               <h2 className="mt-3 text-[clamp(2rem,1.6rem+1.8vw,3rem)] font-semibold tracking-[-0.06em] text-[var(--ink)]">
-                Detailing campaigns ready from day one.
+                Three detailing campaigns, presented the right way.
               </h2>
           </div>
           <div className="mt-6 flex justify-center">
             <TemplatesCta hasAccess={hasAccess} />
           </div>
 
-          <div className="mt-10 grid gap-4 lg:grid-cols-6">
-            {showcaseTemplates.map(({ item, template }, index) => (
+          <div className="mx-auto mt-10 grid max-w-6xl gap-5 lg:grid-cols-3">
+            {showcaseTemplates.map(({ item, template }) => (
               <TemplateShowcaseCard
                 key={item.slug}
                 item={item}
                 template={template}
-                wide={index === 0 || index === 3}
               />
             ))}
           </div>
