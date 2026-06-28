@@ -32,7 +32,13 @@ export async function POST(request: Request) {
     await assertActiveUserBilling(user.id);
   } catch (error) {
     if (error instanceof BillingRequiredError) {
-      return NextResponse.json({ error: "Billing required." }, { status: 402 });
+      return NextResponse.json(
+        {
+          error: "Activate your 14-day trial to launch.",
+          checkoutRequired: true,
+        },
+        { status: 402 },
+      );
     }
     throw error;
   }

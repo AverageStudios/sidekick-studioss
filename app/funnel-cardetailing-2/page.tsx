@@ -68,7 +68,7 @@ export default function CarDetailingFunnelPage() {
               <span className="brand-word text-lg font-bold tracking-[-0.02em]">SideKick Studioss</span>
             </Link>
             <a href="#start" className="site-cta-primary !h-10 !px-4 text-sm">
-              Start free trial
+              Start free
             </a>
           </div>
         </header>
@@ -257,7 +257,7 @@ export default function CarDetailingFunnelPage() {
       {/* Mobile sticky CTA */}
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[rgba(15,17,22,0.08)] bg-[rgba(248,247,243,0.92)] px-4 py-3 backdrop-blur-xl sm:hidden">
         <a href="#start" className="site-cta-primary w-full">
-          Start free trial
+          Start free
           <ArrowRight className="h-4 w-4" />
         </a>
       </div>

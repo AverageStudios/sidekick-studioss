@@ -134,6 +134,7 @@ type BudgetGuidanceResponse = {
 
 type MetaPublishErrorResponse = {
   error?: string;
+  checkoutRequired?: boolean;
   details?: string[];
   preflight?: LaunchPreflightResponse;
   metaError?: {
@@ -486,6 +487,29 @@ async function saveCampaignDraft({
 
   const payload = (await response.json().catch(() => null)) as { draftId?: string; error?: string } | null;
   return { response, payload };
+}
+
+async function startLaunchCheckout({
+  campaignId,
+}: {
+  campaignId: string;
+}) {
+  const returnTo = `/templates/new?draft=${encodeURIComponent(campaignId)}`;
+  const response = await fetch("/api/billing/create-checkout-session", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      returnTo,
+      campaignId,
+    }),
+  });
+  const payload = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
+  if (!response.ok || !payload?.url) {
+    throw new Error(payload?.error || "Trial checkout could not be started.");
+  }
+  window.location.href = payload.url;
 }
 
 function buildInitialState({
@@ -1398,6 +1422,20 @@ export function TemplateLaunchWizard({
 
     setIsPublishing(false);
     if (!response.ok) {
+      if (response.status === 402 || payload?.checkoutRequired) {
+        try {
+          setPublishError("Your draft is saved. Opening Stripe Checkout to activate your 14-day trial...");
+          await startLaunchCheckout({ campaignId: ensuredDraftId });
+        } catch (checkoutError) {
+          setPublishError(
+            checkoutError instanceof Error
+              ? checkoutError.message
+              : "Trial checkout could not be started.",
+          );
+        }
+        return;
+      }
+
       const responsePreflight =
         payload?.preflight ||
         (payload && "blockingIssues" in payload && Array.isArray(payload.blockingIssues)

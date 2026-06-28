@@ -5,7 +5,7 @@ import { CrmProviderManageCard } from "@/components/crm-provider-manage-card";
 import { PageHeader } from "@/components/page-header";
 import { RequestCrmCard } from "@/components/request-crm-card";
 import { Button } from "@/components/ui/button";
-import { getCurrentRole, requireProductAccessUser } from "@/lib/auth";
+import { getCurrentRole, requireUser } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentWorkspaceContext } from "@/lib/workspaces";
 import { crmProviderMetadataList, getVisibleCrmProviderMetadataList } from "@/lib/crm-providers";
@@ -28,7 +28,7 @@ export default async function WorkspaceCrmSelectionPage({
 }: {
   searchParams: Promise<{ provider?: string; saved?: string; error?: string }>;
 }) {
-  const user = await requireProductAccessUser("/workspace/settings/integrations/crm");
+  const user = await requireUser();
   const [{ provider: selectedProvider, saved, error }, workspaceContext, currentRole] = await Promise.all([
     searchParams,
     getCurrentWorkspaceContext(),

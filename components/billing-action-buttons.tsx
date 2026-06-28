@@ -5,12 +5,13 @@ import { ArrowRight, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getSafeRelativePath } from "@/lib/safe-redirect";
 
-async function postForRedirect(url: string) {
+async function postForRedirect(url: string, body?: Record<string, unknown>) {
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
+    body: body ? JSON.stringify(body) : undefined,
   });
 
   const payload = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
@@ -23,23 +24,27 @@ async function postForRedirect(url: string) {
 
 function resolveLoggedOutTrialHref(nextPath?: string) {
   if (nextPath === "checkout") {
-    return "/signup?next=checkout";
+    return "/signup?next=%2Fdashboard";
   }
 
-  const next = getSafeRelativePath(nextPath, "/pricing?startTrial=1");
+  const next = getSafeRelativePath(nextPath, "/dashboard");
   return `/signup?next=${encodeURIComponent(next)}`;
 }
 
 export function StartTrialButton({
   loggedIn,
   nextPath,
+  returnTo,
+  campaignId,
   autoStart = false,
   className,
-  label = "Start 14-day free trial",
+  label = "Activate trial",
   pendingLabel = "Starting trial...",
 }: {
   loggedIn: boolean;
   nextPath?: string;
+  returnTo?: string;
+  campaignId?: string | null;
   autoStart?: boolean;
   className?: string;
   label?: string;
@@ -56,12 +61,12 @@ export function StartTrialButton({
     startTransition(async () => {
       try {
         setError(null);
-        await postForRedirect("/api/billing/create-checkout-session");
+        await postForRedirect("/api/billing/create-checkout-session", { returnTo, campaignId });
       } catch (fetchError) {
         setError(fetchError instanceof Error ? fetchError.message : "Trial checkout could not be started.");
       }
     });
-  }, [autoStart, loggedIn]);
+  }, [autoStart, campaignId, loggedIn, returnTo]);
 
   if (!loggedIn) {
     return (
@@ -84,7 +89,7 @@ export function StartTrialButton({
           startTransition(async () => {
             try {
               setError(null);
-              await postForRedirect("/api/billing/create-checkout-session");
+              await postForRedirect("/api/billing/create-checkout-session", { returnTo, campaignId });
             } catch (fetchError) {
               setError(fetchError instanceof Error ? fetchError.message : "Trial checkout could not be started.");
             }

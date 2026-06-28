@@ -6,7 +6,7 @@ import { Reveal } from "@/components/ui/reveal";
 
 export function HomeFinalCta({
   title = "Launch your next campaign from one simple workspace.",
-  subtitle = "Start a 14-day free trial of SideKick Core, then keep unlimited workspaces organized under one self-serve subscription.",
+  subtitle = "Start free, build your first campaign, then activate your 14-day trial when you launch.",
   secondaryLabel = "See pricing",
   secondaryHref = "/pricing",
 }: {
@@ -37,8 +37,8 @@ export function HomeFinalCta({
             </p>
 
             <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link href="/pricing?startTrial=1" className="site-cta-on-dark">
-                Start 14-day free trial
+              <Link href="/signup?next=%2Fdashboard" className="site-cta-on-dark">
+                Start free
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link href={secondaryHref} className="site-cta-ghost-on-dark">
@@ -47,7 +47,7 @@ export function HomeFinalCta({
             </div>
 
             <p className="mt-6 text-sm text-white/45">
-              Payment method required. Ad spend is paid separately to Meta.
+              Payment details are collected when you launch. Ad spend is paid separately to Meta.
             </p>
           </div>
         </div>

@@ -28,23 +28,23 @@ export default async function SignupPage({
         <div className="max-w-lg space-y-5 sm:space-y-6">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">Start simple</p>
           <h1 className="text-4xl font-semibold tracking-[-0.07em] text-[var(--ink)] sm:text-5xl">
-            {isCheckoutFlow ? "Create your account to start your trial" : "Get your first detailing campaign live fast"}
+            {isCheckoutFlow ? "Create your account to start free" : "Get your first detailing campaign ready fast"}
           </h1>
           <p className="text-lg leading-8 text-[var(--muted-strong)]">
             {isCheckoutFlow
-              ? "Set up your SideKick account, then you’ll activate your 14-day free trial securely through Stripe."
-              : "Create your account, activate your 14-day trial, then start building in SideKick."}
+              ? "Set up your SideKick account, build your campaign, then activate your 14-day trial when you launch."
+              : "Create your account, browse templates, and build your first campaign before payment details are needed."}
           </p>
           {!isSupabasePublicConfigured() && supabaseFallbackMessage ? (
             <ConfigNotice title="Supabase auth not configured" message={supabaseFallbackMessage} />
           ) : null}
         </div>
         <AuthCard
-          title={isCheckoutFlow ? "Create account to start your trial" : "Create account"}
+          title={isCheckoutFlow ? "Create account to start free" : "Create account"}
           description={
             isCheckoutFlow
-              ? "Create your account, then continue to secure checkout to activate your 14-day free trial."
-              : "Create your account, activate your 14-day trial, then start building in SideKick."
+              ? "Create your account, then start building. Payment details are collected when you launch."
+              : "Create your account, then start building in SideKick."
           }
           action={signUpAction}
           submitLabel="Create account"

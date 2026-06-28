@@ -16,7 +16,7 @@ function getBillingRequiredHeadline(key: ReturnType<typeof getBillingDisplayStat
     case "paused":
       return "Update your billing";
     default:
-      return "Start your 14-day free trial";
+      return "Activate your 14-day trial to launch";
   }
 }
 
@@ -48,6 +48,7 @@ export default async function BillingRequiredPage({
         <StartTrialButton
           loggedIn
           nextPath={safeReturnTo}
+          returnTo={safeReturnTo}
           label={billingDisplayState.primaryActionLabel}
           pendingLabel="Opening checkout..."
           className="sm:min-w-56"
@@ -64,7 +65,7 @@ export default async function BillingRequiredPage({
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
             {billingDisplayState.key === "not_started"
-              ? "Start your 14-day free trial to unlock SideKick across unlimited workspaces."
+              ? "Your campaign draft can stay saved. Activate your SideKick trial to publish it to Meta and begin capturing live leads."
               : billingDisplayState.description}
           </p>
 
@@ -111,7 +112,7 @@ export default async function BillingRequiredPage({
           </div>
 
           <p className="mt-5 text-sm text-[var(--muted)]">
-            Payment method required. You will not be charged until your 14-day trial ends. Ad spend is billed separately by Meta.
+            Payment details are collected at launch. You will not be charged until your 14-day trial ends. Ad spend is billed separately by Meta.
           </p>
         </Card>
       </div>

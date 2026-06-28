@@ -4,7 +4,6 @@ import Link from "next/link";
 import { ArrowRight, Check, ChevronRight, Circle, Clock, Inbox, Layers3, MapPin, Send, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
 import { MarketingNav } from "@/components/marketing-nav";
 import { PublicSiteFooter } from "@/components/public-site-footer";
-import { StartTrialButton } from "@/components/billing-action-buttons";
 import { AnimatedNumber } from "@/components/funnel/animated-number";
 import { getCurrentUser } from "@/lib/auth";
 import { getUserBillingStatus } from "@/lib/billing";
@@ -183,13 +182,10 @@ function PrimaryCta({
   }
 
   return (
-    <StartTrialButton
-      loggedIn={loggedIn}
-      nextPath="checkout"
-      label={label}
-      className={className}
-      pendingLabel="Opening trial..."
-    />
+    <Link href={loggedIn ? "/templates/new" : "/signup?next=%2Ftemplates%2Fnew"} className={className}>
+      {label}
+      <ArrowRight className="h-4 w-4" />
+    </Link>
   );
 }
 
@@ -319,7 +315,7 @@ export default async function CarDetailingIndustryPage() {
               <PrimaryCta
                 loggedIn={loggedIn}
                 hasAccess={hasAccess}
-                label="Start 14-day free trial"
+                label="Start free"
                 className="site-cta-primary inline-flex justify-center"
               />
               <TemplatesCta hasAccess={hasAccess} />
@@ -422,7 +418,7 @@ export default async function CarDetailingIndustryPage() {
             <PrimaryCta
               loggedIn={loggedIn}
               hasAccess={hasAccess}
-              label="Start 14-day free trial"
+              label="Start free"
               className="site-cta-primary inline-flex justify-center"
             />
           </div>
@@ -553,13 +549,13 @@ export default async function CarDetailingIndustryPage() {
               <PrimaryCta
                 loggedIn={loggedIn}
                 hasAccess={hasAccess}
-                label="Start 14-day free trial"
+                label="Start free"
                 className="site-cta-primary inline-flex w-full justify-center"
               />
             </div>
 
             <p className="mt-4 text-center text-sm leading-6 text-[var(--muted)]">
-              Payment method required. You won&apos;t be charged until your trial ends. Ad spend is paid separately to Meta.
+              Payment details are collected when you launch. You won&apos;t be charged until your trial ends. Ad spend is paid separately to Meta.
             </p>
           </div>
         </div>
@@ -604,7 +600,7 @@ export default async function CarDetailingIndustryPage() {
               <PrimaryCta
                 loggedIn={loggedIn}
                 hasAccess={hasAccess}
-                label="Start 14-day free trial"
+                label="Start free"
                 className="site-cta-primary inline-flex justify-center !bg-white !text-[#1a1430] hover:!bg-[#f1ecff]"
               />
               <Link

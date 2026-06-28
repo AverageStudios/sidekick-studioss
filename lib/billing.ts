@@ -268,9 +268,9 @@ export function getBillingDisplayState(
       key: "not_started",
       label: "Not started",
       accessAllowed: false,
-      primaryActionLabel: "Start 14-day free trial",
+      primaryActionLabel: "Activate trial",
       primaryActionType: "checkout",
-      description: "Start your 14-day free trial to unlock SideKick for your business workspace.",
+      description: "Your trial starts when you launch your first campaign.",
     };
   }
 
@@ -402,7 +402,7 @@ export function getBillingDisplayState(
       key: "checkout_expired",
       label: "Checkout expired",
       accessAllowed: false,
-      primaryActionLabel: "Start 14-day free trial",
+      primaryActionLabel: "Activate trial",
       primaryActionType: "checkout",
       description: "Your checkout session expired. Start a new trial whenever you are ready.",
     };
@@ -437,9 +437,9 @@ export function getBillingDisplayState(
     key: "not_started",
     label: "Not started",
     accessAllowed: false,
-    primaryActionLabel: "Start 14-day free trial",
+    primaryActionLabel: "Activate trial",
     primaryActionType: "checkout",
-    description: "Start your 14-day free trial to unlock SideKick for your business workspace.",
+    description: "Your trial starts when you launch your first campaign.",
   };
 }
 

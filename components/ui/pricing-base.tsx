@@ -1,29 +1,29 @@
 import Link from "next/link";
 import { ArrowRight, Check, Sparkles } from "lucide-react";
-import { ManageBillingButton, StartTrialButton } from "@/components/billing-action-buttons";
+import { ManageBillingButton } from "@/components/billing-action-buttons";
 
 const coreFeatures = [
+  "Sign up free",
+  "Browse campaign templates",
+  "Build your first campaign draft",
+  "Activate trial when ready to launch",
   "Unlimited workspaces",
   "Ready-to-launch Meta campaign templates",
-  "Facebook and Instagram campaign launch",
   "Lead capture workspace",
   "Simple lead status tracking",
   "CRM integrations",
-  "Email alerts and CSV export",
-  "Workspace branding",
-  "Ad spend billed separately by Meta",
+  "Email alerts",
+  "CSV export",
 ];
 
 export function PricingBase({
   loggedIn,
   hasProductAccess,
-  autoStartTrial = false,
   checkoutCancelled = false,
-  pricingActionLabel = "Start 14-day free trial",
+  pricingActionLabel = "Start free",
 }: {
   loggedIn: boolean;
   hasProductAccess: boolean;
-  autoStartTrial?: boolean;
   checkoutCancelled?: boolean;
   pricingActionLabel?: string;
 }) {
@@ -31,14 +31,14 @@ export function PricingBase({
     <section className="site-container pb-24 pt-36 sm:pb-28 sm:pt-44">
       <div className="mx-auto max-w-3xl text-center">
         <h1 className="site-h2 text-[clamp(2.2rem,1.4rem+3vw,3.4rem)]">
-          Simple pricing for ready-to-launch campaigns.
+          Build your first campaign for free.
         </h1>
         <p className="site-lead mx-auto mt-5">
-          Start SideKick Core with a 14-day free trial, launch Meta campaigns yourself, and keep every lead organized.
+          Sign up, browse templates, and build your first draft. Activate your 14-day trial only when you are ready to launch.
         </p>
         {checkoutCancelled ? (
           <div className="mx-auto mt-6 max-w-xl rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Checkout was canceled. You can start your trial whenever you&apos;re ready.
+            Checkout was canceled. You can activate your trial whenever you&apos;re ready to launch.
           </div>
         ) : null}
       </div>
@@ -58,10 +58,10 @@ export function PricingBase({
               </span>
             </p>
             <p className="mt-3 text-sm text-[rgba(15,17,22,0.55)]">
-              Payment method required. Cancel anytime.
+              14-day free trial activated when you launch your first campaign.
             </p>
             <p className="mx-auto mt-5 max-w-md text-sm leading-6 text-[rgba(15,17,22,0.7)]">
-              Launch Facebook and Instagram campaigns, capture leads, and keep follow-up organized from one simple workspace.
+              Payment details are collected at launch. You will not be charged until your trial ends.
             </p>
           </div>
 
@@ -87,13 +87,13 @@ export function PricingBase({
                   <ManageBillingButton label="Manage billing" className="w-full justify-center" />
                 </div>
               ) : (
-                <StartTrialButton
-                  loggedIn={loggedIn}
-                  nextPath="checkout"
-                  autoStart={autoStartTrial}
-                  label={pricingActionLabel}
-                  className="site-cta-primary w-full justify-center"
-                />
+                <Link
+                  href={loggedIn ? "/dashboard" : "/signup?next=%2Fdashboard"}
+                  className="site-cta-primary inline-flex w-full items-center justify-center gap-2"
+                >
+                  {pricingActionLabel}
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
               )}
             </div>
           </div>
@@ -101,7 +101,8 @@ export function PricingBase({
       </div>
 
       <div className="mx-auto mt-8 max-w-3xl space-y-2 text-center text-sm text-[rgba(15,17,22,0.5)]">
-        <p>Payment method required for the 14-day trial.</p>
+        <p>Payment details are collected when you launch your first campaign.</p>
+        <p>You won&apos;t be charged until your 14-day trial ends.</p>
         <p>Ad spend is paid directly to Meta and is separate from SideKick.</p>
       </div>
     </section>

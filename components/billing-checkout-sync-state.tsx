@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { getSafeRelativePath } from "@/lib/safe-redirect";
 
 type SyncPhase = "syncing" | "failed";
 
@@ -15,7 +16,7 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function BillingCheckoutSyncState({ sessionId }: { sessionId: string }) {
+export function BillingCheckoutSyncState({ sessionId, returnTo = "/dashboard" }: { sessionId: string; returnTo?: string }) {
   const router = useRouter();
   const [phase, setPhase] = useState<SyncPhase>("syncing");
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +43,9 @@ export function BillingCheckoutSyncState({ sessionId }: { sessionId: string }) {
           | null;
 
         if (response.ok && payload?.billingStatus?.hasAccess) {
-          router.replace(`/dashboard?success=${encodeURIComponent(ACTIVATION_SUCCESS_MESSAGE)}`);
+          const safeReturnTo = getSafeRelativePath(returnTo, "/dashboard");
+          const separator = safeReturnTo.includes("?") ? "&" : "?";
+          router.replace(`${safeReturnTo}${separator}success=${encodeURIComponent(ACTIVATION_SUCCESS_MESSAGE)}`);
           return;
         }
 
@@ -62,7 +65,7 @@ export function BillingCheckoutSyncState({ sessionId }: { sessionId: string }) {
 
     setError("We could not finish activating your trial.");
     setPhase("failed");
-  }, [router, sessionId]);
+  }, [returnTo, router, sessionId]);
 
   useEffect(() => {
     if (hasStartedRef.current) return;
@@ -86,7 +89,7 @@ export function BillingCheckoutSyncState({ sessionId }: { sessionId: string }) {
           </h1>
           <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-[15px]">
             {phase === "syncing"
-              ? "Stripe checkout finished successfully. SideKick is syncing your billing now so the dashboard can unlock."
+              ? "Stripe checkout finished successfully. SideKick is syncing your billing now so you can return to launch."
               : error || "We could not finish activating your trial."}
           </p>
         </div>

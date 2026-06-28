@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/auth";
-import { assertActiveUserBilling, BillingRequiredError } from "@/lib/billing";
 import { ensureCampaignDraft } from "@/lib/campaign-drafts";
 import { runMetaLaunchPreflight } from "@/lib/meta-launch";
 import { logRouteError, readJsonBody } from "@/lib/api-security";
@@ -19,15 +18,6 @@ export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  try {
-    await assertActiveUserBilling(user.id);
-  } catch (error) {
-    if (error instanceof BillingRequiredError) {
-      return NextResponse.json({ error: "Billing required." }, { status: 402 });
-    }
-    throw error;
   }
 
   const ip = getIpFromRequest(request);

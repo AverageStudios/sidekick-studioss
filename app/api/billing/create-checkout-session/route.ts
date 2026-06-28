@@ -3,10 +3,19 @@ import { getCurrentProfile, getCurrentUser } from "@/lib/auth";
 import { getBillingDisplayState, getUserBillingStatus, upsertUserBillingRow } from "@/lib/billing";
 import { env, isStripeConfigured, isSupabaseServerConfigured } from "@/lib/env";
 import { checkRateLimit, createRateLimitResponse, getIpFromRequest, logRateLimitHit } from "@/lib/rate-limit";
+import { getSafeRelativePath } from "@/lib/safe-redirect";
 import { getStripeServerClient } from "@/lib/stripe";
 
 function buildAbsoluteUrl(path: string) {
   return new URL(path, env.appUrl).toString();
+}
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function appendCheckoutParam(path: string, key: string, value: string) {
+  const [pathWithoutHash, hash = ""] = path.split("#", 2);
+  const separator = pathWithoutHash.includes("?") ? "&" : "?";
+  return `${pathWithoutHash}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}${hash ? `#${hash}` : ""}`;
 }
 
 export async function POST(request: Request) {
@@ -45,6 +54,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Billing is not configured yet." }, { status: 503 });
   }
 
+  const payload = (await request.json().catch(() => null)) as
+    | { returnTo?: unknown; campaignId?: unknown; workspaceId?: unknown }
+    | null;
+  const safeReturnTo = getSafeRelativePath(payload?.returnTo, "/dashboard");
+  const campaignId = typeof payload?.campaignId === "string" && uuidPattern.test(payload.campaignId)
+    ? payload.campaignId
+    : null;
+  const workspaceId = typeof payload?.workspaceId === "string" && uuidPattern.test(payload.workspaceId)
+    ? payload.workspaceId
+    : null;
+
   const billingStatus = await getUserBillingStatus(user.id);
   const billingDisplayState = getBillingDisplayState(billingStatus);
   const shouldOpenPortal =
@@ -56,7 +76,7 @@ export async function POST(request: Request) {
       try {
         const portalSession = await stripe.billingPortal.sessions.create({
           customer: billingStatus.stripeCustomerId,
-          return_url: buildAbsoluteUrl("/settings#account-controls"),
+          return_url: buildAbsoluteUrl(safeReturnTo || "/settings#account-controls"),
         });
         return NextResponse.json({ url: portalSession.url });
       } catch {
@@ -106,15 +126,21 @@ export async function POST(request: Request) {
         },
       ],
       payment_method_collection: "always",
-      success_url: buildAbsoluteUrl("/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}"),
-      cancel_url: buildAbsoluteUrl("/pricing?checkout=cancelled"),
+      success_url: buildAbsoluteUrl(`/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}&returnTo=${encodeURIComponent(safeReturnTo)}`),
+      cancel_url: buildAbsoluteUrl(appendCheckoutParam(safeReturnTo, "checkout", "cancelled")),
       metadata: {
         user_id: user.id,
+        return_to: safeReturnTo,
+        ...(campaignId ? { campaign_id: campaignId, campaign_draft_id: campaignId } : {}),
+        ...(workspaceId ? { workspace_id: workspaceId } : {}),
       },
       subscription_data: {
         trial_period_days: 14,
         metadata: {
           user_id: user.id,
+          return_to: safeReturnTo,
+          ...(campaignId ? { campaign_id: campaignId, campaign_draft_id: campaignId } : {}),
+          ...(workspaceId ? { workspace_id: workspaceId } : {}),
         },
       },
     });

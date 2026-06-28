@@ -2,7 +2,6 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { requireActiveUserBilling } from "@/lib/billing";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { demoUser } from "@/lib/demo-data";
 import { isDemoModeEnabled, isSupabasePublicConfigured, isSupabaseServerConfigured } from "@/lib/env";
@@ -188,7 +187,6 @@ export async function requireAdmin() {
 }
 
 export async function requireProductAccessUser(returnTo = "/dashboard") {
-  const user = await requireUser();
-  await requireActiveUserBilling(user.id, returnTo);
-  return user;
+  void returnTo;
+  return requireUser();
 }

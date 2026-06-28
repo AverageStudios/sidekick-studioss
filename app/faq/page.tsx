@@ -43,7 +43,7 @@ export default function FaqPage() {
 
       <HomeFinalCta
         title="The rest you'll learn by trying it."
-        subtitle="Start the trial, pick a template, and see how launch, leads, and follow-up fit together."
+        subtitle="Start free, pick a template, and see how launch, leads, and follow-up fit together."
       />
 
       <PublicSiteFooter />

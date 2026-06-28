@@ -32,11 +32,11 @@ export default async function SignupConfirmPage({
         <div className="mt-6 space-y-3">
           <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--brand)]">Check your email</p>
           <h1 className="text-3xl font-semibold tracking-[-0.05em] text-[var(--ink)] sm:text-4xl">
-            {isCheckoutFlow ? "Confirm your account to start your trial" : "Confirm your account to keep going"}
+            {isCheckoutFlow ? "Confirm your account to start free" : "Confirm your account to keep going"}
           </h1>
           <p className="text-base leading-7 text-[var(--muted-strong)]">
             {isCheckoutFlow
-              ? `We sent a confirmation link${email ? ` to ${email}` : ""}. Open that email to confirm your account, then SideKick will continue to secure checkout so you can activate your 14-day free trial.`
+              ? `We sent a confirmation link${email ? ` to ${email}` : ""}. Open that email to confirm your account, then sign in to build your first campaign. Your trial activates when you launch.`
               : `We sent a confirmation link${email ? ` to ${email}` : ""}. Open that email, confirm your account, and then sign in to reach your dashboard.`}
           </p>
         </div>

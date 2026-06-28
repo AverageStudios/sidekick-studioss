@@ -10,17 +10,12 @@ export default async function PricingPage({
   searchParams: Promise<{ startTrial?: string; checkout?: string }>;
 }) {
   const user = await getCurrentUser();
-  const [{ startTrial, checkout }, billingStatus] = await Promise.all([
+  const [{ checkout }, billingStatus] = await Promise.all([
     searchParams,
     user ? getUserBillingStatus(user.id) : Promise.resolve(null),
   ]);
   const billingDisplayState = billingStatus ? getBillingDisplayState(billingStatus) : null;
-  const pricingActionLabel =
-    billingDisplayState?.key === "canceled"
-      ? "Restart subscription"
-      : billingDisplayState?.key === "incomplete"
-        ? "Finish checkout"
-        : "Start 14-day free trial";
+  const pricingActionLabel = user && !billingDisplayState?.accessAllowed ? "Open dashboard" : "Start free";
 
   return (
     <main className="public-site min-h-screen">
@@ -28,7 +23,6 @@ export default async function PricingPage({
       <PricingBase
         loggedIn={Boolean(user)}
         hasProductAccess={Boolean(billingStatus?.hasAccess)}
-        autoStartTrial={Boolean(user && startTrial === "1" && !billingStatus?.hasAccess)}
         checkoutCancelled={checkout === "cancelled"}
         pricingActionLabel={pricingActionLabel}
       />

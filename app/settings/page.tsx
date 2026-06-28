@@ -186,7 +186,7 @@ export default async function SettingsPage({
                     </span>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">
-                    One SideKick Core subscription unlocks unlimited workspaces.
+                    Your SideKick Core trial starts when you launch. Unlimited workspaces are included after activation.
                   </p>
                   <div className="mt-5 grid gap-3 rounded-2xl border border-[var(--line)] bg-[var(--soft-panel)] p-4 sm:grid-cols-3">
                     <div>
@@ -203,7 +203,7 @@ export default async function SettingsPage({
                     </div>
                   </div>
                   <div className="mt-4 rounded-2xl border border-[var(--line)] bg-white px-4 py-3">
-                    <p className="mb-2 text-sm font-semibold text-[var(--ink)]">Self-Serve platform access</p>
+                    <p className="mb-2 text-sm font-semibold text-[var(--ink)]">Launch access</p>
                     <p className="text-sm leading-6 text-[var(--muted-strong)]">
                       {billingDisplayState.description}
                     </p>
@@ -230,6 +230,7 @@ export default async function SettingsPage({
                       <StartTrialButton
                         loggedIn
                         nextPath="/settings#account-controls"
+                        returnTo="/settings#account-controls"
                         label={billingDisplayState.primaryActionLabel}
                         pendingLabel="Opening checkout..."
                         className="sm:min-w-48"
@@ -243,7 +244,7 @@ export default async function SettingsPage({
                     <BillingRefreshButton />
                   </div>
                   <p className="mt-4 text-xs leading-5 text-[var(--muted)]">
-                    Payment method required. Ad spend is billed separately by Meta.
+                    Your trial starts when you launch your first campaign. Ad spend is billed separately by Meta.
                   </p>
                 </div>
               </div>

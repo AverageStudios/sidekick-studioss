@@ -31,11 +31,11 @@ export default async function LoginPage({
         <div className="max-w-lg space-y-5 sm:space-y-6">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">SideKick Studioss</p>
           <h1 className="text-4xl font-semibold tracking-[-0.07em] text-[var(--ink)] sm:text-5xl">
-            {isCheckoutFlow ? "Log in to start your trial" : "Launch faster without starting from scratch"}
+            {isCheckoutFlow ? "Log in to keep building" : "Launch faster without starting from scratch"}
           </h1>
           <p className="text-lg leading-8 text-[var(--muted-strong)]">
             {isCheckoutFlow
-              ? "After logging in, you’ll continue to secure checkout and activate your 14-day free trial."
+              ? "After logging in, you can keep building. Your 14-day trial activates when you launch."
               : "Sign in to manage your detail campaigns and leads in one calm workspace."}
           </p>
           {!isSupabasePublicConfigured() && supabaseFallbackMessage ? (
@@ -46,10 +46,10 @@ export default async function LoginPage({
           </Link>
         </div>
         <AuthCard
-          title={isCheckoutFlow ? "Log in to start your trial" : "Welcome back"}
+          title={isCheckoutFlow ? "Log in to continue" : "Welcome back"}
           description={
             isCheckoutFlow
-              ? "Log in, then continue to secure checkout to activate your 14-day free trial."
+              ? "Log in, then return to your campaign workspace."
               : "Use your email and password to get back into your campaign launcher."
           }
           action={signInAction}
@@ -57,7 +57,7 @@ export default async function LoginPage({
           pendingLabel="Signing in..."
           footerLabel="Need an account?"
           footerHref={`/signup?next=${encodeURIComponent(safeNextValue)}`}
-          footerLinkLabel="Start free trial"
+          footerLinkLabel="Start free"
           error={error}
           success={success === authSuccessMessages.confirmed ? "Email confirmed. You can sign in now." : success}
           emailDefaultValue={email}

@@ -90,8 +90,8 @@ export function PublicProductDetailPage({ item }: { item: PublicProductItem }) {
             <p className="site-lead mx-auto mt-5">{item.subheadline}</p>
 
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link href="/pricing?startTrial=1" className="site-cta-primary">
-                Start 14-day free trial
+              <Link href="/signup?next=%2Fdashboard" className="site-cta-primary">
+                Start free
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link href="/pricing" className="site-cta-secondary">
@@ -193,7 +193,7 @@ export function PublicProductDetailPage({ item }: { item: PublicProductItem }) {
 
       <HomeFinalCta
         title={`Put ${item.shortTitle.toLowerCase()} to work this week.`}
-        subtitle="Start the trial, pick a template for your industry, and see the full flow on a real campaign."
+        subtitle="Start free, pick a template for your industry, and see the full flow before payment details are needed."
       />
 
       <PublicSiteFooter />

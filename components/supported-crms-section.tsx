@@ -66,8 +66,8 @@ export function SupportedCrmsSection({
 
       {showCta ? (
         <Reveal className="mt-12 flex justify-center" delay={0.1}>
-          <Link href="/pricing?startTrial=1" className="site-cta-secondary">
-            Start 14-day free trial
+          <Link href="/signup?next=%2Fdashboard" className="site-cta-secondary">
+            Start free
             <ArrowRight className="h-4 w-4" />
           </Link>
         </Reveal>

@@ -2081,7 +2081,7 @@ export async function deleteCampaignAction(formData: FormData) {
   const successRedirectTo = String(formData.get("successRedirectTo") || "/templates") || "/templates";
   const safeRedirectTo = getSafeRelativePath(redirectTo, "/templates");
   const safeSuccessRedirectTo = getSafeRelativePath(successRedirectTo, "/templates");
-  const user = await requireProductActionUser(safeRedirectTo);
+  const user = await requireAuthenticatedActionUser("/login");
 
   if (!isSupabaseServerConfigured()) {
     redirect("/dashboard");
@@ -2132,7 +2132,7 @@ export async function deleteDraftCampaignAction(formData: FormData) {
   const campaignId = String(formData.get("campaignId") || "").trim();
   const redirectTo = String(formData.get("redirectTo") || `/campaigns/${campaignId || ""}`) || `/campaigns/${campaignId || ""}`;
   const safeRedirectTo = getSafeRelativePath(redirectTo, "/templates/drafts");
-  const user = await requireProductActionUser(safeRedirectTo);
+  const user = await requireAuthenticatedActionUser("/login");
 
   if (!isSupabaseServerConfigured()) {
     redirect("/dashboard");
@@ -2794,9 +2794,13 @@ export async function acceptWorkspaceInvitationAction(formData: FormData) {
 }
 
 export async function createCampaignAction(formData: FormData) {
-  const user = await requireProductActionUser("/templates/new");
+  const user = await requireAuthenticatedActionUser("/login");
   const templateSlug = String(formData.get("templateSlug") || "");
   const intent = String(formData.get("intent") || "launch");
+  const isDraftIntent = intent === "draft";
+  if (!isDraftIntent) {
+    await requireActiveUserBilling(user.id, "/templates/new");
+  }
   const template = await getPublishedTemplateBySlug(templateSlug);
 
   if (!template) {
@@ -2910,7 +2914,7 @@ export async function createCampaignAction(formData: FormData) {
       before_images_json: blueprint.funnelConfig.beforeImageUrls,
       after_images_json: blueprint.funnelConfig.afterImageUrls,
       ad_copy_json: blueprint.adCopy,
-      status: intent === "draft" ? "draft" : "published",
+      status: isDraftIntent ? "draft" : "published",
     })
     .select()
     .single();
@@ -2925,8 +2929,8 @@ export async function createCampaignAction(formData: FormData) {
       workspace_id: activeWorkspaceId,
       campaign_id: campaign.id,
       slug: blueprint.slug,
-      is_published: intent !== "draft",
-      published_at: intent === "draft" ? null : new Date().toISOString(),
+      is_published: !isDraftIntent,
+      published_at: isDraftIntent ? null : new Date().toISOString(),
       config_json: blueprint.funnelConfig,
     }),
     admin.from("follow_up_settings").upsert(
@@ -4214,7 +4218,6 @@ export async function refreshMetaIntegrationAssetsAction() {
   if (!user) {
     redirect("/login");
   }
-  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   if (!isSupabaseServerConfigured()) {
     redirect("/workspace/settings?section=integrations&error=Supabase server access is not configured.");
@@ -4272,7 +4275,6 @@ export async function saveMetaIntegrationSelectionsAction(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
-  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   if (!isSupabaseServerConfigured()) {
     redirect("/workspace/settings?section=integrations&error=Supabase server access is not configured.");
@@ -4336,7 +4338,6 @@ export async function disconnectMetaIntegrationAction() {
   if (!user) {
     redirect("/login");
   }
-  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   if (!isSupabaseServerConfigured()) {
     redirect("/workspace/settings?section=integrations&error=Supabase server access is not configured.");
@@ -4381,7 +4382,6 @@ export async function saveCrmConnectionAction(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
-  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   if (!isSupabaseServerConfigured()) {
     redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");
@@ -4466,7 +4466,6 @@ export async function disconnectCrmConnectionAction(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
-  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   if (!isSupabaseServerConfigured()) {
     redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");
@@ -4513,7 +4512,6 @@ export async function testCrmDeliveryAction(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
-  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   const workspaceId = String(formData.get("workspaceId") || "").trim();
   const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=integrations");
@@ -4610,7 +4608,6 @@ export async function saveMondayBoardIdAction(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
-  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   const redirectTo = String(formData.get("redirectTo") || "/workspace/settings?section=integrations");
   const safeRedirectTo = getSafeRelativePath(redirectTo, "/workspace/settings?section=integrations");
@@ -4706,7 +4703,6 @@ export async function updateMondayBoardSelectionAction({
       error: "Monday board could not be saved right now.",
     };
   }
-  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   const normalizedWorkspaceId = workspaceId.trim();
   const normalizedBoardId = boardId.trim();
@@ -4817,7 +4813,6 @@ export async function listMondayBoardsAction(workspaceId: string) {
       error: "Could not load monday boards. Paste a board ID manually.",
     };
   }
-  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   const normalizedWorkspaceId = workspaceId.trim();
 
@@ -4931,7 +4926,6 @@ export async function requestCrmIntegrationAction(input: {
       error: "Could not send request. Please try again.",
     };
   }
-  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   const parsed = crmRequestSchema.safeParse({
     crmName: input.crmName,
@@ -5011,7 +5005,6 @@ export async function saveCrmRoutingAction(formData: FormData) {
   if (!user) {
     redirect("/login");
   }
-  await requireActiveUserBilling(user.id, "/workspace/settings?section=integrations");
 
   if (!isSupabaseServerConfigured()) {
     redirect("/workspace/settings?section=integrations&error=Supabase%20server%20access%20is%20not%20configured.");

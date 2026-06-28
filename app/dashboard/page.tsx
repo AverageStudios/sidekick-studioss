@@ -17,7 +17,7 @@ import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
-import { getUserBillingStatusWithRetry, requireActiveUserBilling } from "@/lib/billing";
+import { getUserBillingStatus, getUserBillingStatusWithRetry } from "@/lib/billing";
 import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
 import { getWorkspaceCrmState } from "@/lib/crm-integration";
 import { getDashboardSnapshot, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
@@ -260,20 +260,26 @@ function BillingActivationState({ sessionId }: { sessionId?: string | null }) {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string; checkout?: string; session_id?: string }>;
+  searchParams: Promise<{ success?: string; checkout?: string; session_id?: string; returnTo?: string }>;
 }) {
   const user = await requireUser();
-  const { success, checkout, session_id: sessionId } = await searchParams;
+  const { success, checkout, session_id: sessionId, returnTo } = await searchParams;
   const isCheckoutActivation = checkout === "success" && Boolean(sessionId);
 
   if (isCheckoutActivation) {
-    return <BillingActivationState sessionId={sessionId} />;
+    return (
+      <AppShell currentPath="/dashboard">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 py-10 sm:py-14">
+          <BillingCheckoutSyncState sessionId={sessionId!} returnTo={returnTo} />
+        </div>
+      </AppShell>
+    );
   }
 
   const billingStatus =
     checkout === "success"
       ? await getUserBillingStatusWithRetry(user.id, { attempts: 4, delayMs: 1500 })
-      : await requireActiveUserBilling(user.id, "/dashboard");
+      : await getUserBillingStatus(user.id);
 
   if (!billingStatus.hasAccess) {
     if (checkout === "success") {

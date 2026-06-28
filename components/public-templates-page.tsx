@@ -60,11 +60,11 @@ export function PublicTemplatesPage({ templates }: { templates: TemplateSeed[] }
               The library lives inside SideKick
             </p>
             <p className="site-body mt-2">
-              Start the trial to browse every template for your industry and
+              Start free to browse every template for your industry and
               preview the exact ad each one runs.
             </p>
-            <Link href="/pricing" className="site-cta-primary mt-6">
-              Start free trial
+            <Link href="/signup?next=%2Ftemplates" className="site-cta-primary mt-6">
+              Start free
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
@@ -129,7 +129,7 @@ export function PublicTemplatesPage({ templates }: { templates: TemplateSeed[] }
 
       <HomeFinalCta
         title="Your template is in there."
-        subtitle="Start the trial, open the library, and launch the campaign that fits your business."
+        subtitle="Start free, open the library, and build the campaign that fits your business."
       />
 
       <PublicSiteFooter />

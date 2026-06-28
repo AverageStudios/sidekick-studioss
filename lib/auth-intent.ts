@@ -16,7 +16,7 @@ export function getSafeAuthNextValue(value: string | null | undefined) {
 
 export function resolvePostAuthDestination(value: string | null | undefined) {
   if (isCheckoutAuthIntent(value)) {
-    return "/pricing?startTrial=1";
+    return "/dashboard";
   }
 
   return getSafeAuthNextValue(value);

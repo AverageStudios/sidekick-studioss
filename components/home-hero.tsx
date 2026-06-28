@@ -111,8 +111,8 @@ export function HomeHero() {
           </motion.p>
 
           <motion.div {...fadeUp(0.62)} className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link href="/pricing?startTrial=1" className="site-cta-primary">
-              Start 14-day free trial
+            <Link href="/signup?next=%2Fdashboard" className="site-cta-primary">
+              Start free
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link href="/product/templates" className="site-cta-secondary">
@@ -121,7 +121,7 @@ export function HomeHero() {
           </motion.div>
 
           <motion.p {...fadeUp(0.72)} className="mt-5 text-sm text-[rgba(15,17,22,0.55)]">
-            14-day free trial. Payment method required. Ad spend billed separately by Meta.
+            Build your first campaign for free. Payment details are collected when you launch. Ad spend is paid separately by Meta.
           </motion.p>
         </motion.div>
 

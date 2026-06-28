@@ -25,7 +25,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PendingLinkButton } from "@/components/ui/pending-link-button";
 import { requireUser } from "@/lib/auth";
-import { requireActiveUserBilling } from "@/lib/billing";
 import { getWorkspaceCampaignsForUser } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { getCampaignLifecycleLabel, getCampaignLifecycleState } from "@/lib/campaign-management";
@@ -95,9 +94,6 @@ export default async function WorkspaceSettingsPage({
   const section = getSection(rawSection);
   const shouldLoadCampaigns = section === "campaigns";
   const shouldLoadIntegrations = section === "integrations";
-  if (section === "integrations" || section === "campaigns") {
-    await requireActiveUserBilling(user.id, `/workspace/settings?section=${section}`);
-  }
   const [workspaceContext, campaigns] = await Promise.all([
     getCurrentWorkspaceContext(),
     shouldLoadCampaigns ? getWorkspaceCampaignsForUser(user.id, false, false) : Promise.resolve([]),
