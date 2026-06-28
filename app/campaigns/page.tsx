@@ -40,6 +40,17 @@ export default async function CampaignsPage() {
     integration: metaIntegration,
     fallbackName: "No Facebook Page selected",
   });
+  const metaConnected = Boolean(
+    metaIntegration?.connection &&
+      metaIntegration.tokenAvailable &&
+      metaIntegration.connection.status === "connected",
+  );
+  const newCampaignHref = metaConnected
+    ? "/templates/new"
+    : `/api/meta/connect?next=${encodeURIComponent("/templates/new")}`;
+  const browseTemplatesHref = metaConnected
+    ? "/templates"
+    : `/api/meta/connect?next=${encodeURIComponent("/templates")}`;
 
   const templateMap = new Map(templates.map((template) => [template.id, template]));
   const draftCampaigns = campaigns.filter((campaign) => getCampaignLifecycleState(campaign) === "draft");
@@ -63,7 +74,7 @@ export default async function CampaignsPage() {
               <Link href="/workspace/settings?section=integrations" prefetch>Review CRM handoff</Link>
             </Button>
             <Button asChild className="rounded-[18px] px-5">
-              <Link href="/templates/new" prefetch>New Campaign</Link>
+              <Link href={newCampaignHref} prefetch={metaConnected}>New Campaign</Link>
             </Button>
           </div>
         </div>
@@ -156,7 +167,7 @@ export default async function CampaignsPage() {
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Button asChild className="rounded-[18px] px-5">
-                <Link href="/templates" prefetch>Browse templates</Link>
+                <Link href={browseTemplatesHref} prefetch={metaConnected}>Browse templates</Link>
               </Button>
             </div>
           </Card>

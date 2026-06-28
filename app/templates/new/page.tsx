@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { TemplateLaunchWizard } from "@/components/template-launch-wizard";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { requireProductAccessUser } from "@/lib/auth";
@@ -33,6 +34,15 @@ export default async function NewTemplateCampaignPage({
     const query = params.toString();
     return query ? `/templates/new?${query}` : "/templates/new";
   })();
+  const metaConnected = Boolean(
+    metaIntegration?.connection &&
+      metaIntegration.tokenAvailable &&
+      metaIntegration.connection.status === "connected",
+  );
+
+  if (!metaConnected) {
+    redirect(`/api/meta/connect?next=${encodeURIComponent(connectNextUrl)}`);
+  }
 
   if (!templates.length) {
     return (

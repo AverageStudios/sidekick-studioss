@@ -1,15 +1,28 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { TemplateCard } from "@/components/template-card";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { requireProductAccessUser } from "@/lib/auth";
-import { getTemplates } from "@/lib/data";
+import { getTemplates, getWorkspaceMetaIntegrationForUser } from "@/lib/data";
 
 export default async function TemplatesPage() {
-  await requireProductAccessUser("/templates");
-  const templates = await getTemplates();
+  const user = await requireProductAccessUser("/templates");
+  const [templates, metaIntegration] = await Promise.all([
+    getTemplates(),
+    getWorkspaceMetaIntegrationForUser(user.id),
+  ]);
+  const metaConnected = Boolean(
+    metaIntegration?.connection &&
+      metaIntegration.tokenAvailable &&
+      metaIntegration.connection.status === "connected",
+  );
+
+  if (!metaConnected) {
+    redirect(`/api/meta/connect?next=${encodeURIComponent("/templates")}`);
+  }
 
   return (
     <AppShell currentPath="/templates">
