@@ -512,6 +512,25 @@ async function startLaunchCheckout({
   window.location.href = payload.url;
 }
 
+function isPaymentMethodPublishError(payload: MetaPublishErrorResponse | null) {
+  const message = [
+    payload?.error,
+    ...(payload?.details || []),
+    payload?.metaError?.message,
+    payload?.metaError?.userTitle,
+    payload?.metaError?.userMessage,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return (
+    message.includes("no payment method") ||
+    message.includes("update payment method") ||
+    message.includes("billing and payment center")
+  );
+}
+
 function buildInitialState({
   templates,
   businessProfile,
@@ -1458,7 +1477,7 @@ export function TemplateLaunchWizard({
 
     setIsPublishing(false);
     if (!response.ok) {
-      if (response.status === 402 || payload?.checkoutRequired) {
+      if (response.status === 402 || payload?.checkoutRequired || isPaymentMethodPublishError(payload)) {
         setPublishError(null);
         setPublishErrorDetails(null);
         setCheckoutCampaignId(ensuredDraftId);
@@ -3020,8 +3039,8 @@ export function TemplateLaunchWizard({
                   Activate your free trial
                 </h2>
                 <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-                  Your draft is saved. Start your 14-day free trial to publish this campaign to Meta. You will not be
-                  charged until the trial ends, and ad spend is paid separately to Meta.
+                  Your draft is saved. Start your 14-day free trial and add a payment method to publish this campaign.
+                  You will not be charged by SideKick until the trial ends, and ad spend is paid separately to Meta.
                 </p>
               </div>
               <button
