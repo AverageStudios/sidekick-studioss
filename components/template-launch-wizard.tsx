@@ -647,6 +647,7 @@ export function TemplateLaunchWizard({
   const [checkoutCampaignId, setCheckoutCampaignId] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [isStartingCheckout, setIsStartingCheckout] = useState(false);
+  const [metaPaymentMethodIssue, setMetaPaymentMethodIssue] = useState(false);
   const [pendingLocation, setPendingLocation] = useState("");
   const deferredLocationQuery = useDeferredValue(pendingLocation);
   const [locationMode, setLocationMode] = useState<CampaignLaunchLocation["targetingMode"]>("home");
@@ -687,6 +688,19 @@ export function TemplateLaunchWizard({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [checkoutCampaignId, isStartingCheckout]);
+
+  useEffect(() => {
+    if (!metaPaymentMethodIssue) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMetaPaymentMethodIssue(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [metaPaymentMethodIssue]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -1031,6 +1045,7 @@ export function TemplateLaunchWizard({
     setPublishErrorDetails(null);
     setPublishSuccess(null);
     setCheckoutError(null);
+    setMetaPaymentMethodIssue(false);
   }
 
   function transitionLaunchState(updater: (current: CampaignLaunchState) => CampaignLaunchState) {
@@ -1477,10 +1492,17 @@ export function TemplateLaunchWizard({
 
     setIsPublishing(false);
     if (!response.ok) {
-      if (response.status === 402 || payload?.checkoutRequired || isPaymentMethodPublishError(payload)) {
+      if (response.status === 402 || payload?.checkoutRequired) {
         setPublishError(null);
         setPublishErrorDetails(null);
         setCheckoutCampaignId(ensuredDraftId);
+        return;
+      }
+
+      if (isPaymentMethodPublishError(payload)) {
+        setPublishError(null);
+        setPublishErrorDetails(null);
+        setMetaPaymentMethodIssue(true);
         return;
       }
 
@@ -3082,6 +3104,59 @@ export function TemplateLaunchWizard({
               >
                 {isStartingCheckout ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {isStartingCheckout ? "Opening..." : "Start free trial"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {metaPaymentMethodIssue ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(15,23,42,0.58)] px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-[30rem] rounded-[2rem] border border-[rgba(255,255,255,0.24)] bg-white p-5 shadow-[0_32px_90px_rgba(15,23,42,0.28)] sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+                  Meta needs one more step
+                </p>
+                <h2 className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
+                  Add a Meta payment method
+                </h2>
+                <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+                  Your SideKick trial is active enough to launch. Meta still needs a valid payment method on the
+                  selected ad account before it can run ads.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-full border border-[var(--line)] p-2 text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)]"
+                onClick={() => setMetaPaymentMethodIssue(false)}
+                aria-label="Close Meta payment method notice"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-5 rounded-[1.5rem] border border-[rgba(109,94,248,0.16)] bg-[rgba(109,94,248,0.07)] px-4 py-4 text-sm leading-6 text-[var(--muted-strong)]">
+              After adding billing in Meta, come back here and click Launch Campaign again. Your campaign draft is still
+              saved.
+            </div>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setMetaPaymentMethodIssue(false)}
+                className="rounded-[18px] px-5"
+              >
+                Back
+              </Button>
+              <Button
+                type="button"
+                asChild
+                className="rounded-[18px] bg-[var(--brand)] px-5 text-white shadow-[0_12px_28px_rgba(109,94,248,0.28)] hover:bg-[var(--brand-strong)]"
+              >
+                <a href="https://business.facebook.com/billing_hub" target="_blank" rel="noreferrer">
+                  Open Meta billing
+                </a>
               </Button>
             </div>
           </div>
