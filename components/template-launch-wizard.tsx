@@ -625,6 +625,9 @@ export function TemplateLaunchWizard({
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishErrorDetails, setPublishErrorDetails] = useState<string | null>(null);
   const [publishSuccess, setPublishSuccess] = useState<string | null>(null);
+  const [checkoutCampaignId, setCheckoutCampaignId] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [isStartingCheckout, setIsStartingCheckout] = useState(false);
   const [pendingLocation, setPendingLocation] = useState("");
   const deferredLocationQuery = useDeferredValue(pendingLocation);
   const [locationMode, setLocationMode] = useState<CampaignLaunchLocation["targetingMode"]>("home");
@@ -652,6 +655,19 @@ export function TemplateLaunchWizard({
       window.removeEventListener("focus", refreshMetaState);
     };
   }, [router]);
+
+  useEffect(() => {
+    if (!checkoutCampaignId) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isStartingCheckout) {
+        setCheckoutCampaignId(null);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [checkoutCampaignId, isStartingCheckout]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -995,12 +1011,31 @@ export function TemplateLaunchWizard({
     setPublishError(null);
     setPublishErrorDetails(null);
     setPublishSuccess(null);
+    setCheckoutError(null);
   }
 
   function transitionLaunchState(updater: (current: CampaignLaunchState) => CampaignLaunchState) {
     startStepTransition(() => {
       updateLaunchState(updater);
     });
+  }
+
+  async function handleStartTrialCheckout() {
+    if (!checkoutCampaignId) return;
+
+    setIsStartingCheckout(true);
+    setCheckoutError(null);
+
+    try {
+      await startLaunchCheckout({ campaignId: checkoutCampaignId });
+    } catch (checkoutError) {
+      setCheckoutError(
+        checkoutError instanceof Error
+          ? checkoutError.message
+          : "Trial checkout could not be started.",
+      );
+      setIsStartingCheckout(false);
+    }
   }
 
   function selectTemplateAndAdvance(template: TemplateSeed) {
@@ -1402,6 +1437,7 @@ export function TemplateLaunchWizard({
     setPublishError(null);
     setPublishErrorDetails(null);
     setPublishSuccess(null);
+    setCheckoutError(null);
 
     const response = await fetch("/api/meta/publish", {
       method: "POST",
@@ -1423,16 +1459,9 @@ export function TemplateLaunchWizard({
     setIsPublishing(false);
     if (!response.ok) {
       if (response.status === 402 || payload?.checkoutRequired) {
-        try {
-          setPublishError("Your draft is saved. Opening Stripe Checkout to activate your 14-day trial...");
-          await startLaunchCheckout({ campaignId: ensuredDraftId });
-        } catch (checkoutError) {
-          setPublishError(
-            checkoutError instanceof Error
-              ? checkoutError.message
-              : "Trial checkout could not be started.",
-          );
-        }
+        setPublishError(null);
+        setPublishErrorDetails(null);
+        setCheckoutCampaignId(ensuredDraftId);
         return;
       }
 
@@ -2979,6 +3008,66 @@ export function TemplateLaunchWizard({
 
   return (
     <div className={cn("bg-[var(--background)]", immersive ? "" : "")}>
+      {checkoutCampaignId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(15,23,42,0.58)] px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-[30rem] rounded-[2rem] border border-[rgba(255,255,255,0.24)] bg-white p-5 shadow-[0_32px_90px_rgba(15,23,42,0.28)] sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+                  Campaign ready
+                </p>
+                <h2 className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
+                  Activate your free trial
+                </h2>
+                <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+                  Your draft is saved. Start your 14-day free trial to publish this campaign to Meta. You will not be
+                  charged until the trial ends, and ad spend is paid separately to Meta.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-full border border-[var(--line)] p-2 text-[var(--muted-strong)] transition-colors hover:bg-[var(--soft-panel)] hover:text-[var(--ink)] disabled:pointer-events-none disabled:opacity-60"
+                onClick={() => setCheckoutCampaignId(null)}
+                disabled={isStartingCheckout}
+                aria-label="Close trial activation"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-5 rounded-[1.5rem] border border-[rgba(109,94,248,0.16)] bg-[rgba(109,94,248,0.07)] px-4 py-4 text-sm leading-6 text-[var(--muted-strong)]">
+              Keep setup moving now, or go back and keep editing your draft.
+            </div>
+
+            {checkoutError ? (
+              <div className="mt-4 rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {checkoutError}
+              </div>
+            ) : null}
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCheckoutCampaignId(null)}
+                disabled={isStartingCheckout}
+                className="rounded-[18px] px-5"
+              >
+                Back
+              </Button>
+              <Button
+                type="button"
+                onClick={handleStartTrialCheckout}
+                disabled={isStartingCheckout}
+                className="rounded-[18px] bg-[var(--brand)] px-5 text-white shadow-[0_12px_28px_rgba(109,94,248,0.28)] hover:bg-[var(--brand-strong)]"
+              >
+                {isStartingCheckout ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {isStartingCheckout ? "Opening..." : "Start free trial"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {/* ── 2-col shell ── */}
       <div
         className={cn(
